@@ -348,13 +348,6 @@ class PoolControllerCard extends HTMLElement {
 	}
 }
 
-customElements.define(`${CARD_TYPE}-card`, PoolControllerCard);
-
-// Provide Lovelace UI config editor
-PoolControllerCard.getConfigElement = async function () {
-	return document.createElement(`${CARD_TYPE}-editor`);
-};
-
 class PoolControllerCardEditor extends HTMLElement {
 	set hass(hass) {
 		this._hass = hass;
@@ -520,6 +513,16 @@ class PoolControllerCardEditor extends HTMLElement {
 }
 
 customElements.define(`${CARD_TYPE}-editor`, PoolControllerCardEditor);
+customElements.define(`${CARD_TYPE}-card`, PoolControllerCard);
+
+// Provide Lovelace UI config editor
+PoolControllerCard.getConfigElement = function () {
+	return document.createElement(`${CARD_TYPE}-editor`);
+};
+
+PoolControllerCard.getStubConfig = function () {
+	return {};
+};
 
 window.customCards = window.customCards || [];
 window.customCards.push({
