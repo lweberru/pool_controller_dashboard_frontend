@@ -65,7 +65,7 @@ class PoolControllerCard extends HTMLElement {
 		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
 		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
 		const auxPower = c.aux_power_entity ? this._num(h.states[c.aux_power_entity]?.state) : null;
-		const powerVal = mainPower || (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
+		const powerVal = mainPower ?? (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
 
 		const ph = c.ph_entity ? this._num(h.states[c.ph_entity]?.state) : null;
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
@@ -215,7 +215,7 @@ class PoolControllerCard extends HTMLElement {
 								<div class="info-label">Modus</div>
 								<div class="info-value">${this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active)}</div>
 							</div>
-							${mainPower != null && auxPower != null ? `
+							${mainPower !== null && auxPower !== null ? `
 							<div class="info-item">
 								<div class="info-label">Pumpe</div>
 								<div class="info-value">${mainPower}W</div>
@@ -226,7 +226,7 @@ class PoolControllerCard extends HTMLElement {
 							</div>` : `
 							<div class="info-item">
 								<div class="info-label">Verbrauch</div>
-								<div class="info-value">${powerVal != null ? powerVal + "W" : "–"}</div>
+								<div class="info-value">${powerVal !== null ? powerVal + "W" : "–"}</div>
 							</div>`}
 						</div>
 						${bathingState.active && bathingEta != null ? `
