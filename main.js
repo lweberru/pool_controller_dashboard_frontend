@@ -54,16 +54,18 @@ class PoolControllerCard extends HTMLElement {
 		const hvac = climate.state;
 		const hvacAction = climate.attributes.hvac_action;
 		const status = c.status_entity ? h.states[c.status_entity]?.state : null;
-		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");
-
+		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");	console.log("[Pool Controller] Aux:", { entity: c.aux_entity, state: h.states[c.aux_entity]?.state, auxOn });
 		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
 		const filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
 		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
 		const pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
-		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
-		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
+		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;	console.log("[Pool Controller] Status-Icons:", { 
+		frost: { entity: c.frost_entity, state: h.states[c.frost_entity]?.state, result: frost },
+		quiet: { entity: c.quiet_entity, state: h.states[c.quiet_entity]?.state, result: quiet },
+		pvAllows: { entity: c.pv_entity, state: h.states[c.pv_entity]?.state, result: pvAllows }
+	});		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
 		const auxPower = c.aux_power_entity ? this._num(h.states[c.aux_power_entity]?.state) : null;
 		const powerVal = mainPower ?? (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
 
@@ -78,6 +80,7 @@ class PoolControllerCard extends HTMLElement {
 		const phMinusStr = c.ph_minus_entity ? h.states[c.ph_minus_entity]?.state : null;
 		const chlorDoseNum = c.chlor_dose_entity ? this._num(h.states[c.chlor_dose_entity]?.state) : null;
 		const chlorDoseStr = c.chlor_dose_entity ? h.states[c.chlor_dose_entity]?.state : null;
+		console.log("[Pool Controller] Wartung:", { phPlusNum, phPlusStr, phMinusNum, phMinusStr, chlorDoseNum, chlorDoseStr });
 
 		const nextStartMins = c.next_start_entity ? this._num(h.states[c.next_start_entity]?.state) : null;
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
@@ -429,10 +432,16 @@ class PoolControllerCard extends HTMLElement {
 
 	_formatEventTime(startTs, endTs) {
 		if (!startTs) return "";
+		// Prüfe ob es ein gültiger Timestamp ist
 		const start = new Date(startTs);
+		if (isNaN(start.getTime())) {
+			// Kein gültiger Timestamp, zeige rohen Text
+			return endTs && endTs !== startTs ? `${startTs} - ${endTs}` : startTs;
+		}
 		const startStr = start.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 		if (!endTs) return startStr;
 		const end = new Date(endTs);
+		if (isNaN(end.getTime())) return `${startStr} - ${endTs}`;
 		const endStr = end.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 		return `${startStr} - ${endStr}`;
 	}
