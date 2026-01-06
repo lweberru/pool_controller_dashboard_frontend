@@ -94,112 +94,221 @@ class PoolControllerCard extends HTMLElement {
 			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f4f6f8; color: #333; }
 			.pill.on { background: #d0f0d0; color: #0f6b2f; }
 			.pill.warn { background: #ffe5d5; color: #b44; }
-			.grid { display: grid; gap: 16px; }
-			.top { grid-template-columns: minmax(200px, 1fr) minmax(220px, 1.1fr); }
-			.dial { position: relative; aspect-ratio: 1 / 1; display: grid; place-items: center; }
-			.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed 0deg); display: grid; place-items: center; padding: 18px; }
-			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 62%, transparent 63%); }
-			.dial-core { position: absolute; display: grid; gap: 6px; place-items: center; text-align: center; }
-			.temp { font-size: 38px; font-weight: 700; }
-			.unit { font-size: 14px; color: var(--secondary-text-color); }
-			.sub { font-size: 13px; color: var(--secondary-text-color); }
-			.dial-buttons { display: grid; grid-template-columns: repeat(2, 48px); gap: 10px; margin-top: 8px; }
-			.btn { height: 46px; border-radius: 12px; border: 1px solid #d0d7de; background: #fff; font-weight: 700; cursor: pointer; transition: transform 120ms ease, box-shadow 120ms ease; }
-			.btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.08); transform: translateY(-1px); }
-			.btn.ghost { background: transparent; border-color: transparent; color: #555; }
-			.mode-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
-			.mode { border: 1px solid #d0d7de; border-radius: 12px; padding: 10px; display: grid; gap: 6px; align-items: center; background: #fff; }
-			.mode.on { border-color: #8a3b32; box-shadow: 0 4px 12px rgba(138,59,50,0.15); }
-			.mode .label { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-			.mode .detail { font-size: 12px; color: #555; }
-			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 12px; background: #fff; display: grid; gap: 12px; }
-			.bar { position: relative; height: 40px; border-radius: 10px; overflow: hidden; }
-			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 10%, #fbb13c 20%, #f6d32b 30%, #8bd448 45%, #27ae60 55%, #1abc9c 65%, #1c9ed8 75%, #2a7fdb 85%, #5c4ac7 100%); }
-			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 30%, #1bbc63 60%, #1bbc63 80%, #f5a524 90%, #d7263d 100%); }
-			.bar .marker { position: absolute; top: 0; width: 2px; height: 100%; background: #0b132b; box-shadow: 0 0 0 6px rgba(0,0,0,0.08); }
-			.bar .thumb { position: absolute; top: -6px; width: 18px; height: 52px; border-radius: 12px; background: #fff; border: 2px solid #0b132b; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
-			.badges { display: flex; flex-wrap: wrap; gap: 8px; }
-			.badge { padding: 6px 10px; border-radius: 10px; background: #f4f6f8; font-size: 12px; border: 1px solid #e0e6ed; }
-			.badge.alert { background: #ffe5d5; color: #8a3b32; border-color: #f3c2a2; }
-			.pv { border: 1px solid #d0d7de; border-radius: 12px; padding: 12px; background: #fff; display: grid; gap: 8px; }
-			.progress { position: relative; height: 12px; border-radius: 999px; background: #eef1f4; overflow: hidden; }
-			.progress .fill { position: absolute; height: 100%; left: 0; top: 0; border-radius: inherit; background: linear-gradient(90deg, #f08a5d, #8a3b32); }
-			.progress .mark { position: absolute; top: -2px; width: 2px; height: 16px; background: #0b132b; opacity: 0.5; }
-			.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 12px; background: #fff; display: grid; gap: 8px; }
-			.event { padding: 8px 10px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e9f0; display: flex; justify-content: space-between; gap: 8px; }
-			.event .time { color: #555; font-size: 12px; }
-			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; }
-			.status-row { display: flex; gap: 8px; flex-wrap: wrap; }
-			.status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; background: #f4f6f8; font-size: 12px; border: 1px solid #e0e6ed; }
-			.status-chip.on { background: #d0f0d0; color: #0f6b2f; border-color: #b8e3b8; }
+			
+			.dial-container { display: grid; place-items: center; margin: 20px auto; max-width: 450px; }
+			.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 350px; display: grid; place-items: center; }
+			.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 30deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 330deg, transparent 330deg); display: grid; place-items: center; padding: 20px; position: relative; }
+			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
+			
+			.status-icons { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
+			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
+			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
+			.status-icon ha-icon { --mdc-icon-size: 18px; }
+			
+			.dial-core { position: absolute; display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
+			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
+			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
+			.info-row { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--secondary-text-color); }
+			.info-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+			.info-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; }
+			.info-value { font-weight: 600; }
+			
+			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
+			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
+			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
+			.action-btn ha-icon { --mdc-icon-size: 20px; }
+			
+			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
+			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
+			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
+			
+			.aux-switch { margin-top: 16px; padding: 12px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
+			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
+			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+			.aux-switch-label ha-icon { --mdc-icon-size: 20px; }
+			
+			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; margin-top: 20px; }
+			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
+			
+			.scale-container { position: relative; }
+			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
+			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 7%, #fbb13c 14%, #f6d32b 21%, #8bd448 35%, #27ae60 50%, #1abc9c 65%, #1c9ed8 78%, #2a7fdb 85%, #5c4ac7 100%); }
+			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
+			
+			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			.scale-marker { position: absolute; bottom: 100%; margin-bottom: 8px; transform: translateX(-50%); }
+			.scale-marker::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid #0b132b; }
+			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; }
+			
+			.scale-range { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #999; text-transform: uppercase; font-weight: 600; }
+			
+			.info-row-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
+			.info-badge.alert { background: #ffe5d5; color: #8a3b32; border-color: #f3c2a2; font-weight: 600; }
+			
+			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 20px; }
+			.maintenance .section-title { color: #c0392b; }
+			.maintenance-items { display: grid; gap: 12px; margin-top: 12px; }
+			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #f3c2a2; }
+			.maintenance-item ha-icon { --mdc-icon-size: 24px; color: #c0392b; }
+			.maintenance-text { flex: 1; }
+			.maintenance-label { font-weight: 600; color: #8a3b32; }
+			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
+			
+			.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 20px; }
+			.event { padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e9f0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+			.event-title { font-weight: 500; }
+			.event-time { color: #555; font-size: 13px; }
+			
+			.next-start { background: #e8f5e9; border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
+			.next-start-label { font-weight: 600; color: #0f6b2f; }
+			.next-start-time { color: #0f6b2f; font-size: 14px; }
 		</style>
 		<ha-card>
 			<div class="header">
 				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
 				<div class="pill ${status === "paused" ? "warn" : status === "frost_protection" ? "on" : ""}">${status || hvac}</div>
 			</div>
-			<div class="grid top">
+			
+			<div class="dial-container">
 				<div class="dial" style="--angle:${dialAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}">
-					<div class="ring"></div>
+					<div class="ring">
+						<div class="status-icons">
+							<div class="status-icon ${frost ? "active" : ""}" title="Frostschutz">
+								<ha-icon icon="mdi:snowflake"></ha-icon>
+							</div>
+							<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit">
+								<ha-icon icon="mdi:power-sleep"></ha-icon>
+							</div>
+						</div>
+					</div>
 					<div class="dial-core">
-						<div class="temp">${(target ?? current ?? 0).toFixed(1)}°C</div>
-						<div class="sub">Ist ${current != null ? `${current.toFixed(1)}°C` : "–"} • Modus ${hvac}</div>
-						<div class="sub">${hvacAction || "idle"}${auxOn ? " • Zusatzheizung" : ""}</div>
-						<div class="dial-buttons">
-							<button class="btn" data-action="dec">−</button>
-							<button class="btn" data-action="inc">+</button>
+						<div class="temp-current">${current != null ? current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
+						<div class="divider"></div>
+						<div class="info-row">
+							<div class="info-item">
+								<div class="info-label">Soll</div>
+								<div class="info-value">${target != null ? target.toFixed(1) : "–"}°</div>
+							</div>
+							<div class="info-item">
+								<div class="info-label">Modus</div>
+								<div class="info-value">${this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active)}</div>
+							</div>
+							<div class="info-item">
+								<div class="info-label">Verbrauch</div>
+								<div class="info-value">${powerVal != null ? powerVal + "W" : "–"}</div>
+							</div>
 						</div>
 					</div>
 				</div>
-				<div class="mode-panel">
-					<div class="mode-row">
-						${this._modeTile("Baden", "mdi:pool", bathingState, c.bathing_start, c.bathing_stop)}
-						${this._modeTile("Filtern", "mdi:rotate-right", filterState, c.filter_start, c.filter_stop)}
-						${this._modeTile("Chloren", "mdi:fan", chlorState, c.chlorine_start, c.chlorine_stop)}
-						${this._modeTile("Pause", "mdi:pause-circle", pauseState, c.pause_start, c.pause_stop)}
+				<div class="temp-controls">
+					<button class="temp-btn" data-action="dec">−</button>
+					<button class="temp-btn" data-action="inc">+</button>
+				</div>
+				<div class="action-buttons">
+					<button class="action-btn ${bathingState.active ? "active" : ""}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${bathingState.active ? "true" : "false"}">
+						<ha-icon icon="mdi:pool"></ha-icon>
+						<span>Baden</span>
+					</button>
+					<button class="action-btn ${filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${filterState.active ? "true" : "false"}">
+						<ha-icon icon="mdi:rotate-right"></ha-icon>
+						<span>Filtern</span>
+					</button>
+					<button class="action-btn ${chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${chlorState.active ? "true" : "false"}">
+						<ha-icon icon="mdi:fan"></ha-icon>
+						<span>Chloren</span>
+					</button>
+					<button class="action-btn ${pauseState.active ? "active" : ""}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${pauseState.active ? "true" : "false"}">
+						<ha-icon icon="mdi:pause-circle"></ha-icon>
+						<span>Pause</span>
+					</button>
+				</div>
+				<div class="aux-switch ${auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
+					<div class="aux-switch-label">
+						<ha-icon icon="mdi:fire"></ha-icon>
+						<span>Zusatzheizung</span>
 					</div>
-					<div class="status-row">
-						${this._chip("Frost", frost)}
-						${this._chip("Ruhezeit", quiet)}
-						${this._chip("PV ok", c.pv_entity ? pvVal != null && pvVal >= c.pv_on : false)}
-						${this._chip("Nächster Start", nextStartMins != null ? `${nextStartMins} min` : "–")}
-					</div>
+					<div>${auxOn ? "AN" : "AUS"}</div>
 				</div>
 			</div>
-			<div class="quality" style="margin-top:16px;">
+			
+			<div class="quality">
 				<div class="section-title">Wasserqualität</div>
-				<div>
-					<div class="label" style="margin-bottom:4px; font-weight:600;">pH ${ph != null ? ph.toFixed(2) : "–"}</div>
-					<div class="bar ph-bar">${this._marker(ph, 1, 14)}</div>
+				<div class="scale-container">
+					<div style="font-weight: 600; margin-bottom: 8px;">pH-Wert</div>
+					<div style="position: relative;">
+						${ph != null ? `<div class="scale-marker" style="left: ${this._pct(ph, 1, 14)}%"><div class="marker-value">${ph.toFixed(2)}</div></div>` : ""}
+						<div class="scale-bar ph-bar"></div>
+					</div>
+					<div class="scale-labels">
+						${[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(n => `<span>${n}</span>`).join("")}
+					</div>
+					<div class="scale-range"><span>Sauer</span><span>Neutral</span><span>Alkalisch</span></div>
 				</div>
-				<div>
-					<div class="label" style="margin-bottom:4px; font-weight:600;">Chlor ${chlor != null ? chlor.toFixed(0) : "–"}</div>
-					<div class="bar chlor-bar">${this._marker(chlor, 0, 1200)}</div>
+				
+				<div class="scale-container">
+					<div style="font-weight: 600; margin-bottom: 8px;">Chlor</div>
+					<div style="position: relative;">
+						${chlor != null ? `<div class="scale-marker" style="left: ${this._pct(chlor, 0, 1200)}%"><div class="marker-value">${chlor.toFixed(0)} mV</div></div>` : ""}
+						<div class="scale-bar chlor-bar"></div>
+					</div>
+					<div class="scale-labels">
+						<span>0</span><span>300</span><span>600</span><span>900</span><span>1200</span>
+					</div>
+					<div class="scale-range"><span>Zu niedrig</span><span>Optimal (${c.chlor_ok_min}-${c.chlor_ok_max} mV)</span><span>Zu hoch</span></div>
 				</div>
-				<div class="badges">
-					${salt != null ? `<div class="badge">Salz ${salt}</div>` : ""}
-					${tds != null ? `<div class="badge">TDS ${tds}</div>` : ""}
-					${phPlus && phPlus > 0 ? `<div class="badge alert">pH+ ${phPlus} g</div>` : ""}
-					${phMinus && phMinus > 0 ? `<div class="badge alert">pH- ${phMinus} g</div>` : ""}
-					${chlorDose && chlorDose > 0 ? `<div class="badge alert">Chlor ${chlorDose}</div>` : ""}
-				</div>
+				
+				${salt != null || tds != null ? `
+				<div class="info-row-badges">
+					${salt != null ? `<div class="info-badge">Salz: ${salt}</div>` : ""}
+					${tds != null ? `<div class="info-badge">TDS: ${tds}</div>` : ""}
+				</div>` : ""}
 			</div>
-			<div class="pv" style="margin-top:16px;">
-				<div class="section-title">Photovoltaik & Verbrauch</div>
-				<div class="progress">
-					<div class="fill" style="width:${pvProgress != null ? pvProgress * 100 : 0}%"></div>
-					<div class="mark" style="left:${this._pct(c.pv_off, c.pv_off, c.pv_on)}%"></div>
-					<div class="mark" style="left:${this._pct(c.pv_on, c.pv_off, c.pv_on)}%"></div>
+			
+			${(phPlus && phPlus > 0) || (phMinus && phMinus > 0) || (chlorDose && chlorDose > 0) ? `
+			<div class="maintenance">
+				<div class="section-title">⚠️ Wartungsarbeiten erforderlich</div>
+				<div class="maintenance-items">
+					${phPlus && phPlus > 0 ? `
+					<div class="maintenance-item">
+						<ha-icon icon="mdi:ph"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">pH+ hinzufügen</div>
+							<div class="maintenance-value">${phPlus} g</div>
+						</div>
+					</div>` : ""}
+					${phMinus && phMinus > 0 ? `
+					<div class="maintenance-item">
+						<ha-icon icon="mdi:ph"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">pH- hinzufügen</div>
+							<div class="maintenance-value">${phMinus} g</div>
+						</div>
+					</div>` : ""}
+					${chlorDose && chlorDose > 0 ? `
+					<div class="maintenance-item">
+						<ha-icon icon="mdi:beaker"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">Chlor hinzufügen</div>
+							<div class="maintenance-value">${chlorDose}</div>
+						</div>
+					</div>` : ""}
 				</div>
-				<div class="status-row">
-					${this._chip("PV", pvVal != null ? `${pvVal} W` : "–")}
-					${this._chip("Verbrauch", powerVal != null ? `${powerVal} W` : "–")}
-				</div>
-			</div>
-			<div class="calendar" style="margin-top:16px;">
+			</div>` : ""}
+			
+			${nextStartMins != null ? `
+			<div class="next-start">
+				<span class="next-start-label">Nächster Start</span>
+				<span class="next-start-time">in ${nextStartMins} Minuten</span>
+			</div>` : ""}
+			
+			${shownEvents.length || nextEventTs ? `
+			<div class="calendar">
 				<div class="section-title">Nächste Termine</div>
-				${shownEvents.length ? shownEvents.map(ev => this._eventRow(ev)).join("") : `<div class="event"><div>Keine Einträge</div></div>`}
-			</div>
+				${shownEvents.length ? shownEvents.map(ev => this._eventRow(ev)).join("") : (nextEventTs ? this._eventRow({ title: "Geplanter Start", start: new Date(nextEventTs) }) : `<div class="event"><div class="event-title">Keine Einträge</div></div>`)}
+			</div>` : ""}
 		</ha-card>`;
 
 		this._attachHandlers();
@@ -210,8 +319,8 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_attachHandlers() {
-		const buttons = this.shadowRoot.querySelectorAll(".btn");
-		buttons.forEach((btn) => {
+		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
+		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
 				const action = btn.dataset.action;
 				if (!this._hass) return;
@@ -223,10 +332,10 @@ class PoolControllerCard extends HTMLElement {
 			});
 		});
 
-		const modeTiles = this.shadowRoot.querySelectorAll("[data-start]");
-		modeTiles.forEach((tile) => {
-			tile.addEventListener("click", () => {
-				const { start, stop, active } = tile.dataset;
+		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
+		actionButtons.forEach((btn) => {
+			btn.addEventListener("click", () => {
+				const { start, stop, active } = btn.dataset;
 				if (active === "true" && stop) {
 					this._triggerEntity(stop, false);
 				} else if (start) {
@@ -234,6 +343,17 @@ class PoolControllerCard extends HTMLElement {
 				}
 			});
 		});
+
+		const auxSwitch = this.shadowRoot.querySelector(".aux-switch");
+		if (auxSwitch) {
+			auxSwitch.addEventListener("click", () => {
+				const entity = auxSwitch.dataset.entity;
+				if (entity && this._hass) {
+					const isOn = this._isOn(this._hass.states[entity]);
+					this._triggerEntity(entity, !isOn);
+				}
+			});
+		}
 	}
 
 	_triggerEntity(entityId, turnOn = true) {
@@ -255,30 +375,20 @@ class PoolControllerCard extends HTMLElement {
 		this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
 	}
 
-	_modeTile(label, icon, state, start, stop) {
-		const active = state?.active;
-		const eta = state?.eta;
-		return `<div class="mode ${active ? "on" : ""}" data-start="${start || ""}" data-stop="${stop || ""}" data-active="${active ? "true" : "false"}">
-			<div class="label"><ha-icon icon="${icon}"></ha-icon><span>${label}</span></div>
-			<div class="detail">${active ? (eta != null ? `Noch ${eta} min` : "Aktiv") : "Bereit"}</div>
-		</div>`;
-	}
-
-	_chip(label, value) {
-		const isOn = value === true || value === "on" || (typeof value === "string" && value.endsWith("min")) || (typeof value === "string" && value !== "–");
-		return `<div class="status-chip ${isOn ? "on" : ""}"><span>${label}</span><strong>${value === true ? "" : value ?? ""}</strong></div>`;
-	}
-
-	_marker(val, min, max) {
-		if (val == null) return "";
-		const pct = this._clamp(((val - min) / (max - min)) * 100, 0, 100);
-		return `<div class="marker" style="left:${pct}%"></div><div class="thumb" style="left:calc(${pct}% - 9px)">${val}</div>`;
+	_getStatusText(hvac, hvacAction, bathing, filtering, chlorinating, paused) {
+		if (paused) return "Pause";
+		if (bathing) return "Baden";
+		if (chlorinating) return "Chloren";
+		if (filtering) return "Filtern";
+		if (hvacAction === "heating" || hvacAction === "heat") return "Heizt";
+		if (hvac === "off") return "Aus";
+		return hvac || "–";
 	}
 
 	_eventRow(ev) {
 		const dt = ev.start instanceof Date ? ev.start : new Date(ev.start);
-		const dateStr = dt ? dt.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "";
-		return `<div class="event"><div>${ev.title || ev.summary || "Termin"}</div><div class="time">${dateStr}</div></div>`;
+		const dateStr = dt ? dt.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+		return `<div class="event"><div class="event-title">${ev.title || ev.summary || "Termin"}</div><div class="event-time">${dateStr}</div></div>`;
 	}
 
 	_modeState(h, entity, untilEntity, fallbackActiveEntity) {
