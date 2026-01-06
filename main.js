@@ -57,14 +57,16 @@ class PoolControllerCard extends HTMLElement {
 		const status = c.status_entity ? h.states[c.status_entity]?.state : null;
 		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");
 
-		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until);
+		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
 		const filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
 		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
 		const pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
-		const pvVal = c.pv_entity ? this._num(h.states[c.pv_entity]?.state) : null;
-		const powerVal = c.power_entity ? this._num(h.states[c.power_entity]?.state) : null;
+		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
+		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
+		const auxPower = c.aux_power_entity ? this._num(h.states[c.aux_power_entity]?.state) : null;
+		const powerVal = mainPower || (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
 
 		const ph = c.ph_entity ? this._num(h.states[c.ph_entity]?.state) : null;
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
@@ -82,7 +84,6 @@ class PoolControllerCard extends HTMLElement {
 		const nextEventTs = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 
 		const dialAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
-		const pvProgress = pvVal != null ? this._clamp((pvVal - c.pv_off) / Math.max(1, c.pv_on - c.pv_off), 0, 1) : null;
 
 		// Badesession Timer
 		const bathingEta = bathingState.eta;
@@ -199,8 +200,9 @@ class PoolControllerCard extends HTMLElement {
 							</div>
 							<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit: ${quiet ? "an" : "aus"}">
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
-							</div>
-						</div>
+							</div>						<div class="status-icon ${pvAllows ? "active" : ""}" title="PV-Überschuss: ${pvAllows ? "verfügbar" : "nicht verfügbar"}">
+							<ha-icon icon="mdi:solar-power"></ha-icon>
+						</div>						</div>
 					</div>
 					<div class="dial-core">
 						<div class="temp-current">${current != null ? current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
@@ -214,10 +216,19 @@ class PoolControllerCard extends HTMLElement {
 								<div class="info-label">Modus</div>
 								<div class="info-value">${this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active)}</div>
 							</div>
+							${mainPower != null && auxPower != null ? `
+							<div class="info-item">
+								<div class="info-label">Pumpe</div>
+								<div class="info-value">${mainPower}W</div>
+							</div>
+							<div class="info-item">
+								<div class="info-label">Heizung</div>
+								<div class="info-value">${auxPower}W</div>
+							</div>` : `
 							<div class="info-item">
 								<div class="info-label">Verbrauch</div>
 								<div class="info-value">${powerVal != null ? powerVal + "W" : "–"}</div>
-							</div>
+							</div>`}
 						</div>
 						${bathingState.active && bathingEta != null ? `
 						<div class="bath-timer">
@@ -633,27 +644,34 @@ class PoolControllerCardEditor extends HTMLElement {
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
 			status_entity: pick("sensor", "status") || this._config.status_entity,
 			aux_entity: pick("switch", "aux") || this._config.aux_entity,
+			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
 			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
 			bathing_stop: pick("button", "bath_stop") || this._config.bathing_stop,
 			bathing_until: pick("sensor", "bathing_until") || this._config.bathing_until,
+			bathing_active_binary: pick("binary_sensor", "is_bathing") || this._config.bathing_active_binary,
+			filter_entity: pick("binary_sensor", "filter_active") || this._config.filter_entity,
 			filter_start: pick("button", "filter_60") || pick("button", "filter_30") || this._config.filter_start,
 			filter_stop: pick("button", "filter_stop") || this._config.filter_stop,
 			filter_until: pick("sensor", "filter_until") || this._config.filter_until,
 			next_filter_in: pick("sensor", "next_filter_mins") || this._config.next_filter_in,
+			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
 			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,
 			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
+			pause_entity: pick("binary_sensor", "is_paused") || this._config.pause_entity,
 			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
 			pause_stop: pick("button", "pause_stop") || this._config.pause_stop,
 			pause_until: pick("sensor", "pause_until") || this._config.pause_until,
 			pause_active_entity: pick("binary_sensor", "is_paused") || this._config.pause_active_entity,
-			frost_entity: pick("binary_sensor", "frost") || pick("sensor", "frost_risk") || this._config.frost_entity,
-			quiet_entity: pick("binary_sensor", "quiet") || pick("binary_sensor", "is_quiet") || this._config.quiet_entity,
-			power_entity: pick("sensor", "power") || pick("sensor", "power_consumption") || this._config.power_entity,
-			pv_entity: pick("sensor", "pv") || pick("sensor", "solar_power") || this._config.pv_entity,
+			frost_entity: pick("binary_sensor", "frost_danger") || this._config.frost_entity,
+			quiet_entity: pick("binary_sensor", "in_quiet") || this._config.quiet_entity,
+			main_power_entity: pick("sensor", "main_power") || this._config.main_power_entity,
+			aux_power_entity: pick("sensor", "aux_power") || this._config.aux_power_entity,
+			power_entity: this._config.power_entity,
+			pv_entity: pick("binary_sensor", "pv_allows") || this._config.pv_entity,
 			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
 			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
-			salt_entity: pick("sensor", "salt") || this._config.salt_entity,
-			tds_entity: pick("sensor", "tds") || this._config.tds_entity,
+			salt_entity: this._config.salt_entity,
+			tds_entity: this._config.tds_entity,
 			ph_plus_entity: pick("sensor", "ph_plus_g") || this._config.ph_plus_entity,
 			ph_minus_entity: pick("sensor", "ph_minus_g") || this._config.ph_minus_entity,
 			chlor_dose_entity: pick("sensor", "chlor_spoons") || this._config.chlor_dose_entity,
@@ -676,13 +694,14 @@ class PoolControllerCardEditor extends HTMLElement {
 		const rows = [
 			["climate", cfg.climate_entity],
 			["status", cfg.status_entity],
-			["aux", cfg.aux_entity],
-			["bathing", `${cfg.bathing_start || ""} / ${cfg.bathing_stop || ""}`],
-			["filter", `${cfg.filter_start || ""} / ${cfg.filter_stop || ""}`],
-			["chlorine", cfg.chlorine_start],
-			["pause", `${cfg.pause_start || ""} / ${cfg.pause_stop || ""}`],
-			["quality", `${cfg.ph_entity || ""}, ${cfg.chlorine_value_entity || ""}`],
-			["timers", `${cfg.next_start_entity || ""}, ${cfg.next_event_entity || ""}`],
+			["switches", `${cfg.aux_entity || ""}, ${cfg.bathing_entity || ""}`],
+			["binary", `quiet:${cfg.quiet_entity ? "✓" : "✗"} frost:${cfg.frost_entity ? "✓" : "✗"} pv:${cfg.pv_entity ? "✓" : "✗"}`],
+			["bathing", `${cfg.bathing_start || ""} → ${cfg.bathing_active_binary || ""}`],
+			["filter", `${cfg.filter_start || ""} → ${cfg.filter_entity || ""}`],
+			["chlorine", `${cfg.chlorine_start || ""} → ${cfg.chlorine_entity || ""}`],
+			["pause", `${cfg.pause_start || ""} → ${cfg.pause_entity || ""}`],
+			["power", `main:${cfg.main_power_entity || ""} aux:${cfg.aux_power_entity || ""}`],
+			["quality", `pH:${cfg.ph_entity || ""} Cl:${cfg.chlorine_value_entity || ""}`],
 		];
 		box.innerHTML = rows
 			.map(([k, v]) => `<div class="badge"><strong>${k}</strong>: ${v || "–"}</div>`)
