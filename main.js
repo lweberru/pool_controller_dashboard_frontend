@@ -112,14 +112,17 @@ class PoolControllerCard extends HTMLElement {
 			.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
-			.status-icons { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
+			.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
+			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
 			.dial-core { position: absolute; display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
+			.temp-target-row { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--secondary-text-color); }
+			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			.info-row { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--secondary-text-color); }
 			.info-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 			.info-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; }
@@ -134,6 +137,8 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
+			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
+			.action-btn.chlorine.active { background: #27ae60; border-color: #27ae60; }
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
 			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
@@ -209,28 +214,10 @@ class PoolControllerCard extends HTMLElement {
 					<div class="dial-core">
 						<div class="temp-current">${current != null ? current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
-						<div class="info-row">
-							<div class="info-item">
-								<div class="info-label">Soll</div>
-								<div class="info-value">${target != null ? target.toFixed(1) : "–"}°</div>
-							</div>
-							<div class="info-item">
-								<div class="info-label">Modus</div>
-								<div class="info-value">${this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active)}</div>
-							</div>
-							${mainPower !== null && auxPower !== null ? `
-							<div class="info-item">
-								<div class="info-label">Pumpe</div>
-								<div class="info-value">${mainPower}W</div>
-							</div>
-							<div class="info-item">
-								<div class="info-label">Heizung</div>
-								<div class="info-value">${auxPower}W</div>
-							</div>` : `
-							<div class="info-item">
-								<div class="info-label">Verbrauch</div>
-								<div class="info-value">${powerVal !== null ? powerVal + "W" : "–"}</div>
-							</div>`}
+						<div class="temp-target-row">
+							<span>${target != null ? target.toFixed(1) : "–"}°C</span>
+							${hvacAction === "heating" || hvacAction === "heat" ? '<ha-icon icon="mdi:radiator" style="color:#c0392b"></ha-icon>' : ''}
+							${mainPower !== null && auxPower !== null ? `<span>${mainPower}W</span>` : powerVal !== null ? `<span>${powerVal}W</span>` : ''}
 						</div>
 						${bathingState.active && bathingEta != null ? `
 						<div class="bath-timer">
@@ -250,11 +237,11 @@ class PoolControllerCard extends HTMLElement {
 						<ha-icon icon="mdi:pool"></ha-icon>
 						<span>Baden</span>
 					</button>
-					<button class="action-btn ${filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${filterState.active ? "true" : "false"}">
-						<ha-icon icon="mdi:rotate-right"></ha-icon>
-						<span>Filtern</span>
-					</button>
-					<button class="action-btn ${chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${chlorState.active ? "true" : "false"}">
+				<button class="action-btn filter ${filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${filterState.active ? "true" : "false"}">
+					<ha-icon icon="mdi:rotate-right"></ha-icon>
+					<span>Filtern</span>
+				</button>
+				<button class="action-btn chlorine ${chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${chlorState.active ? "true" : "false"}">
 						<ha-icon icon="mdi:fan"></ha-icon>
 						<span>Chloren</span>
 					</button>
@@ -266,7 +253,7 @@ class PoolControllerCard extends HTMLElement {
 				<div class="aux-switch ${auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
 					<div class="aux-switch-label">
 						<ha-icon icon="mdi:fire"></ha-icon>
-						<span>Zusatzheizung</span>
+					<span>Heizung</span>
 					</div>
 					<div class="toggle"></div>
 				</div>
@@ -651,8 +638,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			filter_until: pick("sensor", "filter_until") || this._config.filter_until,
 			next_filter_in: pick("sensor", "next_filter_mins") || this._config.next_filter_in,
 			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
-			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,
-			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
+			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,		chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
 			pause_entity: pick("binary_sensor", "is_paused") || this._config.pause_entity,
 			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
 			pause_stop: pick("button", "pause_stop") || this._config.pause_stop,
