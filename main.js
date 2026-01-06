@@ -676,11 +676,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			next_event_end_entity: pick("sensor", "next_event_end") || this._config.next_event_end_entity,
 			next_event_summary_entity: pick("sensor", "next_event_summary") || this._config.next_event_summary_entity,
 		};
-		this._updateConfig(cfg, true);
-	}
-
-	async _getEntityRegistry() {
-		if (this._registry) return this._registry;
+	this._updateConfig(cfg);
 		this._registry = await this._hass.callWS({ type: "config/entity_registry/list" });
 		return this._registry;
 	}
