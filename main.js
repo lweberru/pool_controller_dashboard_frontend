@@ -351,11 +351,22 @@ class PoolControllerCard extends HTMLElement {
 class PoolControllerCardEditor extends HTMLElement {
 	set hass(hass) {
 		this._hass = hass;
-		this._render();
+		// Nur initial rendern, nicht bei jedem hass Update
+		if (!this._initialized) {
+			this._render();
+			this._initialized = true;
+		} else {
+			// Nur den Entity Picker aktualisieren, nicht neu rendern
+			const picker = this.shadowRoot?.querySelector("#controller");
+			if (picker && this._hass) {
+				picker.hass = this._hass;
+			}
+		}
 	}
 
 	setConfig(config) {
 		this._config = { ...DEFAULTS, ...config };
+		this._initialized = false;
 		this._render();
 	}
 
@@ -379,8 +390,10 @@ class PoolControllerCardEditor extends HTMLElement {
 		</style>
 		<div class="wrapper">
 			<div class="row">
-				<label>Pool Controller Instanz</label>
-				<ha-entity-picker id="controller" .hass="${""}" .value="${c.controller_entity || ""}" allow-custom-entity="false" .includeDomains="${JSON.stringify(["climate","sensor","switch","binary_sensor","button"])}"></ha-entity-picker>
+				<label>Pool Controller auswählen</label>
+				<select id="controller-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
+					<option value="">Bitte wählen...</option>
+				</select>
 				<div class="box" id="derived"></div>
 				<button id="derive">Automatisch aus Instanz übernehmen</button>
 			</div>
@@ -402,27 +415,9 @@ class PoolControllerCardEditor extends HTMLElement {
 					<input id="show_calendar" type="number" step="1" min="0" value="${c.show_calendar || 1}">
 				</div>
 			</div>
-			<div class="grid2">
-				<div class="row">
-					<label>PV Ein (W)</label>
-					<input id="pv_on" type="number" step="10" value="${c.pv_on}">
-				</div>
-				<div class="row">
-					<label>PV Aus (W)</label>
-					<input id="pv_off" type="number" step="10" value="${c.pv_off}">
-				</div>
-			</div>
 		</div>`;
 
-		const picker = this.shadowRoot.querySelector("#controller");
-		if (picker) {
-			picker.hass = this._hass;
-			picker.value = c.controller_entity || "";
-			picker.addEventListener("value-changed", (ev) => {
-				const val = ev.detail?.value;
-				this._updateConfig({ controller_entity: val, climate_entity: val && val.startsWith("climate.") ? val : this._config?.climate_entity });
-			});
-		}
+		this._populateControllerSelect();
 
 		this.shadowRoot.querySelectorAll("input").forEach((inp) => {
 			inp.addEventListener("change", () => {
@@ -436,6 +431,48 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (deriveBtn) deriveBtn.addEventListener("click", () => this._deriveFromController());
 
 		this._renderDerivedBox();
+	}
+
+	async _populateControllerSelect() {
+		if (!this._hass) return;
+		const select = this.shadowRoot.querySelector("#controller-select");
+		if (!select) return;
+
+		const reg = await this._getEntityRegistry();
+		const poolControllers = reg.filter((r) => 
+			r.platform === "pool_controller" && 
+			r.entity_id.startsWith("climate.")
+		);
+
+		// Clear and populate select
+		select.innerHTML = '<option value="">Bitte wählen...</option>';
+		poolControllers.forEach((entity) => {
+			const state = this._hass.states[entity.entity_id];
+			const name = state?.attributes?.friendly_name || entity.entity_id;
+			const option = document.createElement("option");
+			option.value = entity.entity_id;
+			option.textContent = name;
+			if (entity.entity_id === this._config?.controller_entity) {
+				option.selected = true;
+			}
+			select.appendChild(option);
+		});
+
+		// Auto-select wenn nur eine Instanz vorhanden und noch keine Config
+		if (poolControllers.length === 1 && !this._config?.controller_entity) {
+			const firstController = poolControllers[0].entity_id;
+			select.value = firstController;
+			this._updateConfig({ controller_entity: firstController, climate_entity: firstController });
+			// Automatisch alle Entities übernehmen
+			setTimeout(() => this._deriveFromController(), 100);
+		}
+
+		select.addEventListener("change", (ev) => {
+			const val = ev.target.value;
+			if (val) {
+				this._updateConfig({ controller_entity: val, climate_entity: val });
+			}
+		});
 	}
 
 	async _deriveFromController() {
