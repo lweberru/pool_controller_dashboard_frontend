@@ -1,6 +1,6 @@
 {
   "name": "Pool Controller Dashboard",
-  "content_in_root": false,
-  "filename": "pool_controller_dashboard/main.js",
+  "content_in_root": true,
+  "filename": "main.js",
   "render_readme": true
 }
