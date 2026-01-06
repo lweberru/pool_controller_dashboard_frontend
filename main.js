@@ -347,19 +347,14 @@ class PoolControllerCard extends HTMLElement {
 						</div>
 					</div>
 				</div>
-			</div>
+		</div>` : ""}
 		</div>
-	</ha-card>`;
+	</div>
+</ha-card>`;
 
-		this._attachHandlers();
-	}
-
-	_renderError(msg) {
-		this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px; color:red;">${msg}</div></ha-card>`;
-	}
-
-	_attachHandlers() {
-		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
+	this._attachHandlers();
+}
+_attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
 		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
 				const action = btn.dataset.action;
