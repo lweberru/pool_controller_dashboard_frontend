@@ -70,15 +70,24 @@ class PoolControllerCard extends HTMLElement {
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
 		const salt = c.salt_entity ? this._num(h.states[c.salt_entity]?.state) : null;
 		const tds = c.tds_entity ? this._num(h.states[c.tds_entity]?.state) : null;
-		const phPlus = c.ph_plus_entity ? this._num(h.states[c.ph_plus_entity]?.state) : null;
-		const phMinus = c.ph_minus_entity ? this._num(h.states[c.ph_minus_entity]?.state) : null;
-		const chlorDose = c.chlor_dose_entity ? this._num(h.states[c.chlor_dose_entity]?.state) : null;
+		// Wartungs-Werte: Nummer extrahieren, aber Original für Anzeige behalten
+		const phPlusNum = c.ph_plus_entity ? this._num(h.states[c.ph_plus_entity]?.state) : null;
+		const phPlusStr = c.ph_plus_entity ? h.states[c.ph_plus_entity]?.state : null;
+		const phMinusNum = c.ph_minus_entity ? this._num(h.states[c.ph_minus_entity]?.state) : null;
+		const phMinusStr = c.ph_minus_entity ? h.states[c.ph_minus_entity]?.state : null;
+		const chlorDoseNum = c.chlor_dose_entity ? this._num(h.states[c.chlor_dose_entity]?.state) : null;
+		const chlorDoseStr = c.chlor_dose_entity ? h.states[c.chlor_dose_entity]?.state : null;
 
 		const nextStartMins = c.next_start_entity ? this._num(h.states[c.next_start_entity]?.state) : null;
 		const nextEventTs = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 
 		const dialAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
 		const pvProgress = pvVal != null ? this._clamp((pvVal - c.pv_off) / Math.max(1, c.pv_on - c.pv_off), 0, 1) : null;
+
+		// Badesession Timer
+		const bathingEta = bathingState.eta;
+		const bathingMaxMins = 120;
+		const bathingProgress = bathingEta != null ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : 0;
 
 		const events = await this._loadCalendarEvents();
 		const maxEvents = Number(c.show_calendar || 1);
@@ -97,7 +106,7 @@ class PoolControllerCard extends HTMLElement {
 			
 			.dial-container { display: grid; place-items: center; margin: 20px auto; max-width: 450px; }
 			.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 350px; display: grid; place-items: center; }
-			.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 30deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 330deg, transparent 330deg); display: grid; place-items: center; padding: 20px; position: relative; }
+			.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
 			.status-icons { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
@@ -112,6 +121,11 @@ class PoolControllerCard extends HTMLElement {
 			.info-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 			.info-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; }
 			.info-value { font-weight: 600; }
+			
+			.bath-timer { margin-top: 8px; width: 200px; }
+			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
+			.timer-fill { height: 100%; background: linear-gradient(90deg, #8a3b32, #c0392b); border-radius: inherit; transition: width 300ms ease; }
+			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
 			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -128,6 +142,10 @@ class PoolControllerCard extends HTMLElement {
 			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
 			.aux-switch-label ha-icon { --mdc-icon-size: 20px; }
+			.toggle { width: 44px; height: 24px; background: #d0d7de; border-radius: 999px; position: relative; transition: background 200ms ease; }
+			.toggle::after { content: ""; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 200ms ease; }
+			.aux-switch.active .toggle { background: #fff; }
+			.aux-switch.active .toggle::after { left: 23px; background: #c0392b; }
 			
 			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; margin-top: 20px; }
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
@@ -176,10 +194,10 @@ class PoolControllerCard extends HTMLElement {
 				<div class="dial" style="--angle:${dialAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}">
 					<div class="ring">
 						<div class="status-icons">
-							<div class="status-icon ${frost ? "active" : ""}" title="Frostschutz">
+							<div class="status-icon ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
-							<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit">
+							<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit: ${quiet ? "an" : "aus"}">
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
 							</div>
 						</div>
@@ -201,6 +219,13 @@ class PoolControllerCard extends HTMLElement {
 								<div class="info-value">${powerVal != null ? powerVal + "W" : "–"}</div>
 							</div>
 						</div>
+						${bathingState.active && bathingEta != null ? `
+						<div class="bath-timer">
+							<div class="timer-bar">
+								<div class="timer-fill" style="width: ${bathingProgress * 100}%"></div>
+							</div>
+							<div class="timer-text">Badesession: noch ${bathingEta} min</div>
+						</div>` : ""}
 					</div>
 				</div>
 				<div class="temp-controls">
@@ -230,7 +255,7 @@ class PoolControllerCard extends HTMLElement {
 						<ha-icon icon="mdi:fire"></ha-icon>
 						<span>Zusatzheizung</span>
 					</div>
-					<div>${auxOn ? "AN" : "AUS"}</div>
+					<div class="toggle"></div>
 				</div>
 			</div>
 			
@@ -267,32 +292,32 @@ class PoolControllerCard extends HTMLElement {
 				</div>` : ""}
 			</div>
 			
-			${(phPlus && phPlus > 0) || (phMinus && phMinus > 0) || (chlorDose && chlorDose > 0) ? `
+			${(phPlusNum && phPlusNum > 0) || (phMinusNum && phMinusNum > 0) || (chlorDoseNum && chlorDoseNum > 0) ? `
 			<div class="maintenance">
 				<div class="section-title">⚠️ Wartungsarbeiten erforderlich</div>
 				<div class="maintenance-items">
-					${phPlus && phPlus > 0 ? `
+					${phPlusNum && phPlusNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH+ hinzufügen</div>
-							<div class="maintenance-value">${phPlus} g</div>
+							<div class="maintenance-value">${phPlusStr || (phPlusNum + ' g')}</div>
 						</div>
 					</div>` : ""}
-					${phMinus && phMinus > 0 ? `
+					${phMinusNum && phMinusNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH- hinzufügen</div>
-							<div class="maintenance-value">${phMinus} g</div>
+							<div class="maintenance-value">${phMinusStr || (phMinusNum + ' g')}</div>
 						</div>
 					</div>` : ""}
-					${chlorDose && chlorDose > 0 ? `
+					${chlorDoseNum && chlorDoseNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:beaker"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">Chlor hinzufügen</div>
-							<div class="maintenance-value">${chlorDose}</div>
+							<div class="maintenance-value">${chlorDoseStr || chlorDoseNum}</div>
 						</div>
 					</div>` : ""}
 				</div>
@@ -413,11 +438,18 @@ class PoolControllerCard extends HTMLElement {
 
 	_calcDial(val, min, max) {
 		const pct = this._clamp((val - min) / (max - min), 0, 1);
-		return Math.round(pct * 300 + 30); // leave 60deg gap
+		return Math.round(pct * 270); // 270deg arc (from 225deg to 495deg = 225deg to 135deg)
 	}
 
 	_num(v) {
-		const n = Number(v);
+		if (v == null || v === '') return null;
+		// String normalisieren: deutsche Kommas, Einheiten entfernen
+		let str = String(v).trim();
+		// Entferne Einheiten (g, mV, W, etc.) und Text
+		str = str.replace(/[a-zA-Z°%]+/g, '').trim();
+		// Deutsches Komma → Punkt
+		str = str.replace(',', '.');
+		const n = Number(str);
 		return Number.isFinite(n) ? n : null;
 	}
 
@@ -613,8 +645,15 @@ class PoolControllerCardEditor extends HTMLElement {
 			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
 			pause_stop: pick("button", "pause_stop") || this._config.pause_stop,
 			pause_until: pick("sensor", "pause_until") || this._config.pause_until,
+			pause_active_entity: pick("binary_sensor", "is_paused") || this._config.pause_active_entity,
+			frost_entity: pick("binary_sensor", "frost") || pick("sensor", "frost_risk") || this._config.frost_entity,
+			quiet_entity: pick("binary_sensor", "quiet") || pick("binary_sensor", "is_quiet") || this._config.quiet_entity,
+			power_entity: pick("sensor", "power") || pick("sensor", "power_consumption") || this._config.power_entity,
+			pv_entity: pick("sensor", "pv") || pick("sensor", "solar_power") || this._config.pv_entity,
 			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
 			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
+			salt_entity: pick("sensor", "salt") || this._config.salt_entity,
+			tds_entity: pick("sensor", "tds") || this._config.tds_entity,
 			ph_plus_entity: pick("sensor", "ph_plus_g") || this._config.ph_plus_entity,
 			ph_minus_entity: pick("sensor", "ph_minus_g") || this._config.ph_minus_entity,
 			chlor_dose_entity: pick("sensor", "chlor_spoons") || this._config.chlor_dose_entity,
