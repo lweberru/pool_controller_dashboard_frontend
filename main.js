@@ -635,8 +635,10 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!selected || !selected.config_entry_id) return;
 		const ceid = selected.config_entry_id;
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
+		console.log("[Pool Controller] Found entities:", entries.map(e => ({ id: e.entity_id, unique: e.unique_id })));
 		const pick = (domain, suffix) => {
 			const hit = entries.find((e) => e.entity_id.startsWith(`${domain}.`) && (suffix ? e.unique_id?.endsWith(`_${suffix}`) : true));
+			console.log(`[Pool Controller] pick(${domain}, ${suffix}) -> ${hit?.entity_id} (unique_id: ${hit?.unique_id})`);
 			return hit?.entity_id;
 		};
 		const cfg = {
