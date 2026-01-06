@@ -106,16 +106,20 @@ class PoolControllerCard extends HTMLElement {
 			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f4f6f8; color: #333; }
 			.pill.on { background: #d0f0d0; color: #0f6b2f; }
 			.pill.warn { background: #ffe5d5; color: #b44; }
-			
-			.dial-container { display: grid; place-items: center; margin: 20px auto; max-width: 450px; }
-			.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 350px; display: grid; place-items: center; }
-			.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
-			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
-			
-			.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
-			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
-			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
-			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
+		.pill.active { background: #8a3b32; color: #fff; }
+		
+		.content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+		@media (max-width: 600px) { .content-grid { grid-template-columns: 1fr; } }
+	
+	.dial-container { display: grid; place-items: center; }
+	.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
+	.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
+	.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
+	
+	.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
+	.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
+	.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
+	.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
 			.dial-core { position: absolute; display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
@@ -155,7 +159,7 @@ class PoolControllerCard extends HTMLElement {
 			.aux-switch.active .toggle { background: #fff; }
 			.aux-switch.active .toggle::after { left: 23px; background: #c0392b; }
 			
-			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; margin-top: 20px; }
+.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; }
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
 			
 			.scale-container { position: relative; }
@@ -174,7 +178,7 @@ class PoolControllerCard extends HTMLElement {
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
 			.info-badge.alert { background: #ffe5d5; color: #8a3b32; border-color: #f3c2a2; font-weight: 600; }
 			
-			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 20px; }
+		.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 16px; }
 			.maintenance .section-title { color: #c0392b; }
 			.maintenance-items { display: grid; gap: 12px; margin-top: 12px; }
 			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #f3c2a2; }
@@ -183,7 +187,7 @@ class PoolControllerCard extends HTMLElement {
 			.maintenance-label { font-weight: 600; color: #8a3b32; }
 			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
 			
-			.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 20px; }
+		.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 16px; }
 			.event { padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e9f0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 			.event-title { font-weight: 500; }
 			.event-time { color: #555; font-size: 13px; }
@@ -195,11 +199,13 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
-				<div class="pill ${status === "paused" ? "warn" : status === "frost_protection" ? "on" : ""}">${status || hvac}</div>
+				<div class="pill ${bathingState.active || filterState.active || chlorState.active ? "active" : pauseState.active ? "warn" : frost ? "on" : ""}">${this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active)}</div>
 			</div>
 			
-			<div class="dial-container">
-				<div class="dial" style="--angle:${dialAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}">
+			<div class="content-grid">
+				<div class="left-column">
+					<div class="dial-container">
+						<div class="dial" style="--angle:${dialAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}">
 					<div class="ring">
 						<div class="status-icons">
 							<div class="status-icon ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
@@ -259,7 +265,8 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 			</div>
 			
-			<div class="quality">
+			<div class="right-column">
+				<div class="quality">
 				<div class="section-title">Wasserqualität</div>
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">pH-Wert</div>
@@ -340,8 +347,9 @@ class PoolControllerCard extends HTMLElement {
 						</div>
 					</div>
 				</div>
-			</div>` : ""}
-		</ha-card>`;
+			</div>
+		</div>
+	</ha-card>`;
 
 		this._attachHandlers();
 	}
