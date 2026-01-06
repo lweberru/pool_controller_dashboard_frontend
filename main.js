@@ -208,7 +208,7 @@ class PoolControllerCard extends HTMLElement {
 						<div class="dial" style="--angle:${dialAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}">
 					<div class="ring">
 						<div class="status-icons">
-							<div class="status-icon ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
+						<div class="status-icon frost ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
 							<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit: ${quiet ? "an" : "aus"}">
