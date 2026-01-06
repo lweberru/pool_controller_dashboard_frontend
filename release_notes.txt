@@ -1,0 +1,19 @@
+## 🐛 KRITISCHER BUGFIX: Auto-Discovery speichert Config nicht
+
+### Problem
+Nach Klick auf "Automatisch aus Instanz übernehmen" wurden alle Entities gefunden, aber die Config wurde **nicht gespeichert**. Alle Entities blieben `undefined`.
+
+### Root Cause
+`_deriveFromController()` hat `renderOnly=true` Parameter verwendet, wodurch das `config-changed` Event **nicht gefeuert** wurde.
+
+### Fix ✅
+Config wird nun **automatisch gespeichert** beim Auto-Discovery.
+
+### Nach Update
+1. HACS → Frontend → Pool Controller Dashboard → Update auf v1.1.8
+2. Karte im Editor öffnen
+3. "Automatisch aus Instanz übernehmen" klicken
+4. Config wird **automatisch gespeichert** (kein SAVE-Button mehr nötig!)
+5. Browser neu laden (F5)
+
+Alle Features sollten nun funktionieren! 🎉
