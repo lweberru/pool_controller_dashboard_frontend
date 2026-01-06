@@ -7,7 +7,7 @@ const CARD_TYPE = "pc-pool-controller";
 const DEFAULTS = {
 	min_temp: 10,
 	max_temp: 40,
-	show_calendar: 1,
+	step: 0.5,
 	chlor_ok_min: 650,
 	chlor_ok_max: 850,
 	pv_on: 1000,
@@ -20,7 +20,6 @@ class PoolControllerCard extends HTMLElement {
 			throw new Error("climate_entity ist erforderlich");
 		}
 		this._config = { ...DEFAULTS, ...config };
-		this._calendarCache = { ts: 0, events: [] };
 		if (!this.shadowRoot) {
 			this.attachShadow({ mode: "open" });
 		}
@@ -81,7 +80,9 @@ class PoolControllerCard extends HTMLElement {
 		const chlorDoseStr = c.chlor_dose_entity ? h.states[c.chlor_dose_entity]?.state : null;
 
 		const nextStartMins = c.next_start_entity ? this._num(h.states[c.next_start_entity]?.state) : null;
-		const nextEventTs = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
+		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
+		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
+		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
 
 		const dialAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
 
@@ -90,9 +91,7 @@ class PoolControllerCard extends HTMLElement {
 		const bathingMaxMins = 120;
 		const bathingProgress = bathingEta != null ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : 0;
 
-		const events = await this._loadCalendarEvents();
-		const maxEvents = Number(c.show_calendar || 1);
-		const shownEvents = events.length ? events.slice(0, maxEvents) : (nextEventTs ? [{ title: "Geplanter Start", start: new Date(nextEventTs), source: "calendar" }] : []);
+		// Kein Kalender-Abruf mehr, nur Event aus Sensoren
 
 		this.shadowRoot.innerHTML = `
 		<style>
@@ -340,10 +339,17 @@ class PoolControllerCard extends HTMLElement {
 				<span class="next-start-time">in ${nextStartMins} Minuten</span>
 			</div>` : ""}
 			
-			${shownEvents.length || nextEventTs ? `
+			${nextEventStart ? `
 			<div class="calendar">
-				<div class="section-title">Nächste Termine</div>
-				${shownEvents.length ? shownEvents.map(ev => this._eventRow(ev)).join("") : (nextEventTs ? this._eventRow({ title: "Geplanter Start", start: new Date(nextEventTs) }) : `<div class="event"><div class="event-title">Keine Einträge</div></div>`)}
+				<div class="section-title">Nächster Termin</div>
+				<div class="event">
+					<div style="flex: 1;">
+						<div class="event-title">${nextEventSummary || "Geplanter Start"}</div>
+						<div class="event-time" style="margin-top: 4px;">
+							${this._formatEventTime(nextEventStart, nextEventEnd)}
+						</div>
+					</div>
+				</div>
 			</div>` : ""}
 		</ha-card>`;
 
@@ -421,10 +427,14 @@ class PoolControllerCard extends HTMLElement {
 		return hvac || "–";
 	}
 
-	_eventRow(ev) {
-		const dt = ev.start instanceof Date ? ev.start : new Date(ev.start);
-		const dateStr = dt ? dt.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
-		return `<div class="event"><div class="event-title">${ev.title || ev.summary || "Termin"}</div><div class="event-time">${dateStr}</div></div>`;
+	_formatEventTime(startTs, endTs) {
+		if (!startTs) return "";
+		const start = new Date(startTs);
+		const startStr = start.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+		if (!endTs) return startStr;
+		const end = new Date(endTs);
+		const endStr = end.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+		return `${startStr} - ${endStr}`;
 	}
 
 	_modeState(h, entity, untilEntity, fallbackActiveEntity) {
@@ -477,28 +487,7 @@ class PoolControllerCard extends HTMLElement {
 		return this._clamp(((val - min) / (max - min)) * 100, 0, 100);
 	}
 
-	async _loadCalendarEvents() {
-		const cfg = this._config;
-		if (!this._hass || !cfg.calendar_entities || !cfg.calendar_entities.length) return [];
-		const now = new Date();
-		if (now.getTime() - this._calendarCache.ts < 60000) {
-			return this._calendarCache.events;
-		}
-		const end = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-		const promises = cfg.calendar_entities.map((id) => this._hass.callWS({ type: "calendar/list_events", entity_id: id, start_time: now.toISOString(), end_time: end.toISOString() }));
-		try {
-			const results = await Promise.allSettled(promises);
-			const events = results.flatMap((r, idx) => {
-				if (r.status !== "fulfilled") return [];
-				return (r.value || []).map((ev) => ({ ...ev, source: cfg.calendar_entities[idx] }));
-			});
-			this._calendarCache = { ts: now.getTime(), events };
-			return events;
-		} catch (e) {
-			// ignore
-			return [];
-		}
-	}
+
 }
 
 class PoolControllerCardEditor extends HTMLElement {
@@ -562,10 +551,6 @@ class PoolControllerCardEditor extends HTMLElement {
 				<div class="row">
 					<label>Schrittweite</label>
 					<input id="step" type="number" step="0.1" value="${c.step || 0.5}">
-				</div>
-				<div class="row">
-					<label>Kalender-Einträge anzeigen</label>
-					<input id="show_calendar" type="number" step="1" min="0" value="${c.show_calendar || 1}">
 				</div>
 			</div>
 		</div>`;
@@ -679,6 +664,8 @@ class PoolControllerCardEditor extends HTMLElement {
 			chlor_dose_entity: pick("sensor", "chlor_spoons") || this._config.chlor_dose_entity,
 			next_start_entity: pick("sensor", "next_start_mins") || this._config.next_start_entity,
 			next_event_entity: pick("sensor", "next_event") || this._config.next_event_entity,
+			next_event_end_entity: pick("sensor", "next_event_end") || this._config.next_event_end_entity,
+			next_event_summary_entity: pick("sensor", "next_event_summary") || this._config.next_event_summary_entity,
 		};
 		this._updateConfig(cfg, true);
 	}
