@@ -629,7 +629,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
-			status_entity: pick("sensor", "status") || this._config.status_entity,
+			status_entity: this._config.status_entity, // Status-Sensor hat keine unique_id im Backend
 			aux_entity: pick("switch", "aux") || this._config.aux_entity,
 			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
 			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
