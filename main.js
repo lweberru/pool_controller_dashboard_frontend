@@ -515,15 +515,6 @@ class PoolControllerCardEditor extends HTMLElement {
 customElements.define(`${CARD_TYPE}-editor`, PoolControllerCardEditor);
 customElements.define(`${CARD_TYPE}-card`, PoolControllerCard);
 
-// Provide Lovelace UI config editor
-PoolControllerCard.getConfigElement = function () {
-	return document.createElement(`${CARD_TYPE}-editor`);
-};
-
-PoolControllerCard.getStubConfig = function () {
-	return {};
-};
-
 window.customCards = window.customCards || [];
 window.customCards.push({
 	type: CARD_TYPE,
@@ -531,19 +522,28 @@ window.customCards.push({
 	description: "Whirlpool/Pool Steuerung ohne iFrame.",
 });
 
-window.customElements.define(
-	CARD_TYPE,
-	class extends HTMLElement {
-		setConfig(config) {
-			this._config = config;
-		}
-		set hass(hass) {
-			if (!this._card) {
-				this._card = document.createElement(`${CARD_TYPE}-card`);
-				this._card.setConfig(this._config);
-				this.appendChild(this._card);
-			}
-			this._card.hass = hass;
-		}
+// Main wrapper element
+class PoolControllerCardWrapper extends HTMLElement {
+	setConfig(config) {
+		this._config = config;
 	}
-);
+	
+	set hass(hass) {
+		if (!this._card) {
+			this._card = document.createElement(`${CARD_TYPE}-card`);
+			this._card.setConfig(this._config);
+			this.appendChild(this._card);
+		}
+		this._card.hass = hass;
+	}
+	
+	static getConfigElement() {
+		return document.createElement(`${CARD_TYPE}-editor`);
+	}
+	
+	static getStubConfig() {
+		return {};
+	}
+}
+
+window.customElements.define(CARD_TYPE, PoolControllerCardWrapper);
