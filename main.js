@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.8 - Ring: Winkelreferenz korrigiert (Gap unten)
+ * v1.5.9 - Ring: Dots wie Better Thermostat (IST-Dot klein/hellrot)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -293,6 +293,7 @@ class PoolControllerCard extends HTMLElement {
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 40;
+		const DOT_R = RING_R - 4;
 		// SVG-Winkel (Screen-Koordinaten): 0°=3 Uhr, 90°=6 Uhr.
 		// Gap unten (zentriert bei 90°): Gap 45°..135° => Arc Start 135°, Sweep 270° bis 45°.
 		const RING_START_DEG = 135;
@@ -311,11 +312,11 @@ class PoolControllerCard extends HTMLElement {
 							<!-- Highlight zwischen IST und SOLL -->
 							${d.targetAngle > d.dialAngle ? `<path class="ring-highlight" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-							<circle class="ring-dot-current" cx="${RING_CX + RING_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" 
-								cy="${RING_CY + RING_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.5" />
+							<circle class="ring-dot-current" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" 
+								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.25" style="fill:${d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)"};" />
 							<!-- Dot am SOLL-Wert (größer, weiß) -->
-							<circle class="ring-dot-target" cx="${RING_CX + RING_R * Math.cos((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" 
-								cy="${RING_CY + RING_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
+							<circle class="ring-dot-target" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" 
+								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
