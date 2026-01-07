@@ -31,14 +31,18 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	set hass(hass) {
+		const oldHass = this._hass;
 		this._hass = hass;
-		// Debounce rendering um Flackern zu vermeiden
+		// Debounce + State-Vergleich um Flackern zu vermeiden
 		if (this._renderTimeout) {
 			clearTimeout(this._renderTimeout);
 		}
-		this._renderTimeout = setTimeout(() => {
-			this._render();
-		}, 100);
+		// Nur rendern wenn sich relevante States geändert haben
+		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
+			this._renderTimeout = setTimeout(() => {
+				this._render();
+			}, 150);
+		}
 	}
 
 	connectedCallback() {
@@ -200,9 +204,9 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-		.scale-marker { position: absolute; top: -48px; transform: translateX(-50%); z-index: 10; }
-		.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
-		.marker-value::after { content: ""; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid #0b132b; }
+		.scale-marker { position: absolute; top: -56px; transform: translateX(-50%); z-index: 10; }
+		.marker-value { background: #0b132b; color: #fff; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
+		.marker-value::after { content: ""; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 10px solid #0b132b; }
 			.scale-range { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #999; text-transform: uppercase; font-weight: 600; }
 			
 			.info-row-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -316,6 +320,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 					<div class="toggle"></div>
 				</div>
 			</div>
+			<!-- END left-column -->
 			
 			<div class="right-column">
 				<div class="quality">
@@ -543,6 +548,23 @@ _attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp
 
 	_pct(val, min, max) {
 		return this._clamp(((val - min) / (max - min)) * 100, 0, 100);
+	}
+
+	_hasRelevantChanges(oldHass, newHass) {
+		if (!this._config) return true;
+		// Prüfe nur relevante Entities
+		const entities = [
+			this._config.climate_entity,
+			this._config.aux_entity,
+			this._config.bathing_entity,
+			this._config.filter_entity,
+			this._config.chlorine_entity,
+			this._config.pause_entity,
+			this._config.ph_entity,
+			this._config.chlorine_value_entity,
+		].filter(Boolean);
+		
+		return entities.some(e => oldHass.states[e]?.state !== newHass.states[e]?.state);
 	}
 
 
