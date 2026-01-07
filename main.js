@@ -12,6 +12,10 @@ const DEFAULTS = {
 	chlor_ok_max: 850,
 	pv_on: 1000,
 	pv_off: 500,
+	bathing_max_mins: 120,
+	filter_max_mins: 120,
+	chlor_max_mins: 60,
+	pause_max_mins: 120,
 };
 
 class PoolControllerCard extends HTMLElement {
@@ -73,26 +77,45 @@ class PoolControllerCard extends HTMLElement {
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
 		const salt = c.salt_entity ? this._num(h.states[c.salt_entity]?.state) : null;
 		const tds = c.tds_entity ? this._num(h.states[c.tds_entity]?.state) : null;
-		// Wartungs-Werte: Nummer extrahieren, aber Original für Anzeige behalten
-		const phPlusNum = c.ph_plus_entity ? this._num(h.states[c.ph_plus_entity]?.state) : null;
-		const phPlusStr = c.ph_plus_entity ? h.states[c.ph_plus_entity]?.state : null;
-		const phMinusNum = c.ph_minus_entity ? this._num(h.states[c.ph_minus_entity]?.state) : null;
-		const phMinusStr = c.ph_minus_entity ? h.states[c.ph_minus_entity]?.state : null;
-		const chlorDoseNum = c.chlor_dose_entity ? this._num(h.states[c.chlor_dose_entity]?.state) : null;
-		const chlorDoseStr = c.chlor_dose_entity ? h.states[c.chlor_dose_entity]?.state : null;
-		console.log("[Pool Controller] Wartung:", { phPlusNum, phPlusStr, phMinusNum, phMinusStr, chlorDoseNum, chlorDoseStr });
+		// Wartungs-Werte: Wert + Einheit aus attributes
+		const phPlusStateObj = c.ph_plus_entity ? h.states[c.ph_plus_entity] : null;
+		const phPlusNum = phPlusStateObj ? this._num(phPlusStateObj.state) : null;
+		const phPlusUnit = phPlusStateObj?.attributes?.unit_of_measurement || 'g';
+		
+		const phMinusStateObj = c.ph_minus_entity ? h.states[c.ph_minus_entity] : null;
+		const phMinusNum = phMinusStateObj ? this._num(phMinusStateObj.state) : null;
+		const phMinusUnit = phMinusStateObj?.attributes?.unit_of_measurement || 'g';
+		
+		const chlorDoseStateObj = c.chlor_dose_entity ? h.states[c.chlor_dose_entity] : null;
+		const chlorDoseNum = chlorDoseStateObj ? this._num(chlorDoseStateObj.state) : null;
+		const chlorDoseUnit = chlorDoseStateObj?.attributes?.unit_of_measurement || 'Messlöffel';
+		
+		console.log("[Pool Controller] Wartung:", { phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit });
 
 		const nextStartMins = c.next_start_entity ? this._num(h.states[c.next_start_entity]?.state) : null;
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
 
-		const dialAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
+const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
+	const targetAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
 
-		// Badesession Timer
-		const bathingEta = bathingState.eta;
-		const bathingMaxMins = 120;
-		const bathingProgress = bathingEta != null ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : 0;
+	// Timer für alle Modi
+	const bathingEta = bathingState.eta;
+	const filterEta = filterState.eta;
+	const chlorEta = chlorState.eta;
+	const pauseEta = pauseState.eta;
+	
+	// Timer-Dauern: aus Duration-Sensoren oder Config-Defaults
+	const bathingMaxMins = c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null;
+	const filterMaxMins = c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null;
+	const chlorMaxMins = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
+	const pauseMaxMins = c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null;
+	
+	const bathingProgress = bathingEta != null && bathingMaxMins ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : (bathingEta != null ? this._clamp(bathingEta / c.bathing_max_mins, 0, 1) : 0);
+	const filterProgress = filterEta != null && filterMaxMins ? this._clamp(filterEta / filterMaxMins, 0, 1) : (filterEta != null ? this._clamp(filterEta / c.filter_max_mins, 0, 1) : 0);
+	const chlorProgress = chlorEta != null && chlorMaxMins ? this._clamp(chlorEta / chlorMaxMins, 0, 1) : (chlorEta != null ? this._clamp(chlorEta / c.chlor_max_mins, 0, 1) : 0);
+	const pauseProgress = pauseEta != null && pauseMaxMins ? this._clamp(pausEta / pauseMaxMins, 0, 1) : (pauseEta != null ? this._clamp(pauseEta / c.pause_max_mins, 0, 1) : 0);
 
 		// Kein Kalender-Abruf mehr, nur Event aus Sensoren
 
@@ -138,7 +161,7 @@ class PoolControllerCard extends HTMLElement {
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
-			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; will-change: transform; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
@@ -146,10 +169,10 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
 			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
-			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
+			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; will-change: transform; }
 			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
 			
-			.aux-switch { margin-top: 16px; padding: 12px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
+			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
 			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -168,7 +191,7 @@ class PoolControllerCard extends HTMLElement {
 			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-			.scale-marker { position: absolute; bottom: 100%; margin-bottom: 8px; transform: translateX(-50%); }
+			.scale-marker { position: absolute; top: -48px; transform: translateX(-50%); }
 			.scale-marker::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid #0b132b; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; }
 			
@@ -205,7 +228,7 @@ class PoolControllerCard extends HTMLElement {
 			<div class="content-grid">
 				<div class="left-column">
 					<div class="dial-container">
-						<div class="dial" style="--angle:${dialAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}">
+						<div class="dial" style="--angle:${dialAngle}deg; --target-angle:${targetAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
 					<div class="ring">
 						<div class="status-icons">
 						<div class="status-icon frost ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
@@ -228,9 +251,30 @@ class PoolControllerCard extends HTMLElement {
 						${bathingState.active && bathingEta != null ? `
 						<div class="bath-timer">
 							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${bathingProgress * 100}%"></div>
-							</div>
-							<div class="timer-text">Badesession: noch ${bathingEta} min</div>
+							<div class="timer-fill" style="width: ${(1 - bathingProgress) * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div>
+						</div>
+						<div class="timer-text">Baden: noch ${bathingEta} min</div>
+					</div>` : ""}
+					${filterState.active && filterEta != null ? `
+					<div class="bath-timer">
+						<div class="timer-bar">
+							<div class="timer-fill" style="width: ${(1 - filterProgress) * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div>
+						</div>
+						<div class="timer-text">Filtern: noch ${filterEta} min</div>
+					</div>` : ""}
+					${chlorState.active && chlorEta != null ? `
+					<div class="bath-timer">
+						<div class="timer-bar">
+							<div class="timer-fill" style="width: ${(1 - chlorProgress) * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
+						</div>
+						<div class="timer-text">Chloren: noch ${chlorEta} min</div>
+					</div>` : ""}
+					${pauseState.active && pauseEta != null ? `
+					<div class="bath-timer">
+						<div class="timer-bar">
+							<div class="timer-fill" style="width: ${(1 - pauseProgress) * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div>
+						</div>
+						<div class="timer-text">Pause: noch ${pauseEta} min</div>
 						</div>` : ""}
 					</div>
 				</div>
@@ -259,7 +303,7 @@ class PoolControllerCard extends HTMLElement {
 				<div class="aux-switch ${auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
 					<div class="aux-switch-label">
 						<ha-icon icon="mdi:fire"></ha-icon>
-					<span>Heizung</span>
+				<span>Zusatzheizung</span>
 					</div>
 					<div class="toggle"></div>
 				</div>
@@ -308,7 +352,7 @@ class PoolControllerCard extends HTMLElement {
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH+ hinzufügen</div>
-							<div class="maintenance-value">${phPlusStr || (phPlusNum + ' g')}</div>
+							<div class="maintenance-value">${phPlusNum} ${phPlusUnit}</div>
 						</div>
 					</div>` : ""}
 					${phMinusNum && phMinusNum > 0 ? `
@@ -316,7 +360,7 @@ class PoolControllerCard extends HTMLElement {
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH- hinzufügen</div>
-							<div class="maintenance-value">${phMinusStr || (phMinusNum + ' g')}</div>
+							<div class="maintenance-value">${phMinusNum} ${phMinusUnit}</div>
 						</div>
 					</div>` : ""}
 					${chlorDoseNum && chlorDoseNum > 0 ? `
@@ -324,7 +368,7 @@ class PoolControllerCard extends HTMLElement {
 						<ha-icon icon="mdi:beaker"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">Chlor hinzufügen</div>
-							<div class="maintenance-value">${chlorDoseStr || chlorDoseNum}</div>
+							<div class="maintenance-value">${chlorDoseNum} ${chlorDoseUnit}</div>
 						</div>
 					</div>` : ""}
 				</div>
