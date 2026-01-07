@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * Draft 1: climate-like dial + mode controls + water quality + PV + calendar.
+ * v1.4.5 - Modularisiert mit Template Functions (Option B)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -33,15 +33,9 @@ class PoolControllerCard extends HTMLElement {
 	set hass(hass) {
 		const oldHass = this._hass;
 		this._hass = hass;
-		// Debounce + State-Vergleich um Flackern zu vermeiden
-		if (this._renderTimeout) {
-			clearTimeout(this._renderTimeout);
-		}
-		// Nur rendern wenn sich relevante States geändert haben
+		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
-			this._renderTimeout = setTimeout(() => {
-				this._render();
-			}, 150);
+			this._render();
 		}
 	}
 
@@ -53,6 +47,9 @@ class PoolControllerCard extends HTMLElement {
 		return 5;
 	}
 
+	// ========================================
+	// MODULAR: Haupt-Render orchestriert alles
+	// ========================================
 	async _render() {
 		if (!this._hass || !this._config) return;
 		const h = this._hass;
@@ -63,23 +60,47 @@ class PoolControllerCard extends HTMLElement {
 			return;
 		}
 
+		// Daten vorbereiten
+		const data = this._prepareData(h, c, climate);
+
+		// Komplettes Rendering
+		this.shadowRoot.innerHTML = `
+		${this._getStyles()}
+		<ha-card>
+			<div class="header">
+				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
+				<div class="pill ${data.pillClass}">${data.statusText}</div>
+			</div>
+			
+			<div class="content-grid">
+				${this._renderLeftColumn(data, c)}
+				${this._renderRightColumn(data, c)}
+			</div>
+		</ha-card>`;
+
+		this._attachHandlers();
+	}
+
+	// ========================================
+	// MODULAR: Daten-Vorbereitung
+	// ========================================
+	_prepareData(h, c, climate) {
 		const current = this._num(climate.attributes.current_temperature);
 		const target = this._num(climate.attributes.temperature) ?? this._num(climate.attributes.target_temp) ?? this._num(climate.attributes.max_temp);
 		const hvac = climate.state;
 		const hvacAction = climate.attributes.hvac_action;
-		const status = c.status_entity ? h.states[c.status_entity]?.state : null;
-		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");	console.log("[Pool Controller] Aux:", { entity: c.aux_entity, state: h.states[c.aux_entity]?.state, auxOn });
+		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");
+		
 		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
 		const filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
 		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
 		const pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
+		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
-		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;	console.log("[Pool Controller] Status-Icons:", { 
-		frost: { entity: c.frost_entity, state: h.states[c.frost_entity]?.state, result: frost },
-		quiet: { entity: c.quiet_entity, state: h.states[c.quiet_entity]?.state, result: quiet },
-		pvAllows: { entity: c.pv_entity, state: h.states[c.pv_entity]?.state, result: pvAllows }
-	});		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
+		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
+		
+		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
 		const auxPower = c.aux_power_entity ? this._num(h.states[c.aux_power_entity]?.state) : null;
 		const powerVal = mainPower ?? (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
 
@@ -87,7 +108,7 @@ class PoolControllerCard extends HTMLElement {
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
 		const salt = c.salt_entity ? this._num(h.states[c.salt_entity]?.state) : null;
 		const tds = c.tds_entity ? this._num(h.states[c.tds_entity]?.state) : null;
-		// Wartungs-Werte: Wert + Einheit aus attributes
+		
 		const phPlusStateObj = c.ph_plus_entity ? h.states[c.ph_plus_entity] : null;
 		const phPlusNum = phPlusStateObj ? this._num(phPlusStateObj.state) : null;
 		const phPlusUnit = phPlusStateObj?.attributes?.unit_of_measurement || 'g';
@@ -99,38 +120,54 @@ class PoolControllerCard extends HTMLElement {
 		const chlorDoseStateObj = c.chlor_dose_entity ? h.states[c.chlor_dose_entity] : null;
 		const chlorDoseNum = chlorDoseStateObj ? this._num(chlorDoseStateObj.state) : null;
 		const chlorDoseUnit = chlorDoseStateObj?.attributes?.unit_of_measurement || 'Messlöffel';
-		
-		console.log("[Pool Controller] Wartung:", { phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit });
 
 		const nextStartMins = c.next_start_entity ? this._num(h.states[c.next_start_entity]?.state) : null;
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
 
-const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
-	const targetAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
+		const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
+		const targetAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
 
-	// Timer für alle Modi
-	const bathingEta = bathingState.eta;
-	const filterEta = filterState.eta;
-	const chlorEta = chlorState.eta;
-	const pauseEta = pauseState.eta;
-	
-	// Timer-Dauern: aus Duration-Sensoren oder Config-Defaults
-	const bathingMaxMins = c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null;
-	const filterMaxMins = c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null;
-	const chlorMaxMins = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
-	const pauseMaxMins = c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null;
-	
-	const bathingProgress = bathingEta != null && bathingMaxMins ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : (bathingEta != null ? this._clamp(bathingEta / c.bathing_max_mins, 0, 1) : 0);
-	const filterProgress = filterEta != null && filterMaxMins ? this._clamp(filterEta / filterMaxMins, 0, 1) : (filterEta != null ? this._clamp(filterEta / c.filter_max_mins, 0, 1) : 0);
-	const chlorProgress = chlorEta != null && chlorMaxMins ? this._clamp(chlorEta / chlorMaxMins, 0, 1) : (chlorEta != null ? this._clamp(chlorEta / c.chlor_max_mins, 0, 1) : 0);
-	const pauseProgress = pauseEta != null && pauseMaxMins ? this._clamp(pausEta / pauseMaxMins, 0, 1) : (pauseEta != null ? this._clamp(pauseEta / c.pause_max_mins, 0, 1) : 0);
+		const bathingEta = bathingState.eta;
+		const filterEta = filterState.eta;
+		const chlorEta = chlorState.eta;
+		const pauseEta = pauseState.eta;
+		
+		const bathingMaxMins = c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null;
+		const filterMaxMins = c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null;
+		const chlorMaxMins = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
+		const pauseMaxMins = c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null;
+		
+		const bathingProgress = bathingEta != null && bathingMaxMins ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : (bathingEta != null ? this._clamp(bathingEta / c.bathing_max_mins, 0, 1) : 0);
+		const filterProgress = filterEta != null && filterMaxMins ? this._clamp(filterEta / filterMaxMins, 0, 1) : (filterEta != null ? this._clamp(filterEta / c.filter_max_mins, 0, 1) : 0);
+		const chlorProgress = chlorEta != null && chlorMaxMins ? this._clamp(chlorEta / chlorMaxMins, 0, 1) : (chlorEta != null ? this._clamp(chlorEta / c.chlor_max_mins, 0, 1) : 0);
+		const pauseProgress = pauseEta != null && pauseMaxMins ? this._clamp(pauseEta / pauseMaxMins, 0, 1) : (pauseEta != null ? this._clamp(pauseEta / c.pause_max_mins, 0, 1) : 0);
 
-		// Kein Kalender-Abruf mehr, nur Event aus Sensoren
+		const pillClass = bathingState.active || filterState.active || chlorState.active ? "active" : pauseState.active ? "warn" : frost ? "on" : "";
+		const statusText = this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active);
 
-		this.shadowRoot.innerHTML = `
-		<style>
+		return {
+			current, target, hvac, hvacAction, auxOn,
+			bathingState, filterState, chlorState, pauseState,
+			frost, quiet, pvAllows,
+			mainPower, auxPower, powerVal,
+			ph, chlor, salt, tds,
+			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
+			nextStartMins, nextEventStart, nextEventEnd, nextEventSummary,
+			dialAngle, targetAngle,
+			bathingEta, filterEta, chlorEta, pauseEta,
+			bathingMaxMins, filterMaxMins, chlorMaxMins, pauseMaxMins,
+			bathingProgress, filterProgress, chlorProgress, pauseProgress,
+			pillClass, statusText
+		};
+	}
+
+	// ========================================
+	// MODULAR: Styles
+	// ========================================
+	_getStyles() {
+		return `<style>
 			:host { display: block; }
 			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); }
 			* { box-sizing: border-box; }
@@ -139,30 +176,30 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f4f6f8; color: #333; }
 			.pill.on { background: #d0f0d0; color: #0f6b2f; }
 			.pill.warn { background: #ffe5d5; color: #b44; }
-		.pill.active { background: #8a3b32; color: #fff; }
-		
-		.content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-		@media (max-width: 600px) { .content-grid { grid-template-columns: 1fr; } }
-	
-	.dial-container { display: grid; place-items: center; }
-	.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
-	.ring { width: 100%; height: 100%; border-radius: 50%; position: relative; display: grid; place-items: center; padding: 20px; }
-	
-	/* SVG Ring statt CSS Gradient */
-	.ring-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-135deg); }
-	.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 20; }
-	.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 20; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
-	.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 20; stroke-linecap: round; }
-	.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 24; stroke-linecap: round; opacity: 0.4; }
-	.ring-dot-current { fill: var(--accent, #8a3b32); }
-	.ring-dot-target { fill: #fff; stroke: #d0d7de; stroke-width: 2; }
-	
-	.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
-	
-	.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
-	.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
-	.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
-	.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
+			.pill.active { background: #8a3b32; color: #fff; }
+			
+			.content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+			@media (max-width: 500px) { .content-grid { grid-template-columns: 1fr; } }
+			
+			.dial-container { display: grid; place-items: center; }
+			.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
+			.ring { width: 100%; height: 100%; border-radius: 50%; position: relative; display: grid; place-items: center; padding: 20px; }
+			
+			/* SVG Ring */
+			.ring-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-135deg); }
+			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; }
+			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
+			.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 8; stroke-linecap: round; }
+			.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 10; stroke-linecap: round; opacity: 0.4; }
+			.ring-dot-current { fill: var(--accent, #8a3b32); }
+			.ring-dot-target { fill: #fff; stroke: #d0d7de; stroke-width: 2; }
+			
+			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
+			
+			.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
+			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
+			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
+			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
 			.dial-core { position: absolute; display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
@@ -170,18 +207,14 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
 			.temp-target-row { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--secondary-text-color); }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
-			.info-row { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--secondary-text-color); }
-			.info-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-			.info-label { font-size: 10px; text-transform: uppercase; opacity: 0.7; }
-			.info-value { font-weight: 600; }
 			
 			.bath-timer { margin-top: 8px; width: 200px; }
 			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
-			.timer-fill { height: 100%; background: linear-gradient(90deg, #8a3b32, #c0392b); border-radius: inherit; transition: width 300ms ease; }
+			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
-			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; will-change: transform; }
+			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
@@ -189,7 +222,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
 			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
-			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; will-change: transform; }
+			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
 			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
 			
 			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
@@ -202,7 +235,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.aux-switch.active .toggle { background: #fff; }
 			.aux-switch.active .toggle::after { left: 23px; background: #c0392b; }
 			
-.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; }
+			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; }
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
 			
 			.scale-container { position: relative; }
@@ -214,13 +247,12 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-		.scale-marker { position: absolute; top: -56px; transform: translateX(-50%); z-index: 10; }
-		.marker-value { background: #0b132b; color: #fff; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
-		.marker-value::after { content: ""; position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 36px solid #0b132b; }
+			.scale-marker { position: absolute; top: -56px; transform: translateX(-50%); z-index: 10; }
+			.marker-value { background: #0b132b; color: #fff; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
+			.marker-value::after { content: ""; position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 36px solid #0b132b; }
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
-			.info-badge.alert { background: #ffe5d5; color: #8a3b32; border-color: #f3c2a2; font-weight: 600; }
 			
-		.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 16px; }
+			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 16px; }
 			.maintenance .section-title { color: #c0392b; }
 			.maintenance-items { display: grid; gap: 12px; margin-top: 12px; }
 			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #f3c2a2; }
@@ -229,7 +261,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.maintenance-label { font-weight: 600; color: #8a3b32; }
 			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
 			
-		.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 16px; }
+			.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 16px; }
 			.event { padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e9f0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 			.event-title { font-weight: 500; }
 			.event-time { color: #555; font-size: 13px; }
@@ -237,88 +269,81 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.next-start { background: #e8f5e9; border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
 			.next-start-label { font-weight: 600; color: #0f6b2f; }
 			.next-start-time { color: #0f6b2f; font-size: 14px; }
-		</style>
-		<ha-card>
-			<div class="header">
-				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
-				<div class="pill ${bathingState.active || filterState.active || chlorState.active ? "active" : pauseState.active ? "warn" : frost ? "on" : ""}">${this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active)}</div>
-			</div>
-			
-			<div class="content-grid">
-				<div class="left-column">
-					<div class="dial-container">
-					<div class="dial" style="--accent:${auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
-						<div class="ring">
-							<!-- SVG Ring mit abgerundeten Enden -->
-							<svg class="ring-svg" viewBox="0 0 100 100">
-								<!-- Track (Hintergrund) -->
-								<circle class="ring-track" cx="50" cy="50" r="40" />
-								<!-- Target Range (translucent) -->
-								${targetAngle > dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
-									stroke-dasharray="${(targetAngle - dialAngle) * 251.2 / 270} 251.2" 
-									stroke-dashoffset="${-dialAngle * 251.2 / 270}" />` : ''}
-								<!-- Current Progress (solid) -->
-								<circle class="ring-progress" cx="50" cy="50" r="40" 
-									stroke-dasharray="${dialAngle * 251.2 / 270} 251.2" 
-									stroke-dashoffset="0" />
-								<!-- Highlight zwischen IST und SOLL (dicker, wenn Target > Current) -->
-								${targetAngle > dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
-									stroke-dasharray="${(targetAngle - dialAngle) * 251.2 / 270} 251.2" 
-									stroke-dashoffset="${-dialAngle * 251.2 / 270}" />` : ''}
-								<!-- Dot am Current-Ende -->
-								<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((dialAngle - 135) * Math.PI / 180)}" 
-									cy="${50 + 40 * Math.sin((dialAngle - 135) * Math.PI / 180)}" r="${current < target ? '3' : '4'}" />
-								<!-- Dot am Target-Ende (größer, weiß) -->
-								<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((targetAngle - 135) * Math.PI / 180)}" 
-									cy="${50 + 40 * Math.sin((targetAngle - 135) * Math.PI / 180)}" r="6" />
-							</svg>
-							<div class="status-icons">
-								<div class="status-icon frost ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
-									<ha-icon icon="mdi:snowflake"></ha-icon>
-								</div>
-								<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit: ${quiet ? "an" : "aus"}">
-									<ha-icon icon="mdi:power-sleep"></ha-icon>
-								</div>
-								<div class="status-icon ${pvAllows ? "active" : ""}" title="PV-Überschuss: ${pvAllows ? "verfügbar" : "nicht verfügbar"}">
-									<ha-icon icon="mdi:solar-power"></ha-icon>
-								</div>
+		</style>`;
+	}
+
+	// ========================================
+	// MODULAR: Linke Spalte (Dial + Controls)
+	// ========================================
+	_renderLeftColumn(d, c) {
+		return `<div class="left-column">
+			<div class="dial-container">
+				<div class="dial" style="--accent:${d.auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
+					<div class="ring">
+						<!-- SVG Ring -->
+						<svg class="ring-svg" viewBox="0 0 100 100">
+							<circle class="ring-track" cx="50" cy="50" r="40" />
+							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
+								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 251.2 / 270} 251.2" 
+								stroke-dashoffset="${-d.dialAngle * 251.2 / 270}" />` : ''}
+							<circle class="ring-progress" cx="50" cy="50" r="40" 
+								stroke-dasharray="${d.dialAngle * 251.2 / 270} 251.2" 
+								stroke-dashoffset="0" />
+							${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
+								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 251.2 / 270} 251.2" 
+								stroke-dashoffset="${-d.dialAngle * 251.2 / 270}" />` : ''}
+							<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle - 135) * Math.PI / 180)}" 
+								cy="${50 + 40 * Math.sin((d.dialAngle - 135) * Math.PI / 180)}" r="${d.current < d.target ? '3' : '4'}" />
+							<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 135) * Math.PI / 180)}" 
+								cy="${50 + 40 * Math.sin((d.targetAngle - 135) * Math.PI / 180)}" r="6" />
+						</svg>
+						<div class="status-icons">
+							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
+								<ha-icon icon="mdi:snowflake"></ha-icon>
+							</div>
+							<div class="status-icon ${d.quiet ? "active" : ""}" title="Ruhezeit">
+								<ha-icon icon="mdi:power-sleep"></ha-icon>
+							</div>
+							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="PV-Überschuss">
+								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
 						</div>
+					</div>
 					<div class="dial-core">
-						<div class="temp-current">${current != null ? current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
+						<div class="temp-current">${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
 						<div class="temp-target-row">
-							<span>${target != null ? target.toFixed(1) : "–"}°C</span>
-							${hvacAction === "heating" || hvacAction === "heat" ? '<ha-icon icon="mdi:radiator" style="color:#c0392b"></ha-icon>' : ''}
-							${mainPower !== null && auxPower !== null ? `<span>${mainPower}W</span>` : powerVal !== null ? `<span>${powerVal}W</span>` : ''}
+							<span>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
+							${d.hvacAction === "heating" || d.hvacAction === "heat" ? '<ha-icon icon="mdi:radiator" style="color:#c0392b"></ha-icon>' : ''}
+							${d.mainPower !== null ? `<span>${d.mainPower}W</span>` : d.powerVal !== null ? `<span>${d.powerVal}W</span>` : ''}
 						</div>
-						${bathingState.active && bathingEta != null ? `
+						${d.bathingState.active && d.bathingEta != null ? `
 						<div class="bath-timer">
 							<div class="timer-bar">
-							<div class="timer-fill" style="width: ${(1 - bathingProgress) * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div>
-						</div>
-						<div class="timer-text">Baden: noch ${bathingEta} min</div>
-					</div>` : ""}
-					${filterState.active && filterEta != null ? `
-					<div class="bath-timer">
-						<div class="timer-bar">
-							<div class="timer-fill" style="width: ${(1 - filterProgress) * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div>
-						</div>
-						<div class="timer-text">Filtern: noch ${filterEta} min</div>
-					</div>` : ""}
-					${chlorState.active && chlorEta != null ? `
-					<div class="bath-timer">
-						<div class="timer-bar">
-							<div class="timer-fill" style="width: ${(1 - chlorProgress) * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
-						</div>
-						<div class="timer-text">Chloren: noch ${chlorEta} min</div>
-					</div>` : ""}
-					${pauseState.active && pauseEta != null ? `
-					<div class="bath-timer">
-						<div class="timer-bar">
-							<div class="timer-fill" style="width: ${(1 - pauseProgress) * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div>
-						</div>
-						<div class="timer-text">Pause: noch ${pauseEta} min</div>
+								<div class="timer-fill" style="width: ${(1 - d.bathingProgress) * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div>
+							</div>
+							<div class="timer-text">Baden: noch ${d.bathingEta} min</div>
+						</div>` : ""}
+						${d.filterState.active && d.filterEta != null ? `
+						<div class="bath-timer">
+							<div class="timer-bar">
+								<div class="timer-fill" style="width: ${(1 - d.filterProgress) * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div>
+							</div>
+							<div class="timer-text">Filtern: noch ${d.filterEta} min</div>
+						</div>` : ""}
+						${d.chlorState.active && d.chlorEta != null ? `
+						<div class="bath-timer">
+							<div class="timer-bar">
+								<div class="timer-fill" style="width: ${(1 - d.chlorProgress) * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
+							</div>
+							<div class="timer-text">Chloren: noch ${d.chlorEta} min</div>
+						</div>` : ""}
+						${d.pauseState.active && d.pauseEta != null ? `
+						<div class="bath-timer">
+							<div class="timer-bar">
+								<div class="timer-fill" style="width: ${(1 - d.pauseProgress) * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div>
+							</div>
+							<div class="timer-text">Pause: noch ${d.pauseEta} min</div>
 						</div>` : ""}
 					</div>
 				</div>
@@ -327,133 +352,128 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 					<button class="temp-btn" data-action="inc">+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${bathingState.active ? "active" : ""}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${bathingState.active ? "true" : "false"}">
-						<ha-icon icon="mdi:pool"></ha-icon>
-						<span>Baden</span>
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}">
+						<ha-icon icon="mdi:pool"></ha-icon><span>Baden</span>
 					</button>
-				<button class="action-btn filter ${filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${filterState.active ? "true" : "false"}">
-					<ha-icon icon="mdi:rotate-right"></ha-icon>
-					<span>Filtern</span>
-				</button>
-				<button class="action-btn chlorine ${chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${chlorState.active ? "true" : "false"}">
-						<ha-icon icon="mdi:fan"></ha-icon>
-						<span>Chloren</span>
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}">
+						<ha-icon icon="mdi:rotate-right"></ha-icon><span>Filtern</span>
 					</button>
-					<button class="action-btn ${pauseState.active ? "active" : ""}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${pauseState.active ? "true" : "false"}">
-						<ha-icon icon="mdi:pause-circle"></ha-icon>
-						<span>Pause</span>
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}">
+						<ha-icon icon="mdi:fan"></ha-icon><span>Chloren</span>
+					</button>
+					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}">
+						<ha-icon icon="mdi:pause-circle"></ha-icon><span>Pause</span>
 					</button>
 				</div>
-				<div class="aux-switch ${auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
+				<div class="aux-switch ${d.auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
 					<div class="aux-switch-label">
-						<ha-icon icon="mdi:fire"></ha-icon>
-				<span>Zusatzheizung</span>
+						<ha-icon icon="mdi:fire"></ha-icon><span>Zusatzheizung</span>
 					</div>
 					<div class="toggle"></div>
 				</div>
 			</div>
-			<!-- END left-column -->
-			
-			<div class="right-column">
-				<div class="quality">
+		</div>`;
+	}
+
+	// ========================================
+	// MODULAR: Rechte Spalte (Qualität + Wartung)
+	// ========================================
+	_renderRightColumn(d, c) {
+		return `<div class="right-column">
+			<div class="quality">
 				<div class="section-title">Wasserqualität</div>
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">pH-Wert</div>
 					<div style="position: relative;">
-						${ph != null ? `<div class="scale-marker" style="left: ${this._pct(ph, 1, 14)}%"><div class="marker-value">${ph.toFixed(2)}</div></div>` : ""}
+						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 1, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
 						<div class="scale-bar ph-bar">
-							${Array.from({length: 14}, (_, i) => i + 1).map(n => `<div class="scale-tick major" style="left: ${this._pct(n, 1, 14)}%"></div>`).join("")}
-							${Array.from({length: 26}, (_, i) => (i + 1) * 0.5 + 1).filter(n => n % 1 !== 0).map(n => `<div class="scale-tick minor" style="left: ${this._pct(n, 1, 14)}%"></div>`).join("")}
+							${Array.from({length: 14}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 13) * 100}%"></div>`).join("")}
+							${Array.from({length: 13}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 13) * 100}%"></div>`).join("")}
 						</div>
 					</div>
 					<div class="scale-labels">
 						${[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(n => `<span>${n}</span>`).join("")}
 					</div>
-					<div class="scale-range"><span>Sauer</span><span>Neutral</span><span>Alkalisch</span></div>
 				</div>
 				
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">Chlor</div>
 					<div style="position: relative;">
-						${chlor != null ? `<div class="scale-marker" style="left: ${this._pct(chlor, 0, 1200)}%"><div class="marker-value">${chlor.toFixed(0)} mV</div></div>` : ""}
+						${d.chlor != null ? `<div class="scale-marker" style="left: ${this._pct(d.chlor, 0, 1200)}%"><div class="marker-value">${d.chlor.toFixed(0)} mV</div></div>` : ""}
 						<div class="scale-bar chlor-bar">
-							${[300, 600, 900].map(n => `<div class="scale-tick major" style="left: ${this._pct(n, 0, 1200)}%"></div>`).join("")}
-							${[100, 200, 400, 500, 700, 800, 1000, 1100].map(n => `<div class="scale-tick minor" style="left: ${this._pct(n, 0, 1200)}%"></div>`).join("")}
+							${[0, 300, 600, 900, 1200].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
+							${[1, 2, 3].map(i => `<div class="scale-tick minor" style="left: ${((i - 0.5) / 4) * 100}%"></div>`).join("")}
 						</div>
 					</div>
 					<div class="scale-labels">
 						<span>0</span><span>300</span><span>600</span><span>900</span><span>1200</span>
 					</div>
-					<div class="scale-range"><span>Zu niedrig</span><span>Optimal (${c.chlor_ok_min}-${c.chlor_ok_max} mV)</span><span>Zu hoch</span></div>
 				</div>
 				
-				${salt != null || tds != null ? `
+				${d.salt != null || d.tds != null ? `
 				<div class="info-row-badges">
-					${salt != null ? `<div class="info-badge">Salz: ${salt}</div>` : ""}
-					${tds != null ? `<div class="info-badge">TDS: ${tds}</div>` : ""}
+					${d.salt != null ? `<div class="info-badge">Salz: ${d.salt}</div>` : ""}
+					${d.tds != null ? `<div class="info-badge">TDS: ${d.tds}</div>` : ""}
 				</div>` : ""}
 			</div>
-			<!-- END quality -->
 			
-			
-			${(phPlusNum && phPlusNum > 0) || (phMinusNum && phMinusNum > 0) || (chlorDoseNum && chlorDoseNum > 0) ? `
+			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) ? `
 			<div class="maintenance">
 				<div class="section-title">⚠️ Wartungsarbeiten erforderlich</div>
 				<div class="maintenance-items">
-					${phPlusNum && phPlusNum > 0 ? `
+					${d.phPlusNum && d.phPlusNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH+ hinzufügen</div>
-							<div class="maintenance-value">${phPlusNum} ${phPlusUnit}</div>
+							<div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div>
 						</div>
 					</div>` : ""}
-					${phMinusNum && phMinusNum > 0 ? `
+					${d.phMinusNum && d.phMinusNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH- hinzufügen</div>
-							<div class="maintenance-value">${phMinusNum} ${phMinusUnit}</div>
+							<div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div>
 						</div>
 					</div>` : ""}
-					${chlorDoseNum && chlorDoseNum > 0 ? `
+					${d.chlorDoseNum && d.chlorDoseNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:beaker"></ha-icon>
 						<div class="maintenance-text">
 							<div class="maintenance-label">Chlor hinzufügen</div>
-							<div class="maintenance-value">${chlorDoseNum} ${chlorDoseUnit}</div>
+							<div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div>
 						</div>
 					</div>` : ""}
 				</div>
 			</div>` : ""}
 			
-			${nextStartMins != null ? `
+			${d.nextStartMins != null ? `
 			<div class="next-start">
 				<span class="next-start-label">Nächster Start</span>
-				<span class="next-start-time">in ${nextStartMins} Minuten</span>
+				<span class="next-start-time">in ${d.nextStartMins} Minuten</span>
 			</div>` : ""}
 			
-			${nextEventStart ? `
+			${d.nextEventStart ? `
 			<div class="calendar">
 				<div class="section-title">Nächster Termin</div>
 				<div class="event">
 					<div style="flex: 1;">
-						<div class="event-title">${nextEventSummary || "Geplanter Start"}</div>
+						<div class="event-title">${d.nextEventSummary || "Geplanter Start"}</div>
 						<div class="event-time" style="margin-top: 4px;">
-							${this._formatEventTime(nextEventStart, nextEventEnd)}
+							${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
 						</div>
 					</div>
 				</div>
 			</div>` : ""}
-			</div>
-			<!-- END right-column -->
-	</div>
-	<!-- END content-grid -->
-</ha-card>`;
+		</div>`;
+	}
 
-	this._attachHandlers();
-}
-_attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
+	// ========================================
+	// Event Handlers
+	// ========================================
+	_attachHandlers() {
+		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
 		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
 				const action = btn.dataset.action;
@@ -505,7 +525,6 @@ _attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp
 			this._hass.callService("input_boolean", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
 			return;
 		}
-		// fallback: homeassistant.turn_on/off
 		this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
 	}
 
@@ -521,10 +540,8 @@ _attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp
 
 	_formatEventTime(startTs, endTs) {
 		if (!startTs) return "";
-		// Prüfe ob es ein gültiger Timestamp ist
 		const start = new Date(startTs);
 		if (isNaN(start.getTime())) {
-			// Kein gültiger Timestamp, zeige rohen Text
 			return endTs && endTs !== startTs ? `${startTs} - ${endTs}` : startTs;
 		}
 		const startStr = start.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -557,16 +574,13 @@ _attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp
 
 	_calcDial(val, min, max) {
 		const pct = this._clamp((val - min) / (max - min), 0, 1);
-		return Math.round(pct * 270); // 270deg arc (from 225deg to 495deg = 225deg to 135deg)
+		return Math.round(pct * 270);
 	}
 
 	_num(v) {
 		if (v == null || v === '') return null;
-		// String normalisieren: deutsche Kommas, Einheiten entfernen
 		let str = String(v).trim();
-		// Entferne Einheiten (g, mV, W, etc.) und Text
 		str = str.replace(/[a-zA-Z°%]+/g, '').trim();
-		// Deutsches Komma → Punkt
 		str = str.replace(',', '.');
 		const n = Number(str);
 		return Number.isFinite(n) ? n : null;
@@ -587,23 +601,62 @@ _attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp
 
 	_hasRelevantChanges(oldHass, newHass) {
 		if (!this._config) return true;
-		// Einfacher: Bei JEDEM State-Change neu rendern
-		// Das verhindert das Problem, dass wichtige Entities nicht geprüft werden
-		return true;
+		
+		const relevantEntities = [
+			this._config.climate_entity,
+			this._config.aux_entity,
+			this._config.bathing_entity,
+			this._config.bathing_until,
+			this._config.bathing_active_binary,
+			this._config.filter_entity,
+			this._config.filter_until,
+			this._config.next_filter_in,
+			this._config.chlorine_entity,
+			this._config.chlorine_until,
+			this._config.chlorine_active_entity,
+			this._config.pause_entity,
+			this._config.pause_until,
+			this._config.pause_active_entity,
+			this._config.frost_entity,
+			this._config.quiet_entity,
+			this._config.pv_entity,
+			this._config.main_power_entity,
+			this._config.aux_power_entity,
+			this._config.power_entity,
+			this._config.ph_entity,
+			this._config.chlorine_value_entity,
+			this._config.salt_entity,
+			this._config.tds_entity,
+			this._config.ph_plus_entity,
+			this._config.ph_minus_entity,
+			this._config.chlor_dose_entity,
+			this._config.next_start_entity,
+			this._config.next_event_entity,
+			this._config.next_event_end_entity,
+			this._config.next_event_summary_entity,
+		].filter(Boolean);
+		
+		return relevantEntities.some(entityId => {
+			const oldState = oldHass.states[entityId];
+			const newState = newHass.states[entityId];
+			if (!oldState || !newState) return true;
+			return oldState.state !== newState.state || 
+			       JSON.stringify(oldState.attributes) !== JSON.stringify(newState.attributes);
+		});
 	}
 
-
+	_renderError(msg) {
+		this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px;color:var(--error-color)">${msg}</div></ha-card>`;
+	}
 }
 
 class PoolControllerCardEditor extends HTMLElement {
 	set hass(hass) {
 		this._hass = hass;
-		// Nur initial rendern, nicht bei jedem hass Update
 		if (!this._initialized) {
 			this._render();
 			this._initialized = true;
 		} else {
-			// Nur den Entity Picker aktualisieren, nicht neu rendern
 			const picker = this.shadowRoot?.querySelector("#controller");
 			if (picker && this._hass) {
 				picker.hass = this._hass;
@@ -687,7 +740,6 @@ class PoolControllerCardEditor extends HTMLElement {
 			r.entity_id.startsWith("climate.")
 		);
 
-		// Clear and populate select
 		select.innerHTML = '<option value="">Bitte wählen...</option>';
 		poolControllers.forEach((entity) => {
 			const state = this._hass.states[entity.entity_id];
@@ -701,12 +753,10 @@ class PoolControllerCardEditor extends HTMLElement {
 			select.appendChild(option);
 		});
 
-		// Auto-select wenn nur eine Instanz vorhanden und noch keine Config
 		if (poolControllers.length === 1 && !this._config?.controller_entity) {
 			const firstController = poolControllers[0].entity_id;
 			select.value = firstController;
 			this._updateConfig({ controller_entity: firstController, climate_entity: firstController });
-			// Automatisch alle Entities übernehmen
 			setTimeout(() => this._deriveFromController(), 100);
 		}
 
@@ -725,16 +775,14 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!selected || !selected.config_entry_id) return;
 		const ceid = selected.config_entry_id;
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
-		console.log("[Pool Controller] Found entities:", entries.map(e => ({ id: e.entity_id, unique: e.unique_id })));
+		
 		const pick = (domain, suffix) => {
 			const hit = entries.find((e) => e.entity_id.startsWith(`${domain}.`) && (suffix ? e.unique_id?.endsWith(`_${suffix}`) : true));
-			console.log(`[Pool Controller] pick(${domain}, ${suffix}) -> ${hit?.entity_id} (unique_id: ${hit?.unique_id})`);
 			return hit?.entity_id;
 		};
 		const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
-			status_entity: this._config.status_entity, // Status-Sensor hat keine unique_id im Backend
 			aux_entity: pick("switch", "aux") || this._config.aux_entity,
 			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
 			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
@@ -747,7 +795,9 @@ class PoolControllerCardEditor extends HTMLElement {
 			filter_until: pick("sensor", "filter_until") || this._config.filter_until,
 			next_filter_in: pick("sensor", "next_filter_mins") || this._config.next_filter_in,
 			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
-			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,		chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
+			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,
+			chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,
+			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
 			pause_entity: pick("binary_sensor", "is_paused") || this._config.pause_entity,
 			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
 			pause_stop: pick("button", "pause_stop") || this._config.pause_stop,
@@ -757,12 +807,9 @@ class PoolControllerCardEditor extends HTMLElement {
 			quiet_entity: pick("binary_sensor", "in_quiet") || this._config.quiet_entity,
 			main_power_entity: pick("sensor", "main_power") || this._config.main_power_entity,
 			aux_power_entity: pick("sensor", "aux_power") || this._config.aux_power_entity,
-			power_entity: this._config.power_entity,
 			pv_entity: pick("binary_sensor", "pv_allows") || this._config.pv_entity,
 			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
 			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
-			salt_entity: this._config.salt_entity,
-			tds_entity: this._config.tds_entity,
 			ph_plus_entity: pick("sensor", "ph_plus_g") || this._config.ph_plus_entity,
 			ph_minus_entity: pick("sensor", "ph_minus_g") || this._config.ph_minus_entity,
 			chlor_dose_entity: pick("sensor", "chlor_spoons") || this._config.chlor_dose_entity,
@@ -771,7 +818,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			next_event_end_entity: pick("sensor", "next_event_end") || this._config.next_event_end_entity,
 			next_event_summary_entity: pick("sensor", "next_event_summary") || this._config.next_event_summary_entity,
 		};
-	this._updateConfig(cfg);
+		this._updateConfig(cfg);
 	}
 
 	async _getEntityRegistry() {
@@ -787,15 +834,11 @@ class PoolControllerCardEditor extends HTMLElement {
 		const cfg = this._config;
 		const rows = [
 			["climate", cfg.climate_entity],
-			["status", cfg.status_entity],
-			["switches", `${cfg.aux_entity || ""}, ${cfg.bathing_entity || ""}`],
-			["binary", `quiet:${cfg.quiet_entity ? "✓" : "✗"} frost:${cfg.frost_entity ? "✓" : "✗"} pv:${cfg.pv_entity ? "✓" : "✗"}`],
+			["aux", cfg.aux_entity],
 			["bathing", `${cfg.bathing_start || ""} → ${cfg.bathing_active_binary || ""}`],
 			["filter", `${cfg.filter_start || ""} → ${cfg.filter_entity || ""}`],
 			["chlorine", `${cfg.chlorine_start || ""} → ${cfg.chlorine_entity || ""}`],
 			["pause", `${cfg.pause_start || ""} → ${cfg.pause_entity || ""}`],
-			["power", `main:${cfg.main_power_entity || ""} aux:${cfg.aux_power_entity || ""}`],
-			["quality", `pH:${cfg.ph_entity || ""} Cl:${cfg.chlorine_value_entity || ""}`],
 		];
 		box.innerHTML = rows
 			.map(([k, v]) => `<div class="badge"><strong>${k}</strong>: ${v || "–"}</div>`)
@@ -821,7 +864,6 @@ window.customCards.push({
 	description: "Whirlpool/Pool Steuerung ohne iFrame.",
 });
 
-// Main wrapper element
 class PoolControllerCardWrapper extends HTMLElement {
 	setConfig(config) {
 		this._config = config;
