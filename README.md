@@ -47,12 +47,12 @@ climate_entity: climate.mein_pool
 
 ### Does auto-discovery work without using the UI editor?
 
-Partially:
+Yes (with one requirement):
 
-- The card itself can auto-derive **Salt/TDS and TDS water-change sensors** at runtime *as long as* `climate_entity` belongs to the `pool_controller` config entry and the frontend can access the entity registry.
-- The **full mapping for all controls** (bath/filter/chlorine/pause buttons, timers, etc.) is performed by the **UI editor**. If you create the card with YAML only, you typically need to provide those entity IDs yourself (or open the editor once to auto-fill them).
+- If `climate_entity` belongs to the same `pool_controller` config entry, the card will derive the related entities (buttons/sensors/binary_sensors) from the entity registry at runtime.
+- This means **YAML-only** with `type` + `climate_entity` is typically enough to get the full UI (actions, timers, water quality, maintenance).
 
-In other words: YAML-only + `climate_entity` is enough to show the core dial, and it should also show Salt/TDS if those sensors exist. For the action buttons and timers, use the editor auto-mapping or specify the entities in YAML.
+If entity registry access is blocked/unavailable, only explicitly configured entities will work.
 
 ## How to use / meaning of elements
 

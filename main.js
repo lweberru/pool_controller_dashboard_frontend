@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.21 - Auto-derive Salt/TDS sensors in card + show TDS maintenance
+ * v1.5.24 - Full auto-discovery in card (YAML-only)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -64,9 +64,10 @@ class PoolControllerCard extends HTMLElement {
 
 		// Falls optionale Entities nicht im Config sind, leite sie aus der Backend-Instanz ab.
 		await this._ensureDerivedEntities();
+		const effectiveConfig = this._withDerivedConfig(c);
 
 		// Daten vorbereiten
-		const data = this._prepareData(h, c, climate);
+		const data = this._prepareData(h, effectiveConfig, climate);
 
 		// Komplettes Rendering
 		this.shadowRoot.innerHTML = `
@@ -77,8 +78,8 @@ class PoolControllerCard extends HTMLElement {
 			</div>
 			
 			<div class="content-grid">
-				${this._renderLeftColumn(data, c)}
-				${this._renderRightColumn(data, c)}
+				${this._renderLeftColumn(data, effectiveConfig)}
+				${this._renderRightColumn(data, effectiveConfig)}
 			</div>
 		</ha-card>`;
 
@@ -841,6 +842,62 @@ class PoolControllerCard extends HTMLElement {
 		});
 	}
 
+	_withDerivedConfig(c) {
+		const d = this._derivedEntities || {};
+		const prefer = (key) => {
+			const v = c?.[key];
+			if (v == null) return d[key] ?? v;
+			if (typeof v === 'string' && v.trim() === '') return d[key] ?? v;
+			return v;
+		};
+
+		return {
+			...c,
+			aux_entity: prefer('aux_entity'),
+			aux_binary: prefer('aux_binary'),
+			bathing_entity: prefer('bathing_entity'),
+			bathing_start: prefer('bathing_start'),
+			bathing_stop: prefer('bathing_stop'),
+			bathing_until: prefer('bathing_until'),
+			bathing_active_binary: prefer('bathing_active_binary'),
+			filter_entity: prefer('filter_entity'),
+			filter_start: prefer('filter_start'),
+			filter_stop: prefer('filter_stop'),
+			filter_until: prefer('filter_until'),
+			next_filter_in: prefer('next_filter_in'),
+			chlorine_entity: prefer('chlorine_entity'),
+			chlorine_start: prefer('chlorine_start'),
+			chlorine_stop: prefer('chlorine_stop'),
+			chlorine_until: prefer('chlorine_until'),
+			chlorine_active_entity: prefer('chlorine_active_entity'),
+			pause_entity: prefer('pause_entity'),
+			pause_start: prefer('pause_start'),
+			pause_stop: prefer('pause_stop'),
+			pause_until: prefer('pause_until'),
+			pause_active_entity: prefer('pause_active_entity'),
+			frost_entity: prefer('frost_entity'),
+			quiet_entity: prefer('quiet_entity'),
+			pv_entity: prefer('pv_entity'),
+			main_power_entity: prefer('main_power_entity'),
+			aux_power_entity: prefer('aux_power_entity'),
+			power_entity: prefer('power_entity'),
+			ph_entity: prefer('ph_entity'),
+			chlorine_value_entity: prefer('chlorine_value_entity'),
+			salt_entity: prefer('salt_entity'),
+			tds_entity: prefer('tds_entity'),
+			tds_assessment_entity: prefer('tds_assessment_entity'),
+			water_change_percent_entity: prefer('water_change_percent_entity'),
+			water_change_liters_entity: prefer('water_change_liters_entity'),
+			ph_plus_entity: prefer('ph_plus_entity'),
+			ph_minus_entity: prefer('ph_minus_entity'),
+			chlor_dose_entity: prefer('chlor_dose_entity'),
+			next_start_entity: prefer('next_start_entity'),
+			next_event_entity: prefer('next_event_entity'),
+			next_event_end_entity: prefer('next_event_end_entity'),
+			next_event_summary_entity: prefer('next_event_summary_entity'),
+		};
+	}
+
 	async _getEntityRegistry() {
 		if (!this._registry && this._hass) {
 			this._registry = await this._hass.callWS({ type: "config/entity_registry/list" });
@@ -878,11 +935,56 @@ class PoolControllerCard extends HTMLElement {
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			// Core / controls
+			climate_entity: this._pickEntity(entries, "climate", ["climate"]) || null,
+			aux_entity: this._pickEntity(entries, "switch", ["aux"]) || null,
+			bathing_entity: this._pickEntity(entries, "switch", ["bathing"]) || null,
+			bathing_start: this._pickEntity(entries, "button", ["bath_60", "bath_30"]) || null,
+			bathing_stop: this._pickEntity(entries, "button", ["bath_stop"]) || null,
+			bathing_until: this._pickEntity(entries, "sensor", ["bathing_until"]) || null,
+			bathing_active_binary: this._pickEntity(entries, "binary_sensor", ["is_bathing"]) || null,
+			filter_entity: this._pickEntity(entries, "binary_sensor", ["filter_active"]) || null,
+			filter_start: this._pickEntity(entries, "button", ["filter_60", "filter_30"]) || null,
+			filter_stop: this._pickEntity(entries, "button", ["filter_stop"]) || null,
+			filter_until: this._pickEntity(entries, "sensor", ["filter_until"]) || null,
+			next_filter_in: this._pickEntity(entries, "sensor", ["next_filter_mins"]) || null,
+			chlorine_entity: this._pickEntity(entries, "binary_sensor", ["is_quick_chlor"]) || null,
+			chlorine_start: this._pickEntity(entries, "button", ["quick_chlor"]) || null,
+			chlorine_stop: this._pickEntity(entries, "button", ["quick_chlor_stop"]) || null,
+			chlorine_until: this._pickEntity(entries, "sensor", ["quick_chlorine_until"]) || null,
+			chlorine_active_entity: this._pickEntity(entries, "binary_sensor", ["is_quick_chlor"]) || null,
+			pause_entity: this._pickEntity(entries, "binary_sensor", ["is_paused"]) || null,
+			pause_start: this._pickEntity(entries, "button", ["pause_60", "pause_30"]) || null,
+			pause_stop: this._pickEntity(entries, "button", ["pause_stop"]) || null,
+			pause_until: this._pickEntity(entries, "sensor", ["pause_until"]) || null,
+			pause_active_entity: this._pickEntity(entries, "binary_sensor", ["is_paused"]) || null,
+
+			// Status
+			frost_entity: this._pickEntity(entries, "binary_sensor", ["frost_danger"]) || null,
+			quiet_entity: this._pickEntity(entries, "binary_sensor", ["in_quiet"]) || null,
+			pv_entity: this._pickEntity(entries, "binary_sensor", ["pv_allows"]) || null,
+
+			// Power
+			main_power_entity: this._pickEntity(entries, "sensor", ["main_power"]) || null,
+			aux_power_entity: this._pickEntity(entries, "sensor", ["aux_power"]) || null,
+
+			// Water quality
+			ph_entity: this._pickEntity(entries, "sensor", ["ph_val"]) || null,
+			chlorine_value_entity: this._pickEntity(entries, "sensor", ["chlor_val"]) || null,
 			salt_entity: this._pickEntity(entries, "sensor", ["salt_val", "salt"]) || null,
 			tds_entity: this._pickEntity(entries, "sensor", ["tds_val", "tds", "tds_ppm"]) || null,
 			tds_assessment_entity: this._pickEntity(entries, "sensor", ["tds_status", "tds_assessment", "tds_state"]) || null,
 			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
 			water_change_percent_entity: this._pickEntity(entries, "sensor", ["tds_water_change_percent", "water_change_percent"]) || null,
+			ph_plus_entity: this._pickEntity(entries, "sensor", ["ph_plus_g"]) || null,
+			ph_minus_entity: this._pickEntity(entries, "sensor", ["ph_minus_g"]) || null,
+			chlor_dose_entity: this._pickEntity(entries, "sensor", ["chlor_spoons"]) || null,
+
+			// Upcoming event
+			next_start_entity: this._pickEntity(entries, "sensor", ["next_start_mins"]) || null,
+			next_event_entity: this._pickEntity(entries, "sensor", ["next_event"]) || null,
+			next_event_end_entity: this._pickEntity(entries, "sensor", ["next_event_end"]) || null,
+			next_event_summary_entity: this._pickEntity(entries, "sensor", ["next_event_summary"]) || null,
 		};
 		this._derivedForClimate = this._config.climate_entity;
 	}
