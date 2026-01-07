@@ -1,5 +1,128 @@
 # Pool Controller Dashboard (Frontend)
 
+This Lovelace custom card is the frontend UI for the Home Assistant integration **pool_controller**.
+- Backend integration: https://github.com/lweberru/pool_controller
+- This repository (HACS Plugin): ships the single-file resource `main.js`
+
+## Screenshot
+![Card example](card_example_1.png)
+
+## Features (high level)
+- Thermostat-style dial (current/target temperature)
+- Quick actions: **Bathing**, **Filtering**, **Chlorine**, **Pause**
+- Optional AUX heater toggle
+- Status indicators: Frost protection, Quiet hours, PV surplus
+- Water quality: pH, ORP/Chlorine (mV), optional Salt (g/L + %) and TDS (ppm)
+- Maintenance hints (e.g. dosing, water change recommendation for high TDS)
+
+## Installation (HACS)
+
+1. In HACS → **Custom repositories** add this repo (Category: **Plugin**)
+2. Install
+3. Ensure the resource is registered as **JavaScript Module**:
+	- `/hacsfiles/pool_controller_dashboard_frontend/main.js`
+
+Note: HACS usually adds the resource automatically.
+
+## Installation (manual)
+1. Copy `main.js` to `config/www/pool_controller_dashboard_frontend/`
+2. In Home Assistant go to **Settings → Dashboards → Resources** and add as module:
+	- `/local/pool_controller_dashboard_frontend/main.js`
+
+## Add the card (UI editor)
+
+Recommended path (because it can auto-map most entities):
+1. Open your dashboard → **Edit dashboard**
+2. **Add card** → search for “Pool Controller” (custom card)
+3. In the card editor select your **Pool Controller** (the `climate.*` entity from `pool_controller`)
+4. The editor will auto-fill the related entities (buttons/sensors/binary_sensors) from the same config entry
+
+## Add the card (YAML)
+You can also add the card manually via YAML:
+
+```yaml
+type: custom:pc-pool-controller
+climate_entity: climate.mein_pool
+```
+
+### Does auto-discovery work without using the UI editor?
+
+Partially:
+
+- The card itself can auto-derive **Salt/TDS and TDS water-change sensors** at runtime *as long as* `climate_entity` belongs to the `pool_controller` config entry and the frontend can access the entity registry.
+- The **full mapping for all controls** (bath/filter/chlorine/pause buttons, timers, etc.) is performed by the **UI editor**. If you create the card with YAML only, you typically need to provide those entity IDs yourself (or open the editor once to auto-fill them).
+
+In other words: YAML-only + `climate_entity` is enough to show the core dial, and it should also show Salt/TDS if those sensors exist. For the action buttons and timers, use the editor auto-mapping or specify the entities in YAML.
+
+## How to use / meaning of elements
+
+### Temperature dial (left)
+
+- Big number: **current temperature** (measured water temperature)
+- Smaller value: **target temperature**
+- Dial ring:
+	- Progress arc shows current temperature relative to the configured min/max
+	- Target marker shows the target temperature
+- `+` / `−` buttons: change target temperature (calls `climate.set_temperature`)
+
+### Status icons (inside the dial)
+
+- Frost: frost protection active
+- Moon: quiet hours active
+- Solar: PV surplus allows heating/filtering
+
+### Actions
+
+- **Bathing**: start/stop bathing mode
+- **Filtering**: start/stop filter cycle
+- **Chlorine**: start/stop quick chlorine
+- **Pause**: pause automation
+
+Depending on the mapped entity type, the card will call `button.press`, `switch.turn_on/off`, or `input_boolean.turn_on/off`.
+
+### AUX heater
+
+- “Additional heater”: toggles the AUX heater (if configured)
+
+## Water quality (right)
+
+- **pH**: scale 0–14
+- **Chlorine/ORP**: shown in mV (scale 0–1200)
+- **Salt** (optional): shown as g/L plus percent (g/L × 0.1 = %)
+- **TDS** (optional): shown in ppm
+
+Salt and TDS bars are rendered when the values are available as sensors (including a value of 0).
+
+## Maintenance
+
+The “Maintenance” section appears when the backend recommends an action, e.g.:
+
+- Add pH+ / pH-
+- Add chlorine
+- **Water change** (when TDS is high; based on backend recommendation: percent and optionally liters)
+
+## Configuration (key overview)
+
+Required:
+
+- `climate_entity`
+
+Common optional keys (usually filled by the UI editor auto-mapping):
+
+- `aux_entity`
+- `bathing_start`, `bathing_stop`, `bathing_until`, `bathing_active_binary`
+- `filter_start`, `filter_stop`, `filter_until`, `next_filter_in`
+- `chlorine_start`, `chlorine_stop`, `chlorine_until`, `chlorine_active_entity`
+- `pause_start`, `pause_stop`, `pause_until`, `pause_active_entity`
+- `ph_entity`, `chlorine_value_entity`, `salt_entity`, `tds_entity`
+- `tds_assessment_entity`, `water_change_percent_entity`, `water_change_liters_entity`
+
+## Troubleshooting
+
+- After updates: hard reload the browser (Ctrl+F5) and/or clear the HA frontend cache.
+- If auto-discovery does not work: verify `climate_entity` is the `pool_controller` climate entity and that the frontend can access the entity registry.
+# Pool Controller Dashboard (Frontend)
+
 Diese Lovelace Custom Card ist das Frontend für die Home-Assistant-Integration **pool_controller**.
 
 - Backend-Integration: https://github.com/lweberru/pool_controller
