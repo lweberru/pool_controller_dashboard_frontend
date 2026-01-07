@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.3 - Ring mit rotate(225), Dots 225+dialAngle
+ * v1.5.4 - Ring dashoffset 0 statt -62.8
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -299,22 +299,22 @@ class PoolControllerCard extends HTMLElement {
 							<!-- Track: 270° Arc von 225° bis 135° -->
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
-								stroke-dashoffset="-62.8" 
+								stroke-dashoffset="0" 
 								transform="rotate(225 50 50)" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-								stroke-dashoffset="${-62.8 - d.dialAngle * 188.4 / 270}" 
+								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" 
 								transform="rotate(225 50 50)" />` : ''}
 						<!-- Current Progress -->
 						<circle class="ring-progress" cx="50" cy="50" r="40" 
 							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-							stroke-dashoffset="-62.8" 
+							stroke-dashoffset="0" 
 							transform="rotate(225 50 50)" />
 						<!-- Highlight zwischen IST und SOLL -->
 						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
 							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-62.8 - d.dialAngle * 188.4 / 270}" 
+							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" 
 							transform="rotate(225 50 50)" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
 					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((225 + d.dialAngle) * Math.PI / 180)}" 
