@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.13 - Dial Spacing Fix + Wide-Layout Tuning
+ * v1.5.20 - Show Salt/TDS also at 0
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -499,7 +499,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				
-				${(d.salt != null && d.salt > 0) ? `
+				${(d.salt != null) ? `
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">Salzgehalt</div>
 					<div style="position: relative;">
@@ -516,7 +516,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>` : ""}
 
-				${(d.tds != null && d.tds > 0) ? `
+				${(d.tds != null) ? `
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">TDS</div>
 					<div style="position: relative;">
