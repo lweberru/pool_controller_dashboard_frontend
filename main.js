@@ -32,7 +32,13 @@ class PoolControllerCard extends HTMLElement {
 
 	set hass(hass) {
 		this._hass = hass;
-		this._render();
+		// Debounce rendering um Flackern zu vermeiden
+		if (this._renderTimeout) {
+			clearTimeout(this._renderTimeout);
+		}
+		this._renderTimeout = setTimeout(() => {
+			this._render();
+		}, 100);
 	}
 
 	connectedCallback() {
@@ -194,9 +200,9 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-		.scale-marker { position: absolute; top: 19px; transform: translateX(-50%); z-index: 10; }
-			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; }
-			
+		.scale-marker { position: absolute; top: -48px; transform: translateX(-50%); z-index: 10; }
+		.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
+		.marker-value::after { content: ""; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid #0b132b; }
 			.scale-range { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #999; text-transform: uppercase; font-weight: 600; }
 			
 			.info-row-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -400,6 +406,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 					</div>
 				</div>
 			</div>` : ""}
+			</div>
 		</div>
 	</div>
 </ha-card>`;
