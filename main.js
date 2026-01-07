@@ -122,11 +122,37 @@ class PoolControllerCard extends HTMLElement {
 		const salt = c.salt_entity ? this._num(h.states[c.salt_entity]?.state) : null;
 		const tds = c.tds_entity ? this._num(h.states[c.tds_entity]?.state) : null;
 
-		// TDS assessment and recommended water change (percent). Optionally compute liters if pool_volume_l provided in config.
+		// TDS assessment and recommended water change: prefer backend-provided values (entities or attributes),
+		// otherwise fall back to local computation.
 		let tdsAssessment = null;
 		let waterChangePercent = 0;
 		let waterChangeLiters = null;
-		if (tds != null) {
+
+		// 1) Try configured entity names (allow integrator to expose dedicated sensors)
+		if (c.tds_assessment_entity && h.states[c.tds_assessment_entity]) {
+			tdsAssessment = h.states[c.tds_assessment_entity].state;
+		}
+		if (c.water_change_percent_entity && h.states[c.water_change_percent_entity]) {
+			waterChangePercent = this._num(h.states[c.water_change_percent_entity].state) || 0;
+		}
+		if (c.water_change_liters_entity && h.states[c.water_change_liters_entity]) {
+			waterChangeLiters = this._num(h.states[c.water_change_liters_entity].state) || null;
+		}
+
+		// 2) Fallback: check attributes on the TDS sensor (common integration pattern)
+		if ((tds == null || tdsAssessment == null) && c.tds_entity && h.states[c.tds_entity]) {
+			const attrs = h.states[c.tds_entity].attributes || {};
+			if (!tdsAssessment && attrs.assessment) tdsAssessment = attrs.assessment;
+			if ((!waterChangePercent || waterChangePercent === 0) && attrs.recommended_water_change_percent) {
+				waterChangePercent = this._num(attrs.recommended_water_change_percent) || 0;
+			}
+			if (!waterChangeLiters && attrs.recommended_water_change_liters) {
+				waterChangeLiters = this._num(attrs.recommended_water_change_liters) || null;
+			}
+		}
+
+		// 3) Final fallback: local heuristic based on numeric TDS value
+		if ((tds != null) && (tdsAssessment == null) && (waterChangePercent === 0) && !waterChangeLiters) {
 			if (tds <= 500) {
 				tdsAssessment = 'Gut';
 				waterChangePercent = 0;
@@ -143,6 +169,11 @@ class PoolControllerCard extends HTMLElement {
 			if (waterChangePercent > 0 && Number.isFinite(Number(c.pool_volume_l))) {
 				waterChangeLiters = Math.round((Number(c.pool_volume_l) * waterChangePercent) / 100);
 			}
+		}
+
+		// If percent provided but liters missing, compute liters if pool_volume_l set
+		if ((waterChangePercent > 0) && (!waterChangeLiters) && Number.isFinite(Number(c.pool_volume_l))) {
+			waterChangeLiters = Math.round((Number(c.pool_volume_l) * waterChangePercent) / 100);
 		}
 		
 		const phPlusStateObj = c.ph_plus_entity ? h.states[c.ph_plus_entity] : null;
