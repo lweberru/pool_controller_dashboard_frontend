@@ -224,7 +224,7 @@ class PoolControllerCard extends HTMLElement {
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
+			.dial-core { position: absolute; top: 52%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
@@ -234,8 +234,8 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-left, .temp-target-right { font-weight: 600; white-space: nowrap; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 52%; max-width: 150px; z-index: 9; }
-			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
+			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 44%; max-width: 120px; z-index: 9; }
+			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
 
@@ -275,13 +275,13 @@ class PoolControllerCard extends HTMLElement {
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-			.scale-marker { position: absolute; top: -48px; transform: translateX(-50%); z-index: 10; }
+			.scale-marker { position: absolute; top: -36px; transform: translateX(-50%); z-index: 10; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
-			.marker-value::after { content: ""; position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 30px solid #0b132b; }
+			.marker-value::after { content: ""; position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 15px solid #0b132b; }
 			@container (max-width: 520px) {
-				.scale-marker { top: -44px; }
+				.scale-marker { top: -32px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
-				.marker-value::after { bottom: -26px; border-left-width: 9px; border-right-width: 9px; border-top-width: 26px; }
+				.marker-value::after { bottom: -12px; border-left-width: 5px; border-right-width: 5px; border-top-width: 15px; }
 			}
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
 			
@@ -311,8 +311,8 @@ class PoolControllerCard extends HTMLElement {
 	_renderLeftColumn(d, c) {
 		const RING_CX = 50;
 		const RING_CY = 50;
-		const RING_R = 40;
-		const DOT_R = RING_R;
+			const RING_R = 44;
+			const DOT_R = RING_R;
 		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
 		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
 		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
@@ -387,7 +387,25 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 					<div class="toggle"></div>
 				</div>
-			</div>
+				${(d.nextStartMins != null || d.nextEventStart) ? `
+				<div style="margin-top:12px; width:100%; max-width:420px;">
+					<div class="next-start" style="display:flex; justify-content:space-between; align-items:center;">
+						<span class="next-start-label">Nächster Termin</span>
+						<span class="next-start-time">${d.nextStartMins != null ? `in ${d.nextStartMins} Minuten` : ''}</span>
+					</div>
+					${d.nextEventStart ? `
+					<div class="calendar" style="margin-top:10px;">
+						<div class="event">
+							<div style="flex: 1;">
+								<div class="event-title">${d.nextEventSummary || "Geplanter Start"}</div>
+								<div class="event-time" style="margin-top: 4px;">
+									${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
+								</div>
+							</div>
+						</div>
+					</div>` : ''}
+				</div>` : ''}
+				</div>
 		</div>`;
 	}
 
@@ -464,24 +482,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 			</div>` : ""}
 			
-			${d.nextStartMins != null ? `
-			<div class="next-start">
-				<span class="next-start-label">Nächster Start</span>
-				<span class="next-start-time">in ${d.nextStartMins} Minuten</span>
-			</div>` : ""}
-			
-			${d.nextEventStart ? `
-			<div class="calendar">
-				<div class="section-title">Nächster Termin</div>
-				<div class="event">
-					<div style="flex: 1;">
-						<div class="event-title">${d.nextEventSummary || "Geplanter Start"}</div>
-						<div class="event-time" style="margin-top: 4px;">
-							${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
-						</div>
-					</div>
-				</div>
-			</div>` : ""}
+
 		</div>`;
 	}
 
