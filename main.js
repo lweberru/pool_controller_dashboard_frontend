@@ -121,6 +121,29 @@ class PoolControllerCard extends HTMLElement {
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
 		const salt = c.salt_entity ? this._num(h.states[c.salt_entity]?.state) : null;
 		const tds = c.tds_entity ? this._num(h.states[c.tds_entity]?.state) : null;
+
+		// TDS assessment and recommended water change (percent). Optionally compute liters if pool_volume_l provided in config.
+		let tdsAssessment = null;
+		let waterChangePercent = 0;
+		let waterChangeLiters = null;
+		if (tds != null) {
+			if (tds <= 500) {
+				tdsAssessment = 'Gut';
+				waterChangePercent = 0;
+			} else if (tds <= 1000) {
+				tdsAssessment = 'Erhöht';
+				waterChangePercent = 0;
+			} else if (tds <= 1500) {
+				tdsAssessment = 'Hoch';
+				waterChangePercent = 20; // empfehlen 20% Wasser wechseln
+			} else {
+				tdsAssessment = 'Sehr hoch';
+				waterChangePercent = 50; // empfehlen 50% Wasser wechseln
+			}
+			if (waterChangePercent > 0 && Number.isFinite(Number(c.pool_volume_l))) {
+				waterChangeLiters = Math.round((Number(c.pool_volume_l) * waterChangePercent) / 100);
+			}
+		}
 		
 		const phPlusStateObj = c.ph_plus_entity ? h.states[c.ph_plus_entity] : null;
 		const phPlusNum = phPlusStateObj ? this._num(phPlusStateObj.state) : null;
@@ -167,6 +190,7 @@ class PoolControllerCard extends HTMLElement {
 			frost, quiet, pvAllows,
 			mainPower, auxPower, powerVal,
 			ph, chlor, salt, tds,
+			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextEventStart, nextEventEnd, nextEventSummary,
 			dialAngle, targetAngle,
@@ -486,6 +510,14 @@ class PoolControllerCard extends HTMLElement {
 						<div class="maintenance-text">
 							<div class="maintenance-label">pH+ hinzufügen</div>
 							<div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div>
+						</div>
+					</div>` : ""}
+					${d.waterChangePercent && d.waterChangePercent > 0 ? `
+					<div class="maintenance-item">
+						<ha-icon icon="mdi:water"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">Wasser wechseln</div>
+							<div class="maintenance-value">${d.waterChangePercent}%${d.waterChangeLiters ? ` — ${d.waterChangeLiters} L` : ''}</div>
 						</div>
 					</div>` : ""}
 					${d.phMinusNum && d.phMinusNum > 0 ? `
