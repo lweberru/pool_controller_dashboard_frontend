@@ -93,7 +93,7 @@ class PoolControllerCard extends HTMLElement {
 		
 		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
 		const filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
-		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
+		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity); // quick_chlorine_until Sensor verwenden!
 		const pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
 		
 		// Debug Chloren
@@ -101,9 +101,11 @@ class PoolControllerCard extends HTMLElement {
 			console.log('Chloren Debug:', {
 				chlorine_entity: c.chlorine_entity,
 				chlorine_until: c.chlorine_until,
+				chlorine_until_state: c.chlorine_until ? h.states[c.chlorine_until]?.state : 'fehlt',
 				chlorine_active_entity: c.chlorine_active_entity,
+				chlorine_active_state: c.chlorine_active_entity ? h.states[c.chlorine_active_entity]?.state : 'fehlt',
 				chlorState,
-				chlorEta: chlorState.eta
+				note: 'Verwende sensor.pool_quick_chlorine_until für Timer'
 			});
 		}
 		
@@ -198,7 +200,7 @@ class PoolControllerCard extends HTMLElement {
 			.ring { width: 100%; height: 100%; border-radius: 50%; position: relative; display: grid; place-items: center; padding: 20px; }
 			
 			/* SVG Ring */
-			.ring-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
+			.ring-svg { position: absolute; width: 100%; height: 100%; }
 			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; }
 			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
 			.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 8; stroke-linecap: round; }
@@ -297,25 +299,25 @@ class PoolControllerCard extends HTMLElement {
 							<!-- Track: 270° Arc (75% vom Umfang = 188.4 von 251.2) -->
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
-						stroke-dashoffset="0" />
+						stroke-dashoffset="-188.4" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-188.4 - d.dialAngle * 188.4 / 270}" />` : ''}
 						<!-- Current Progress -->
 						<circle class="ring-progress" cx="50" cy="50" r="40" 
 							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-						stroke-dashoffset="0" />
+						stroke-dashoffset="-188.4" />
 						<!-- Highlight zwischen IST und SOLL -->
 						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
 							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-188.4 - d.dialAngle * 188.4 / 270}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle - 90) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.dialAngle - 90) * Math.PI / 180)}" r="1.5" />
+					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle + 270) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.dialAngle + 270) * Math.PI / 180)}" r="1.5" />
 					<!-- Dot am SOLL-Wert (größer, weiß) -->
-					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 90) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.targetAngle - 90) * Math.PI / 180)}" r="2.5" />
+					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle + 270) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.targetAngle + 270) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
@@ -357,6 +359,9 @@ class PoolControllerCard extends HTMLElement {
 								<div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
 							</div>
 							<div class="timer-text">Chloren: noch ${d.chlorEta} min</div>
+						</div>` : d.chlorState.active ? `
+						<div class="bath-timer">
+							<div class="timer-text" style="margin-top: 4px; font-weight: 600; color: #27ae60;">Chloren aktiv</div>
 						</div>` : ""}
 						${d.pauseState.active && d.pauseEta != null ? `
 						<div class="bath-timer">
@@ -716,8 +721,6 @@ class PoolControllerCardEditor extends HTMLElement {
 				<select id="controller-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
 					<option value="">Bitte wählen...</option>
 				</select>
-				<div class="box" id="derived"></div>
-				<button id="derive">Automatisch aus Instanz übernehmen</button>
 			</div>
 			<div class="grid2">
 				<div class="row">
@@ -744,11 +747,6 @@ class PoolControllerCardEditor extends HTMLElement {
 				this._updateConfig({ [id]: Number.isFinite(num) ? num : inp.value });
 			});
 		});
-
-		const deriveBtn = this.shadowRoot.querySelector("#derive");
-		if (deriveBtn) deriveBtn.addEventListener("click", () => this._deriveFromController());
-
-		this._renderDerivedBox();
 	}
 
 	async _populateControllerSelect() {
@@ -782,10 +780,12 @@ class PoolControllerCardEditor extends HTMLElement {
 			setTimeout(() => this._deriveFromController(), 100);
 		}
 
-		select.addEventListener("change", (ev) => {
+		select.addEventListener("change", async (ev) => {
 			const val = ev.target.value;
 			if (val) {
 				this._updateConfig({ controller_entity: val, climate_entity: val });
+				// Automatisch alle Entities vom ausgewählten Controller ableiten
+				setTimeout(() => this._deriveFromController(), 100);
 			}
 		});
 	}
@@ -819,6 +819,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
 			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,
 			chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,
+			chlorine_until: pick("sensor", "quick_chlorine_until") || this._config.chlorine_until,
 			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
 			pause_entity: pick("binary_sensor", "is_paused") || this._config.pause_entity,
 			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
@@ -850,26 +851,8 @@ class PoolControllerCardEditor extends HTMLElement {
 		return this._registry;
 	}
 
-	_renderDerivedBox() {
-		const box = this.shadowRoot.querySelector("#derived");
-		if (!box || !this._config) return;
-		const cfg = this._config;
-		const rows = [
-			["climate", cfg.climate_entity],
-			["aux", cfg.aux_entity],
-			["bathing", `${cfg.bathing_start || ""} → ${cfg.bathing_active_binary || ""}`],
-			["filter", `${cfg.filter_start || ""} → ${cfg.filter_entity || ""}`],
-			["chlorine", `${cfg.chlorine_start || ""} → ${cfg.chlorine_entity || ""}`],
-			["pause", `${cfg.pause_start || ""} → ${cfg.pause_entity || ""}`],
-		];
-		box.innerHTML = rows
-			.map(([k, v]) => `<div class="badge"><strong>${k}</strong>: ${v || "–"}</div>`)
-			.join("");
-	}
-
 	_updateConfig(patch, renderOnly = false) {
 		this._config = { ...DEFAULTS, ...this._config, ...patch };
-		this._renderDerivedBox();
 		if (!renderOnly) {
 			this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
 		}
