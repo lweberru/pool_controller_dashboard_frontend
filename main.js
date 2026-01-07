@@ -270,18 +270,20 @@ class PoolControllerCard extends HTMLElement {
 			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
 			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 7%, #fbb13c 14%, #f6d32b 21%, #8bd448 35%, #27ae60 50%, #1abc9c 65%, #1c9ed8 78%, #2a7fdb 85%, #5c4ac7 100%); }
 			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
+			.salt-bar { background: linear-gradient(90deg, #e6f7ff 0%, #7fd1ff 50%, #0a84ff 100%); }
+			.tds-bar { background: linear-gradient(90deg, #2ecc71 0%, #f1c40f 50%, #e74c3c 100%); }
 			.scale-tick { position: absolute; bottom: 0; width: 2px; background: rgba(255,255,255,0.4); height: 50%; pointer-events: none; }
 			.scale-tick.major { height: 70%; background: rgba(255,255,255,0.6); width: 3px; }
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-			.scale-marker { position: absolute; top: -36px; transform: translateX(-50%); z-index: 10; }
+			.scale-marker { position: absolute; top: -22px; transform: translateX(-50%); z-index: 10; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
-			.marker-value::after { content: ""; position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 15px solid #0b132b; }
+			.marker-value::after { content: ""; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 12px solid #0b132b; }
 			@container (max-width: 520px) {
-				.scale-marker { top: -32px; }
+				.scale-marker { top: -20px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
-				.marker-value::after { bottom: -12px; border-left-width: 5px; border-right-width: 5px; border-top-width: 15px; }
+				.marker-value::after { bottom: -8px; border-left-width: 4px; border-right-width: 4px; border-top-width: 10px; }
 			}
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
 			
@@ -387,20 +389,18 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 					<div class="toggle"></div>
 				</div>
-				${(d.nextStartMins != null || d.nextEventStart) ? `
-				<div style="margin-top:12px; width:100%; max-width:420px;">
-					<div class="next-start" style="display:flex; justify-content:space-between; align-items:center;">
-						<span class="next-start-label">Nächster Termin</span>
-						<span class="next-start-time">${d.nextStartMins != null ? `in ${d.nextStartMins} Minuten` : ''}</span>
+				${(d.nextEventStart || d.nextStartMins != null) ? `
+				<div class="calendar" style="margin-top:12px;">
+					<div style="display:flex; justify-content:space-between; align-items:center;">
+						<div style="font-weight:700;">Nächster Termin</div>
+						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${d.nextStartMins != null ? `in ${d.nextStartMins} Minuten` : ''}</div>
 					</div>
 					${d.nextEventStart ? `
-					<div class="calendar" style="margin-top:10px;">
-						<div class="event">
-							<div style="flex: 1;">
-								<div class="event-title">${d.nextEventSummary || "Geplanter Start"}</div>
-								<div class="event-time" style="margin-top: 4px;">
-									${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
-								</div>
+					<div class="event" style="margin-top:10px;">
+						<div style="flex: 1;">
+							<div class="event-title">${d.nextEventSummary || "Geplanter Start"}</div>
+							<div class="event-time" style="margin-top: 4px;">
+								${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
 							</div>
 						</div>
 					</div>` : ''}
@@ -444,16 +444,38 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				
-				${d.salt != null || d.tds != null ? `
-				<div class="info-row-badges">
-					${d.salt != null ? `<div class="info-badge">Salz: ${d.salt}</div>` : ""}
-					${d.tds != null ? `<div class="info-badge">TDS: ${d.tds}</div>` : ""}
+				${(d.salt != null && d.salt > 0) ? `
+				<div class="scale-container">
+					<div style="font-weight: 600; margin-bottom: 8px;">Salzgehalt</div>
+					<div style="position: relative;">
+						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L</div></div>
+						<div class="scale-bar salt-bar">
+							${[0,2.5,5,7.5,10].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
+						</div>
+					</div>
+					<div class="scale-labels">
+						<span>0</span><span>2.5</span><span>5</span><span>7.5</span><span>10</span>
+					</div>
+				</div>` : ""}
+
+				${(d.tds != null && d.tds > 0) ? `
+				<div class="scale-container">
+					<div style="font-weight: 600; margin-bottom: 8px;">TDS</div>
+					<div style="position: relative;">
+						<div class="scale-marker" style="left: ${this._pct(d.tds, 0, 2000)}%"><div class="marker-value">${d.tds.toFixed(0)} ppm</div></div>
+						<div class="scale-bar tds-bar">
+							${[0,500,1000,1500,2000].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
+						</div>
+					</div>
+					<div class="scale-labels">
+						<span>0</span><span>500</span><span>1000</span><span>1500</span><span>2000</span>
+					</div>
 				</div>` : ""}
 			</div>
 			
 			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) ? `
 			<div class="maintenance">
-				<div class="section-title">⚠️ Wartungsarbeiten erforderlich</div>
+				<div class="section-title">⚠️ Wartungsarbeiten</div>
 				<div class="maintenance-items">
 					${d.phPlusNum && d.phPlusNum > 0 ? `
 					<div class="maintenance-item">
