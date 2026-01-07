@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.10 - Dial Layout fix (keine Sprünge), Status als Icon
+ * v1.5.11 - Layout Feinschliff (Ziel/Watt + Timer), Dots auf Ring
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -219,13 +219,13 @@ class PoolControllerCard extends HTMLElement {
 			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
-			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 220px; font-size: 14px; color: var(--secondary-text-color); }
+			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 180px; font-size: 14px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
 			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
 			.temp-target-right { justify-self: end; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); width: 100%; max-width: 200px; z-index: 9; }
+			.dial-timer { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); width: 100%; max-width: 160px; z-index: 9; }
 			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -296,7 +296,7 @@ class PoolControllerCard extends HTMLElement {
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 40;
-		const DOT_R = RING_R - 4;
+		const DOT_R = RING_R;
 		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
 		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
 		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
