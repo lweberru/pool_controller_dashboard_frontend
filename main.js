@@ -139,10 +139,10 @@ class PoolControllerCard extends HTMLElement {
 		const chlorMaxMins = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
 		const pauseMaxMins = c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null;
 		
-		const bathingProgress = bathingEta != null && bathingMaxMins ? this._clamp(bathingEta / bathingMaxMins, 0, 1) : (bathingEta != null ? this._clamp(bathingEta / c.bathing_max_mins, 0, 1) : 0);
-		const filterProgress = filterEta != null && filterMaxMins ? this._clamp(filterEta / filterMaxMins, 0, 1) : (filterEta != null ? this._clamp(filterEta / c.filter_max_mins, 0, 1) : 0);
-		const chlorProgress = chlorEta != null && chlorMaxMins ? this._clamp(chlorEta / chlorMaxMins, 0, 1) : (chlorEta != null ? this._clamp(chlorEta / c.chlor_max_mins, 0, 1) : 0);
-		const pauseProgress = pauseEta != null && pauseMaxMins ? this._clamp(pauseEta / pauseMaxMins, 0, 1) : (pauseEta != null ? this._clamp(pauseEta / c.pause_max_mins, 0, 1) : 0);
+		const bathingProgress = bathingEta != null && bathingMaxMins ? this._clamp(1 - (bathingEta / bathingMaxMins), 0, 1) : (bathingEta != null ? this._clamp(1 - (bathingEta / c.bathing_max_mins), 0, 1) : 0);
+		const filterProgress = filterEta != null && filterMaxMins ? this._clamp(1 - (filterEta / filterMaxMins), 0, 1) : (filterEta != null ? this._clamp(1 - (filterEta / c.filter_max_mins), 0, 1) : 0);
+		const chlorProgress = chlorEta != null && chlorMaxMins ? this._clamp(1 - (chlorEta / chlorMaxMins), 0, 1) : (chlorEta != null ? this._clamp(1 - (chlorEta / c.chlor_max_mins), 0, 1) : 0);
+		const pauseProgress = pauseEta != null && pauseMaxMins ? this._clamp(1 - (pauseEta / pauseMaxMins), 0, 1) : (pauseEta != null ? this._clamp(1 - (pauseEta / c.pause_max_mins), 0, 1) : 0);
 
 		const pillClass = bathingState.active || filterState.active || chlorState.active ? "active" : pauseState.active ? "warn" : frost ? "on" : "";
 		const statusText = this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active);
@@ -501,6 +501,9 @@ class PoolControllerCard extends HTMLElement {
 				const stop = btn.dataset.stop;
 				const active = btn.dataset.active === "true";
 				if (active && stop) {
+					this._triggerEntity(stop, false);
+				} else if (start) {
+					this._triggerEntity(start, true);
 				}
 			});
 		});
