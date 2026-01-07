@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.1 - Ring offset -157 FINAL + optimistic button updates
+ * v1.5.2 - Ring mit transform rotate(135), Dots 135+dialAngle
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -294,30 +294,34 @@ class PoolControllerCard extends HTMLElement {
 			<div class="dial-container">
 				<div class="dial" style="--accent:${d.auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
 					<div class="ring">
-						<!-- SVG Ring mit 270° Arc (Öffnung unten) -->
+						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
-							<!-- Track: 270° Arc (75% vom Umfang = 188.4 von 251.2) -->
+							<!-- Track: 270° Arc von 225° bis 135° -->
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
-						stroke-dashoffset="-157" />
+								stroke-dashoffset="-62.8" 
+								transform="rotate(135 50 50)" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-157 - d.dialAngle * 188.4 / 270}" />` : ''}
+								stroke-dashoffset="${-62.8 - d.dialAngle * 188.4 / 270}" 
+								transform="rotate(135 50 50)" />` : ''}
 						<!-- Current Progress -->
 						<circle class="ring-progress" cx="50" cy="50" r="40" 
 							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-						stroke-dashoffset="-157" />
+							stroke-dashoffset="-62.8" 
+							transform="rotate(135 50 50)" />
 						<!-- Highlight zwischen IST und SOLL -->
 						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
 							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-157 - d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-62.8 - d.dialAngle * 188.4 / 270}" 
+							transform="rotate(135 50 50)" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle + 225) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.dialAngle + 225) * Math.PI / 180)}" r="1.5" />
+					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((135 + d.dialAngle) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((135 + d.dialAngle) * Math.PI / 180)}" r="1.5" />
 					<!-- Dot am SOLL-Wert (größer, weiß) -->
-					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle + 225) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.targetAngle + 225) * Math.PI / 180)}" r="2.5" />
+					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((135 + d.targetAngle) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((135 + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
