@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.9 - Ring: Dots wie Better Thermostat (IST-Dot klein/hellrot)
+ * v1.5.10 - Dial Layout fix (keine Sprünge), Status als Icon
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -69,7 +69,6 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
-				<div class="pill ${data.pillClass}">${data.statusText}</div>
 			</div>
 			
 			<div class="content-grid">
@@ -89,6 +88,7 @@ class PoolControllerCard extends HTMLElement {
 		const target = this._num(climate.attributes.temperature) ?? this._num(climate.attributes.target_temp) ?? this._num(climate.attributes.max_temp);
 		const hvac = climate.state;
 		const hvacAction = climate.attributes.hvac_action;
+		const climateOff = hvac === "off" || hvac === "unavailable" || hvac === "unknown";
 		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");
 		
 		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
@@ -162,7 +162,7 @@ class PoolControllerCard extends HTMLElement {
 		const statusText = this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active);
 
 		return {
-			current, target, hvac, hvacAction, auxOn,
+			current, target, hvac, hvacAction, climateOff, auxOn,
 			bathingState, filterState, chlorState, pauseState,
 			frost, quiet, pvAllows,
 			mainPower, auxPower, powerVal,
@@ -210,19 +210,22 @@ class PoolControllerCard extends HTMLElement {
 			
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
-			.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
+			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-core { position: absolute; display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
+			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
-			.temp-target-row { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--secondary-text-color); }
+			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 220px; font-size: 14px; color: var(--secondary-text-color); }
+			.temp-target-left { justify-self: start; }
+			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
+			.temp-target-right { justify-self: end; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.bath-timer { margin-top: 8px; width: 100%; max-width: 180px; }
+			.dial-timer { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); width: 100%; max-width: 200px; z-index: 9; }
 			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -294,12 +297,15 @@ class PoolControllerCard extends HTMLElement {
 		const RING_CY = 50;
 		const RING_R = 40;
 		const DOT_R = RING_R - 4;
+		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
+		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
+		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
 		// SVG-Winkel (Screen-Koordinaten): 0°=3 Uhr, 90°=6 Uhr.
 		// Gap unten (zentriert bei 90°): Gap 45°..135° => Arc Start 135°, Sweep 270° bis 45°.
 		const RING_START_DEG = 135;
 		return `<div class="left-column">
 			<div class="dial-container">
-				<div class="dial" style="--accent:${d.auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
+				<div class="dial" style="--accent:${accent}; --target-accent:${targetAccent}">
 					<div class="ring">
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
@@ -313,7 +319,7 @@ class PoolControllerCard extends HTMLElement {
 							${d.targetAngle > d.dialAngle ? `<path class="ring-highlight" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
 							<circle class="ring-dot-current" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" 
-								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.25" style="fill:${d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)"};" />
+								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.25" style="fill:${dotCurrentFill};" />
 							<!-- Dot am SOLL-Wert (größer, weiß) -->
 							<circle class="ring-dot-target" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" 
 								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
@@ -334,42 +340,12 @@ class PoolControllerCard extends HTMLElement {
 						<div class="temp-current">${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
 						<div class="temp-target-row">
-							<span>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
-							${d.hvacAction === "heating" || d.hvacAction === "heat" ? '<ha-icon icon="mdi:radiator" style="color:#c0392b"></ha-icon>' : ''}
-							${d.mainPower !== null ? `<span>${d.mainPower}W</span>` : d.powerVal !== null ? `<span>${d.powerVal}W</span>` : ''}
+							<span class="temp-target-left">${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
+							<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
+							<span class="temp-target-right">${d.mainPower !== null ? `${d.mainPower}W` : d.powerVal !== null ? `${d.powerVal}W` : ''}</span>
 						</div>
-						${d.bathingState.active && d.bathingEta != null ? `
-						<div class="bath-timer">
-							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div>
-							</div>
-							<div class="timer-text">Baden: noch ${d.bathingEta} min</div>
-						</div>` : ""}
-						${d.filterState.active && d.filterEta != null ? `
-						<div class="bath-timer">
-							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${d.filterProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div>
-							</div>
-							<div class="timer-text">Filtern: noch ${d.filterEta} min</div>
-						</div>` : ""}
-						${d.chlorState.active && d.chlorEta != null ? `
-						<div class="bath-timer">
-							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
-							</div>
-							<div class="timer-text">Chloren: noch ${d.chlorEta} min</div>
-						</div>` : d.chlorState.active ? `
-						<div class="bath-timer">
-							<div class="timer-text" style="margin-top: 4px; font-weight: 600; color: #27ae60;">Chloren aktiv</div>
-						</div>` : ""}
-						${d.pauseState.active && d.pauseEta != null ? `
-						<div class="bath-timer">
-							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${d.pauseProgress * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div>
-							</div>
-							<div class="timer-text">Pause: noch ${d.pauseEta} min</div>
-						</div>` : ""}
 					</div>
+					${this._renderDialTimer(d)}
 				</div>
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec">−</button>
@@ -576,6 +552,50 @@ class PoolControllerCard extends HTMLElement {
 		if (hvacAction === "heating" || hvacAction === "heat") return "Heizt";
 		if (hvac === "off") return "Aus";
 		return hvac || "–";
+	}
+
+	_renderStatusMidIcon(d) {
+		const title = d.statusText || "";
+		if (d.pauseState?.active) return `<ha-icon icon="mdi:pause-circle" title="${title}" style="color:#e67e22"></ha-icon>`;
+		if (d.bathingState?.active) return `<ha-icon icon="mdi:pool" title="${title}" style="color:#8a3b32"></ha-icon>`;
+		if (d.chlorState?.active) return `<ha-icon icon="mdi:fan" title="${title}" style="color:#27ae60"></ha-icon>`;
+		if (d.filterState?.active) return `<ha-icon icon="mdi:rotate-right" title="${title}" style="color:#2a7fdb"></ha-icon>`;
+		if (d.hvacAction === "heating" || d.hvacAction === "heat") return `<ha-icon icon="mdi:radiator" title="${title}" style="color:#c0392b"></ha-icon>`;
+		if (d.hvac === "off") return `<ha-icon icon="mdi:power" title="${title}" style="color:var(--secondary-text-color)"></ha-icon>`;
+		return `<ha-icon icon="mdi:thermometer" title="${title}" style="color:var(--secondary-text-color)"></ha-icon>`;
+	}
+
+	_renderDialTimer(d) {
+		if (d.bathingState?.active && d.bathingEta != null) {
+			return `<div class="dial-timer">
+				<div class="timer-bar"><div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div></div>
+				<div class="timer-text">Baden: noch ${d.bathingEta} min</div>
+			</div>`;
+		}
+		if (d.filterState?.active && d.filterEta != null) {
+			return `<div class="dial-timer">
+				<div class="timer-bar"><div class="timer-fill" style="width: ${d.filterProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div></div>
+				<div class="timer-text">Filtern: noch ${d.filterEta} min</div>
+			</div>`;
+		}
+		if (d.chlorState?.active && d.chlorEta != null) {
+			return `<div class="dial-timer">
+				<div class="timer-bar"><div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div></div>
+				<div class="timer-text">Chloren: noch ${d.chlorEta} min</div>
+			</div>`;
+		}
+		if (d.chlorState?.active) {
+			return `<div class="dial-timer">
+				<div class="timer-text" style="font-weight: 600; color: #27ae60;">Chloren aktiv</div>
+			</div>`;
+		}
+		if (d.pauseState?.active && d.pauseEta != null) {
+			return `<div class="dial-timer">
+				<div class="timer-bar"><div class="timer-fill" style="width: ${d.pauseProgress * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div></div>
+				<div class="timer-text">Pause: noch ${d.pauseEta} min</div>
+			</div>`;
+		}
+		return "";
 	}
 
 	_formatEventTime(startTs, endTs) {
