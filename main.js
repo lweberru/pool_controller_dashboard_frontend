@@ -208,7 +208,7 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-row { display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--secondary-text-color); }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.bath-timer { margin-top: 8px; width: 200px; }
+			.bath-timer { margin-top: 8px; width: 100%; max-width: 180px; }
 			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -280,22 +280,30 @@ class PoolControllerCard extends HTMLElement {
 			<div class="dial-container">
 				<div class="dial" style="--accent:${d.auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
 					<div class="ring">
-						<!-- SVG Ring -->
+						<!-- SVG Ring mit 270° Arc (Öffnung unten) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
-							<circle class="ring-track" cx="50" cy="50" r="40" />
-							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
-								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 251.2 / 270} 251.2" 
-								stroke-dashoffset="${-d.dialAngle * 251.2 / 270}" />` : ''}
-							<circle class="ring-progress" cx="50" cy="50" r="40" 
-								stroke-dasharray="${d.dialAngle * 251.2 / 270} 251.2" 
+							<!-- Track: 270° Arc (75% vom Umfang = 188.4 von 251.2) -->
+							<circle class="ring-track" cx="50" cy="50" r="40" 
+								stroke-dasharray="188.4 251.2" 
 								stroke-dashoffset="0" />
+							<!-- Target Range (nur wenn Target > Current) -->
+							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
+								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
+								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+							<!-- Current Progress -->
+							<circle class="ring-progress" cx="50" cy="50" r="40" 
+								stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
+								stroke-dashoffset="0" />
+							<!-- Highlight zwischen IST und SOLL -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
-								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 251.2 / 270} 251.2" 
-								stroke-dashoffset="${-d.dialAngle * 251.2 / 270}" />` : ''}
+								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
+								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+							<!-- Dot am IST-Wert (kleiner) -->
 							<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle - 135) * Math.PI / 180)}" 
-								cy="${50 + 40 * Math.sin((d.dialAngle - 135) * Math.PI / 180)}" r="${d.current < d.target ? '3' : '4'}" />
+								cy="${50 + 40 * Math.sin((d.dialAngle - 135) * Math.PI / 180)}" r="4" />
+							<!-- Dot am SOLL-Wert (größer, weiß) -->
 							<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 135) * Math.PI / 180)}" 
-								cy="${50 + 40 * Math.sin((d.targetAngle - 135) * Math.PI / 180)}" r="6" />
+								cy="${50 + 40 * Math.sin((d.targetAngle - 135) * Math.PI / 180)}" r="7" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
@@ -320,28 +328,28 @@ class PoolControllerCard extends HTMLElement {
 						${d.bathingState.active && d.bathingEta != null ? `
 						<div class="bath-timer">
 							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${(1 - d.bathingProgress) * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div>
+								<div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div>
 							</div>
 							<div class="timer-text">Baden: noch ${d.bathingEta} min</div>
 						</div>` : ""}
 						${d.filterState.active && d.filterEta != null ? `
 						<div class="bath-timer">
 							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${(1 - d.filterProgress) * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div>
+								<div class="timer-fill" style="width: ${d.filterProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div>
 							</div>
 							<div class="timer-text">Filtern: noch ${d.filterEta} min</div>
 						</div>` : ""}
 						${d.chlorState.active && d.chlorEta != null ? `
 						<div class="bath-timer">
 							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${(1 - d.chlorProgress) * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
+								<div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div>
 							</div>
 							<div class="timer-text">Chloren: noch ${d.chlorEta} min</div>
 						</div>` : ""}
 						${d.pauseState.active && d.pauseEta != null ? `
 						<div class="bath-timer">
 							<div class="timer-bar">
-								<div class="timer-fill" style="width: ${(1 - d.pauseProgress) * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div>
+								<div class="timer-fill" style="width: ${d.pauseProgress * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div>
 							</div>
 							<div class="timer-text">Pause: noch ${d.pauseEta} min</div>
 						</div>` : ""}
@@ -385,14 +393,14 @@ class PoolControllerCard extends HTMLElement {
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">pH-Wert</div>
 					<div style="position: relative;">
-						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 1, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
+						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 0, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
 						<div class="scale-bar ph-bar">
-							${Array.from({length: 14}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 13) * 100}%"></div>`).join("")}
-							${Array.from({length: 13}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 13) * 100}%"></div>`).join("")}
+							${Array.from({length: 15}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 14) * 100}%"></div>`).join("")}
+							${Array.from({length: 14}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("")}
 						</div>
 					</div>
 					<div class="scale-labels">
-						${[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(n => `<span>${n}</span>`).join("")}
+						${[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(n => `<span>${n}</span>`).join("")}
 					</div>
 				</div>
 				
@@ -489,11 +497,10 @@ class PoolControllerCard extends HTMLElement {
 		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
 		actionButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
-				const { start, stop, active } = btn.dataset;
-				if (active === "true" && stop) {
-					this._triggerEntity(stop, false);
-				} else if (start) {
-					this._triggerEntity(start, true);
+				const start = btn.dataset.start;
+				const stop = btn.dataset.stop;
+				const active = btn.dataset.active === "true";
+				if (active && stop) {
 				}
 			});
 		});
