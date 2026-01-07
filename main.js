@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.5 - Ring rotate(-135) mit dashoffset 0
+ * v1.5.7 - Ring per SVG-Arc-Path (Gap unten stabil)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -201,8 +201,8 @@ class PoolControllerCard extends HTMLElement {
 			
 			/* SVG Ring */
 			.ring-svg { position: absolute; width: 100%; height: 100%; }
-			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; }
-			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
+			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; stroke-linecap: round; }
+			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; }
 			.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 8; stroke-linecap: round; }
 			.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 10; stroke-linecap: round; opacity: 0.4; }
 			.ring-dot-current { fill: var(--accent, #8a3b32); }
@@ -290,38 +290,31 @@ class PoolControllerCard extends HTMLElement {
 	// MODULAR: Linke Spalte (Dial + Controls)
 	// ========================================
 	_renderLeftColumn(d, c) {
+		const RING_CX = 50;
+		const RING_CY = 50;
+		const RING_R = 40;
+		// Gap unten (zentriert bei 180°/6 Uhr): Arc von 225° bis 135° (Sweep 270°)
+		const RING_START_DEG = 225;
 		return `<div class="left-column">
 			<div class="dial-container">
 				<div class="dial" style="--accent:${d.auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
 					<div class="ring">
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
-							<!-- Track: 270° Arc von 225° bis 135° -->
-							<circle class="ring-track" cx="50" cy="50" r="40" 
-								stroke-dasharray="188.4 251.2" 
-								stroke-dashoffset="0" 
-								transform="rotate(-135 50 50)" />
+							<!-- Track: 270° Arc von 225° bis 135° (Gap unten) -->
+							<path class="ring-track" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, 270)}" />
 							<!-- Target Range (nur wenn Target > Current) -->
-							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
-								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" 
-								transform="rotate(-135 50 50)" />` : ''}
-						<!-- Current Progress -->
-						<circle class="ring-progress" cx="50" cy="50" r="40" 
-							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-							stroke-dashoffset="0" 
-							transform="rotate(-135 50 50)" />
-						<!-- Highlight zwischen IST und SOLL -->
-						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
-							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" 
-							transform="rotate(-135 50 50)" />` : ''}
+							${d.targetAngle > d.dialAngle ? `<path class="ring-target" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
+							<!-- Current Progress -->
+							<path class="ring-progress" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, d.dialAngle)}" />
+							<!-- Highlight zwischen IST und SOLL -->
+							${d.targetAngle > d.dialAngle ? `<path class="ring-highlight" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((-135 + d.dialAngle) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((-135 + d.dialAngle) * Math.PI / 180)}" r="1.5" />
-					<!-- Dot am SOLL-Wert (größer, weiß) -->
-					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((-135 + d.targetAngle) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((-135 + d.targetAngle) * Math.PI / 180)}" r="2.5" />
+							<circle class="ring-dot-current" cx="${RING_CX + RING_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" 
+								cy="${RING_CY + RING_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.5" />
+							<!-- Dot am SOLL-Wert (größer, weiß) -->
+							<circle class="ring-dot-target" cx="${RING_CX + RING_R * Math.cos((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" 
+								cy="${RING_CY + RING_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
@@ -620,6 +613,20 @@ class PoolControllerCard extends HTMLElement {
 	_calcDial(val, min, max) {
 		const pct = this._clamp((val - min) / (max - min), 0, 1);
 		return Math.round(pct * 270);
+	}
+
+	_arcPath(cx, cy, r, startDeg, sweepDeg) {
+		const sweep = Number(sweepDeg);
+		if (!Number.isFinite(sweep) || sweep === 0) return "";
+		const startRad = (startDeg * Math.PI) / 180;
+		const endRad = ((startDeg + sweep) * Math.PI) / 180;
+		const x1 = cx + r * Math.cos(startRad);
+		const y1 = cy + r * Math.sin(startRad);
+		const x2 = cx + r * Math.cos(endRad);
+		const y2 = cy + r * Math.sin(endRad);
+		const largeArc = Math.abs(sweep) > 180 ? 1 : 0;
+		const sweepFlag = sweep >= 0 ? 1 : 0;
+		return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${x2} ${y2}`;
 	}
 
 	_num(v) {
