@@ -33,11 +33,9 @@ class PoolControllerCard extends HTMLElement {
 	set hass(hass) {
 		const oldHass = this._hass;
 		this._hass = hass;
-		// Debounce für smoother Ring-Updates bei Button-Clicks
-		if (this._renderTimeout) clearTimeout(this._renderTimeout);
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
-			this._renderTimeout = setTimeout(() => this._render(), 50);
+			this._render();
 		}
 	}
 
@@ -97,6 +95,17 @@ class PoolControllerCard extends HTMLElement {
 		const filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
 		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
 		const pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
+		
+		// Debug Chloren
+		if (chlorState.active || chlorState.eta) {
+			console.log('Chloren Debug:', {
+				chlorine_entity: c.chlorine_entity,
+				chlorine_until: c.chlorine_until,
+				chlorine_active_entity: c.chlorine_active_entity,
+				chlorState,
+				chlorEta: chlorState.eta
+			});
+		}
 		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
@@ -189,7 +198,7 @@ class PoolControllerCard extends HTMLElement {
 			.ring { width: 100%; height: 100%; border-radius: 50%; position: relative; display: grid; place-items: center; padding: 20px; }
 			
 			/* SVG Ring */
-			.ring-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-135deg); }
+			.ring-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-90deg); }
 			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; }
 			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
 			.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 8; stroke-linecap: round; }
@@ -288,25 +297,25 @@ class PoolControllerCard extends HTMLElement {
 							<!-- Track: 270° Arc (75% vom Umfang = 188.4 von 251.2) -->
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
-						stroke-dashoffset="-31.4" />
+						stroke-dashoffset="0" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-31.4 - d.dialAngle * 188.4 / 270}" />` : ''}
-							<!-- Current Progress -->
-							<circle class="ring-progress" cx="50" cy="50" r="40" 
-								stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-							stroke-dashoffset="-31.4" />
-							<!-- Highlight zwischen IST und SOLL -->
-							${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
-								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-31.4 - d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+						<!-- Current Progress -->
+						<circle class="ring-progress" cx="50" cy="50" r="40" 
+							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
+						stroke-dashoffset="0" />
+						<!-- Highlight zwischen IST und SOLL -->
+						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
+							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
+							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-							<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle - 135) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.dialAngle - 135) * Math.PI / 180)}" r="1.5" />
+					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle - 90) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.dialAngle - 90) * Math.PI / 180)}" r="1.5" />
 					<!-- Dot am SOLL-Wert (größer, weiß) -->
-					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 135) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.targetAngle - 135) * Math.PI / 180)}" r="2.5" />
+					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 90) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.targetAngle - 90) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
