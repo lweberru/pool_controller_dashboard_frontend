@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.20 - Show Salt/TDS also at 0
+ * v1.5.21 - Auto-derive Salt/TDS sensors in card + show TDS maintenance
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -24,6 +24,8 @@ class PoolControllerCard extends HTMLElement {
 			throw new Error("climate_entity ist erforderlich");
 		}
 		this._config = { ...DEFAULTS, ...config };
+		this._derivedEntities = null;
+		this._derivedForClimate = null;
 		if (!this.shadowRoot) {
 			this.attachShadow({ mode: "open" });
 		}
@@ -59,6 +61,9 @@ class PoolControllerCard extends HTMLElement {
 			this._renderError(`Entity ${c.climate_entity} nicht gefunden`);
 			return;
 		}
+
+		// Falls optionale Entities nicht im Config sind, leite sie aus der Backend-Instanz ab.
+		await this._ensureDerivedEntities();
 
 		// Daten vorbereiten
 		const data = this._prepareData(h, c, climate);
@@ -119,8 +124,10 @@ class PoolControllerCard extends HTMLElement {
 
 		const ph = c.ph_entity ? this._num(h.states[c.ph_entity]?.state) : null;
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
-		const salt = c.salt_entity ? this._num(h.states[c.salt_entity]?.state) : null;
-		const tds = c.tds_entity ? this._num(h.states[c.tds_entity]?.state) : null;
+		const saltEntityId = c.salt_entity || this._derivedEntities?.salt_entity;
+		const tdsEntityId = c.tds_entity || this._derivedEntities?.tds_entity;
+		const salt = saltEntityId ? this._num(h.states[saltEntityId]?.state) : null;
+		const tds = tdsEntityId ? this._num(h.states[tdsEntityId]?.state) : null;
 
 		// TDS assessment and recommended water change: prefer backend-provided values (entities or attributes),
 		// otherwise fall back to local computation.
@@ -128,20 +135,24 @@ class PoolControllerCard extends HTMLElement {
 		let waterChangePercent = 0;
 		let waterChangeLiters = null;
 
-		// 1) Try configured entity names (allow integrator to expose dedicated sensors)
-		if (c.tds_assessment_entity && h.states[c.tds_assessment_entity]) {
-			tdsAssessment = h.states[c.tds_assessment_entity].state;
+		const tdsAssessmentEntityId = c.tds_assessment_entity || this._derivedEntities?.tds_assessment_entity;
+		const waterChangePercentEntityId = c.water_change_percent_entity || this._derivedEntities?.water_change_percent_entity;
+		const waterChangeLitersEntityId = c.water_change_liters_entity || this._derivedEntities?.water_change_liters_entity;
+
+		// 1) Try configured/derived backend sensors
+		if (tdsAssessmentEntityId && h.states[tdsAssessmentEntityId]) {
+			tdsAssessment = h.states[tdsAssessmentEntityId].state;
 		}
-		if (c.water_change_percent_entity && h.states[c.water_change_percent_entity]) {
-			waterChangePercent = this._num(h.states[c.water_change_percent_entity].state) || 0;
+		if (waterChangePercentEntityId && h.states[waterChangePercentEntityId]) {
+			waterChangePercent = this._num(h.states[waterChangePercentEntityId].state) || 0;
 		}
-		if (c.water_change_liters_entity && h.states[c.water_change_liters_entity]) {
-			waterChangeLiters = this._num(h.states[c.water_change_liters_entity].state) || null;
+		if (waterChangeLitersEntityId && h.states[waterChangeLitersEntityId]) {
+			waterChangeLiters = this._num(h.states[waterChangeLitersEntityId].state) || null;
 		}
 
 		// 2) Fallback: check attributes on the TDS sensor (common integration pattern)
-		if ((tds == null || tdsAssessment == null) && c.tds_entity && h.states[c.tds_entity]) {
-			const attrs = h.states[c.tds_entity].attributes || {};
+		if ((tds == null || tdsAssessment == null) && tdsEntityId && h.states[tdsEntityId]) {
+			const attrs = h.states[tdsEntityId].attributes || {};
 			if (!tdsAssessment && attrs.assessment) tdsAssessment = attrs.assessment;
 			if ((!waterChangePercent || waterChangePercent === 0) && attrs.recommended_water_change_percent) {
 				waterChangePercent = this._num(attrs.recommended_water_change_percent) || 0;
@@ -531,7 +542,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>` : ""}
 			</div>
 			
-			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) ? `
+			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
 			<div class="maintenance">
 				<div class="section-title">⚠️ Wartungsarbeiten</div>
 				<div class="maintenance-items">
@@ -817,14 +828,63 @@ class PoolControllerCard extends HTMLElement {
 			this._config.next_event_end_entity,
 			this._config.next_event_summary_entity,
 		].filter(Boolean);
+
+		const derived = this._derivedEntities ? Object.values(this._derivedEntities).filter(Boolean) : [];
+		const allRelevant = relevantEntities.concat(derived);
 		
-		return relevantEntities.some(entityId => {
+		return allRelevant.some(entityId => {
 			const oldState = oldHass.states[entityId];
 			const newState = newHass.states[entityId];
 			if (!oldState || !newState) return true;
 			return oldState.state !== newState.state || 
 			       JSON.stringify(oldState.attributes) !== JSON.stringify(newState.attributes);
 		});
+	}
+
+	async _getEntityRegistry() {
+		if (!this._registry && this._hass) {
+			this._registry = await this._hass.callWS({ type: "config/entity_registry/list" });
+		}
+		return this._registry || [];
+	}
+
+	_pickEntity(entries, domain, suffixes = []) {
+		const list = Array.isArray(suffixes) ? suffixes.filter(Boolean) : [];
+		for (const suffix of list) {
+			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && e.unique_id?.endsWith(`_${suffix}`));
+			if (hit?.entity_id) return hit.entity_id;
+		}
+		for (const suffix of list) {
+			const token = String(suffix).toLowerCase();
+			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && String(e.entity_id).toLowerCase().includes(token));
+			if (hit?.entity_id) return hit.entity_id;
+		}
+		return null;
+	}
+
+	async _ensureDerivedEntities() {
+		if (!this._hass || !this._config?.climate_entity) return;
+		if (this._derivedEntities && this._derivedForClimate === this._config.climate_entity) return;
+
+		let reg = [];
+		try {
+			reg = await this._getEntityRegistry();
+		} catch (e) {
+			return;
+		}
+		const selected = reg.find((r) => r.entity_id === this._config.climate_entity);
+		if (!selected?.config_entry_id) return;
+		const ceid = selected.config_entry_id;
+		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
+
+		this._derivedEntities = {
+			salt_entity: this._pickEntity(entries, "sensor", ["salt_val", "salt"]) || null,
+			tds_entity: this._pickEntity(entries, "sensor", ["tds_val", "tds", "tds_ppm"]) || null,
+			tds_assessment_entity: this._pickEntity(entries, "sensor", ["tds_status", "tds_assessment", "tds_state"]) || null,
+			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
+			water_change_percent_entity: this._pickEntity(entries, "sensor", ["tds_water_change_percent", "water_change_percent"]) || null,
+		};
+		this._derivedForClimate = this._config.climate_entity;
 	}
 
 	_renderError(msg) {
