@@ -448,13 +448,16 @@ class PoolControllerCard extends HTMLElement {
 				<div class="scale-container">
 					<div style="font-weight: 600; margin-bottom: 8px;">Salzgehalt</div>
 					<div style="position: relative;">
-						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L</div></div>
+						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)</div></div>
 						<div class="scale-bar salt-bar">
 							${[0,2.5,5,7.5,10].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
 					</div>
 					<div class="scale-labels">
 						<span>0</span><span>2.5</span><span>5</span><span>7.5</span><span>10</span>
+					</div>
+					<div class="scale-labels" style="margin-top:6px; font-size:11px; color:#666;">
+						<span>0%</span><span>0.25%</span><span>0.50%</span><span>0.75%</span><span>1.00%</span>
 					</div>
 				</div>` : ""}
 
