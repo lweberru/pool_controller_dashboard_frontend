@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.4.5 - Modularisiert mit Template Functions (Option B)
+ * v1.5.1 - Ring offset -157 FINAL + optimistic button updates
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -299,25 +299,25 @@ class PoolControllerCard extends HTMLElement {
 							<!-- Track: 270° Arc (75% vom Umfang = 188.4 von 251.2) -->
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
-						stroke-dashoffset="-188.4" />
+						stroke-dashoffset="-157" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-188.4 - d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-157 - d.dialAngle * 188.4 / 270}" />` : ''}
 						<!-- Current Progress -->
 						<circle class="ring-progress" cx="50" cy="50" r="40" 
 							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-						stroke-dashoffset="-188.4" />
+						stroke-dashoffset="-157" />
 						<!-- Highlight zwischen IST und SOLL -->
 						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
 							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-							stroke-dashoffset="${-188.4 - d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-157 - d.dialAngle * 188.4 / 270}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle + 270) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.dialAngle + 270) * Math.PI / 180)}" r="1.5" />
+					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle + 225) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.dialAngle + 225) * Math.PI / 180)}" r="1.5" />
 					<!-- Dot am SOLL-Wert (größer, weiß) -->
-					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle + 270) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((d.targetAngle + 270) * Math.PI / 180)}" r="2.5" />
+					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle + 225) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.targetAngle + 225) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
@@ -507,7 +507,21 @@ class PoolControllerCard extends HTMLElement {
 				const climate = this._hass.states[this._config.climate_entity];
 				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? this._config.min_temp;
 				const next = action === "inc" ? currentTarget + step : currentTarget - step;
-				this._hass.callService("climate", "set_temperature", { entity_id: this._config.climate_entity, temperature: this._clamp(next, this._config.min_temp, this._config.max_temp) });
+				const newTemp = this._clamp(next, this._config.min_temp, this._config.max_temp);
+				
+				// Optimistic update: Sofort lokale Änderung anzeigen
+				if (climate) {
+					const optimisticState = { ...climate };
+					optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
+					this._hass.states[this._config.climate_entity] = optimisticState;
+					this._render();
+				}
+				
+				// Service call im Hintergrund
+				this._hass.callService("climate", "set_temperature", { 
+					entity_id: this._config.climate_entity, 
+					temperature: newTemp 
+				});
 			});
 		});
 
