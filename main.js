@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.7 - Ring per SVG-Arc-Path (Gap unten stabil)
+ * v1.5.8 - Ring: Winkelreferenz korrigiert (Gap unten)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -293,15 +293,16 @@ class PoolControllerCard extends HTMLElement {
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 40;
-		// Gap unten (zentriert bei 180°/6 Uhr): Arc von 225° bis 135° (Sweep 270°)
-		const RING_START_DEG = 225;
+		// SVG-Winkel (Screen-Koordinaten): 0°=3 Uhr, 90°=6 Uhr.
+		// Gap unten (zentriert bei 90°): Gap 45°..135° => Arc Start 135°, Sweep 270° bis 45°.
+		const RING_START_DEG = 135;
 		return `<div class="left-column">
 			<div class="dial-container">
 				<div class="dial" style="--accent:${d.auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
 					<div class="ring">
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
-							<!-- Track: 270° Arc von 225° bis 135° (Gap unten) -->
+							<!-- Track: 270° Arc (Gap unten) -->
 							<path class="ring-track" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, 270)}" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<path class="ring-target" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
