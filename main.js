@@ -33,9 +33,11 @@ class PoolControllerCard extends HTMLElement {
 	set hass(hass) {
 		const oldHass = this._hass;
 		this._hass = hass;
+		// Debounce für smoother Ring-Updates bei Button-Clicks
+		if (this._renderTimeout) clearTimeout(this._renderTimeout);
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
-			this._render();
+			this._renderTimeout = setTimeout(() => this._render(), 50);
 		}
 	}
 
@@ -139,10 +141,11 @@ class PoolControllerCard extends HTMLElement {
 		const chlorMaxMins = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
 		const pauseMaxMins = c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null;
 		
-		const bathingProgress = bathingEta != null && bathingMaxMins ? this._clamp(1 - (bathingEta / bathingMaxMins), 0, 1) : (bathingEta != null ? this._clamp(1 - (bathingEta / c.bathing_max_mins), 0, 1) : 0);
-		const filterProgress = filterEta != null && filterMaxMins ? this._clamp(1 - (filterEta / filterMaxMins), 0, 1) : (filterEta != null ? this._clamp(1 - (filterEta / c.filter_max_mins), 0, 1) : 0);
-		const chlorProgress = chlorEta != null && chlorMaxMins ? this._clamp(1 - (chlorEta / chlorMaxMins), 0, 1) : (chlorEta != null ? this._clamp(1 - (chlorEta / c.chlor_max_mins), 0, 1) : 0);
-		const pauseProgress = pauseEta != null && pauseMaxMins ? this._clamp(1 - (pauseEta / pauseMaxMins), 0, 1) : (pauseEta != null ? this._clamp(1 - (pauseEta / c.pause_max_mins), 0, 1) : 0);
+		// Fallback: Verwende ETA als Max wenn keine Duration-Entity vorhanden (Timer gerade gestartet)
+		const bathingProgress = bathingEta != null ? this._clamp(bathingEta / (bathingMaxMins || bathingEta || c.bathing_max_mins), 0, 1) : 0;
+		const filterProgress = filterEta != null ? this._clamp(filterEta / (filterMaxMins || filterEta || c.filter_max_mins), 0, 1) : 0;
+		const chlorProgress = chlorEta != null ? this._clamp(chlorEta / (chlorMaxMins || chlorEta || c.chlor_max_mins), 0, 1) : 0;
+		const pauseProgress = pauseEta != null ? this._clamp(pauseEta / (pauseMaxMins || pauseEta || c.pause_max_mins), 0, 1) : 0;
 
 		const pillClass = bathingState.active || filterState.active || chlorState.active ? "active" : pauseState.active ? "warn" : frost ? "on" : "";
 		const statusText = this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active);
@@ -285,25 +288,25 @@ class PoolControllerCard extends HTMLElement {
 							<!-- Track: 270° Arc (75% vom Umfang = 188.4 von 251.2) -->
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
-								stroke-dashoffset="0" />
+						stroke-dashoffset="-31.4" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-31.4 - d.dialAngle * 188.4 / 270}" />` : ''}
 							<!-- Current Progress -->
 							<circle class="ring-progress" cx="50" cy="50" r="40" 
 								stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
-								stroke-dashoffset="0" />
+							stroke-dashoffset="-31.4" />
 							<!-- Highlight zwischen IST und SOLL -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
-								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" />` : ''}
+							stroke-dashoffset="${-31.4 - d.dialAngle * 188.4 / 270}" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
 							<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((d.dialAngle - 135) * Math.PI / 180)}" 
-								cy="${50 + 40 * Math.sin((d.dialAngle - 135) * Math.PI / 180)}" r="4" />
-							<!-- Dot am SOLL-Wert (größer, weiß) -->
-							<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 135) * Math.PI / 180)}" 
-								cy="${50 + 40 * Math.sin((d.targetAngle - 135) * Math.PI / 180)}" r="7" />
+						cy="${50 + 40 * Math.sin((d.dialAngle - 135) * Math.PI / 180)}" r="1.5" />
+					<!-- Dot am SOLL-Wert (größer, weiß) -->
+					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((d.targetAngle - 135) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((d.targetAngle - 135) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
