@@ -136,7 +136,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 	
 	.dial-container { display: grid; place-items: center; }
 	.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
-	.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), #e6e9ed var(--angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
+	.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), var(--target-accent, rgba(138,59,50,0.3)) var(--angle, 0deg), var(--target-accent, rgba(138,59,50,0.3)) var(--target-angle, 0deg), #e6e9ed var(--target-angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
 	.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 	
 	.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
@@ -189,10 +189,12 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
 			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 7%, #fbb13c 14%, #f6d32b 21%, #8bd448 35%, #27ae60 50%, #1abc9c 65%, #1c9ed8 78%, #2a7fdb 85%, #5c4ac7 100%); }
 			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
+			.scale-tick { position: absolute; bottom: 0; width: 2px; background: rgba(255,255,255,0.4); height: 50%; pointer-events: none; }
+			.scale-tick.major { height: 70%; background: rgba(255,255,255,0.6); width: 3px; }
+			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-			.scale-marker { position: absolute; top: -48px; transform: translateX(-50%); }
-			.scale-marker::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid #0b132b; }
+		.scale-marker { position: absolute; top: 19px; transform: translateX(-50%); z-index: 10; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; }
 			
 			.scale-range { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #999; text-transform: uppercase; font-weight: 600; }
@@ -316,7 +318,10 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 					<div style="font-weight: 600; margin-bottom: 8px;">pH-Wert</div>
 					<div style="position: relative;">
 						${ph != null ? `<div class="scale-marker" style="left: ${this._pct(ph, 1, 14)}%"><div class="marker-value">${ph.toFixed(2)}</div></div>` : ""}
-						<div class="scale-bar ph-bar"></div>
+						<div class="scale-bar ph-bar">
+							${Array.from({length: 14}, (_, i) => i + 1).map(n => `<div class="scale-tick major" style="left: ${this._pct(n, 1, 14)}%"></div>`).join("")}
+							${Array.from({length: 26}, (_, i) => (i + 1) * 0.5 + 1).filter(n => n % 1 !== 0).map(n => `<div class="scale-tick minor" style="left: ${this._pct(n, 1, 14)}%"></div>`).join("")}
+						</div>
 					</div>
 					<div class="scale-labels">
 						${[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(n => `<span>${n}</span>`).join("")}
@@ -328,7 +333,10 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 					<div style="font-weight: 600; margin-bottom: 8px;">Chlor</div>
 					<div style="position: relative;">
 						${chlor != null ? `<div class="scale-marker" style="left: ${this._pct(chlor, 0, 1200)}%"><div class="marker-value">${chlor.toFixed(0)} mV</div></div>` : ""}
-						<div class="scale-bar chlor-bar"></div>
+						<div class="scale-bar chlor-bar">
+							${[300, 600, 900].map(n => `<div class="scale-tick major" style="left: ${this._pct(n, 0, 1200)}%"></div>`).join("")}
+							${[100, 200, 400, 500, 700, 800, 1000, 1100].map(n => `<div class="scale-tick minor" style="left: ${this._pct(n, 0, 1200)}%"></div>`).join("")}
+						</div>
 					</div>
 					<div class="scale-labels">
 						<span>0</span><span>300</span><span>600</span><span>900</span><span>1200</span>
@@ -391,7 +399,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 						</div>
 					</div>
 				</div>
-		</div>` : ""}
+			</div>` : ""}
 		</div>
 	</div>
 </ha-card>`;
