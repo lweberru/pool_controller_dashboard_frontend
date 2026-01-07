@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.4 - Ring dashoffset 0 statt -62.8
+ * v1.5.5 - Ring rotate(-135) mit dashoffset 0
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -300,28 +300,28 @@ class PoolControllerCard extends HTMLElement {
 							<circle class="ring-track" cx="50" cy="50" r="40" 
 								stroke-dasharray="188.4 251.2" 
 								stroke-dashoffset="0" 
-								transform="rotate(225 50 50)" />
+								transform="rotate(-135 50 50)" />
 							<!-- Target Range (nur wenn Target > Current) -->
 							${d.targetAngle > d.dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
 								stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
 								stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" 
-								transform="rotate(225 50 50)" />` : ''}
+								transform="rotate(-135 50 50)" />` : ''}
 						<!-- Current Progress -->
 						<circle class="ring-progress" cx="50" cy="50" r="40" 
 							stroke-dasharray="${d.dialAngle * 188.4 / 270} 251.2" 
 							stroke-dashoffset="0" 
-							transform="rotate(225 50 50)" />
+							transform="rotate(-135 50 50)" />
 						<!-- Highlight zwischen IST und SOLL -->
 						${d.targetAngle > d.dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
 							stroke-dasharray="${(d.targetAngle - d.dialAngle) * 188.4 / 270} 251.2" 
 							stroke-dashoffset="${-d.dialAngle * 188.4 / 270}" 
-							transform="rotate(225 50 50)" />` : ''}
+							transform="rotate(-135 50 50)" />` : ''}
 							<!-- Dot am IST-Wert (kleiner) -->
-					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((225 + d.dialAngle) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((225 + d.dialAngle) * Math.PI / 180)}" r="1.5" />
+					<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((-135 + d.dialAngle) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((-135 + d.dialAngle) * Math.PI / 180)}" r="1.5" />
 					<!-- Dot am SOLL-Wert (größer, weiß) -->
-					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((225 + d.targetAngle) * Math.PI / 180)}" 
-						cy="${50 + 40 * Math.sin((225 + d.targetAngle) * Math.PI / 180)}" r="2.5" />
+					<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((-135 + d.targetAngle) * Math.PI / 180)}" 
+						cy="${50 + 40 * Math.sin((-135 + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
 							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
