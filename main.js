@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.12 - Responsive Layout (Container Queries), bessere Proportionen
+ * v1.5.13 - Dial Spacing Fix + Wide-Layout Tuning
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -198,8 +198,9 @@ class PoolControllerCard extends HTMLElement {
 			/* Card-basiert (Home Assistant Layout): reagiert auf Kartenbreite, nicht Viewport */
 			@container (min-width: 520px) { .content-grid { grid-template-columns: 1fr 1fr; } }
 			@container (min-width: 850px) {
-				.content-grid { grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
-				.dial { max-width: 340px; }
+				.content-grid { grid-template-columns: 1.35fr 0.65fr; gap: 24px; }
+				.dial { max-width: 380px; }
+				.right-column { max-width: 520px; justify-self: end; }
 			}
 			
 			.dial-container { display: grid; place-items: center; }
@@ -226,17 +227,19 @@ class PoolControllerCard extends HTMLElement {
 			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
-			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 180px; font-size: 16px; color: var(--secondary-text-color); }
+			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
 			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
 			.temp-target-right { justify-self: end; }
-			.temp-target-left, .temp-target-right { font-weight: 600; }
+			.temp-target-left, .temp-target-right { font-weight: 600; white-space: nowrap; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); width: 60%; max-width: 180px; z-index: 9; }
+			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 52%; max-width: 150px; z-index: 9; }
 			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
+
+			.right-column { width: 100%; }
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
 			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
