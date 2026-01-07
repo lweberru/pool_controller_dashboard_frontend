@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.11 - Layout Feinschliff (Ziel/Watt + Timer), Dots auf Ring
+ * v1.5.12 - Responsive Layout (Container Queries), bessere Proportionen
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -183,7 +183,7 @@ class PoolControllerCard extends HTMLElement {
 	_getStyles() {
 		return `<style>
 			:host { display: block; }
-			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); }
+			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); container-type: inline-size; }
 			* { box-sizing: border-box; }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
 			.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
@@ -192,8 +192,15 @@ class PoolControllerCard extends HTMLElement {
 			.pill.warn { background: #ffe5d5; color: #b44; }
 			.pill.active { background: #8a3b32; color: #fff; }
 			
-			.content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-			@media (max-width: 500px) { .content-grid { grid-template-columns: 1fr; } }
+			.content-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+			/* Fallback (viewport-basiert), falls Container Queries fehlen */
+			@media (min-width: 501px) { .content-grid { grid-template-columns: 1fr 1fr; } }
+			/* Card-basiert (Home Assistant Layout): reagiert auf Kartenbreite, nicht Viewport */
+			@container (min-width: 520px) { .content-grid { grid-template-columns: 1fr 1fr; } }
+			@container (min-width: 850px) {
+				.content-grid { grid-template-columns: 1.2fr 0.8fr; gap: 24px; }
+				.dial { max-width: 340px; }
+			}
 			
 			.dial-container { display: grid; place-items: center; }
 			.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
@@ -219,13 +226,14 @@ class PoolControllerCard extends HTMLElement {
 			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
-			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 180px; font-size: 14px; color: var(--secondary-text-color); }
+			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 180px; font-size: 16px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
 			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
 			.temp-target-right { justify-self: end; }
+			.temp-target-left, .temp-target-right { font-weight: 600; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); width: 100%; max-width: 160px; z-index: 9; }
+			.dial-timer { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); width: 60%; max-width: 180px; z-index: 9; }
 			.timer-bar { height: 6px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -264,9 +272,14 @@ class PoolControllerCard extends HTMLElement {
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-			.scale-marker { position: absolute; top: -56px; transform: translateX(-50%); z-index: 10; }
-			.marker-value { background: #0b132b; color: #fff; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
-			.marker-value::after { content: ""; position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 36px solid #0b132b; }
+			.scale-marker { position: absolute; top: -48px; transform: translateX(-50%); z-index: 10; }
+			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
+			.marker-value::after { content: ""; position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 30px solid #0b132b; }
+			@container (max-width: 520px) {
+				.scale-marker { top: -44px; }
+				.marker-value { padding: 5px 8px; font-size: 12px; }
+				.marker-value::after { bottom: -26px; border-left-width: 9px; border-right-width: 9px; border-top-width: 26px; }
+			}
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
 			
 			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 16px; }
