@@ -146,7 +146,17 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 	
 	.dial-container { display: grid; place-items: center; }
 	.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
-	.ring { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 225deg, var(--accent, #8a3b32) 0deg, var(--accent, #8a3b32) var(--angle, 0deg), var(--target-accent, rgba(138,59,50,0.3)) var(--angle, 0deg), var(--target-accent, rgba(138,59,50,0.3)) var(--target-angle, 0deg), #e6e9ed var(--target-angle, 0deg), #e6e9ed 270deg, transparent 270deg); display: grid; place-items: center; padding: 20px; position: relative; }
+	.ring { width: 100%; height: 100%; border-radius: 50%; position: relative; display: grid; place-items: center; padding: 20px; }
+	
+	/* SVG Ring statt CSS Gradient */
+	.ring-svg { position: absolute; width: 100%; height: 100%; transform: rotate(-135deg); }
+	.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 20; }
+	.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 20; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
+	.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 20; stroke-linecap: round; }
+	.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 24; stroke-linecap: round; opacity: 0.4; }
+	.ring-dot-current { fill: var(--accent, #8a3b32); }
+	.ring-dot-target { fill: #fff; stroke: #d0d7de; stroke-width: 2; }
+	
 	.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 	
 	.status-icons { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
@@ -206,10 +216,7 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
 		.scale-marker { position: absolute; top: -56px; transform: translateX(-50%); z-index: 10; }
 		.marker-value { background: #0b132b; color: #fff; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; position: relative; }
-		.marker-value::after { content: ""; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 10px solid #0b132b; }
-			.scale-range { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; color: #999; text-transform: uppercase; font-weight: 600; }
-			
-			.info-row-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+		.marker-value::after { content: ""; position: absolute; bottom: -36px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 36px solid #0b132b; }
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
 			.info-badge.alert { background: #ffe5d5; color: #8a3b32; border-color: #f3c2a2; font-weight: 600; }
 			
@@ -240,18 +247,43 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 			<div class="content-grid">
 				<div class="left-column">
 					<div class="dial-container">
-						<div class="dial" style="--angle:${dialAngle}deg; --target-angle:${targetAngle}deg; --accent:${auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
-					<div class="ring">
-						<div class="status-icons">
-						<div class="status-icon frost ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
-								<ha-icon icon="mdi:snowflake"></ha-icon>
+					<div class="dial" style="--accent:${auxOn ? "#c0392b" : "#8a3b32"}; --target-accent:${auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)"}">
+						<div class="ring">
+							<!-- SVG Ring mit abgerundeten Enden -->
+							<svg class="ring-svg" viewBox="0 0 100 100">
+								<!-- Track (Hintergrund) -->
+								<circle class="ring-track" cx="50" cy="50" r="40" />
+								<!-- Target Range (translucent) -->
+								${targetAngle > dialAngle ? `<circle class="ring-target" cx="50" cy="50" r="40" 
+									stroke-dasharray="${(targetAngle - dialAngle) * 251.2 / 270} 251.2" 
+									stroke-dashoffset="${-dialAngle * 251.2 / 270}" />` : ''}
+								<!-- Current Progress (solid) -->
+								<circle class="ring-progress" cx="50" cy="50" r="40" 
+									stroke-dasharray="${dialAngle * 251.2 / 270} 251.2" 
+									stroke-dashoffset="0" />
+								<!-- Highlight zwischen IST und SOLL (dicker, wenn Target > Current) -->
+								${targetAngle > dialAngle ? `<circle class="ring-highlight" cx="50" cy="50" r="40" 
+									stroke-dasharray="${(targetAngle - dialAngle) * 251.2 / 270} 251.2" 
+									stroke-dashoffset="${-dialAngle * 251.2 / 270}" />` : ''}
+								<!-- Dot am Current-Ende -->
+								<circle class="ring-dot-current" cx="${50 + 40 * Math.cos((dialAngle - 135) * Math.PI / 180)}" 
+									cy="${50 + 40 * Math.sin((dialAngle - 135) * Math.PI / 180)}" r="${current < target ? '3' : '4'}" />
+								<!-- Dot am Target-Ende (größer, weiß) -->
+								<circle class="ring-dot-target" cx="${50 + 40 * Math.cos((targetAngle - 135) * Math.PI / 180)}" 
+									cy="${50 + 40 * Math.sin((targetAngle - 135) * Math.PI / 180)}" r="6" />
+							</svg>
+							<div class="status-icons">
+								<div class="status-icon frost ${frost ? "active" : ""}" title="Frostschutz: ${frost ? "an" : "aus"}">
+									<ha-icon icon="mdi:snowflake"></ha-icon>
+								</div>
+								<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit: ${quiet ? "an" : "aus"}">
+									<ha-icon icon="mdi:power-sleep"></ha-icon>
+								</div>
+								<div class="status-icon ${pvAllows ? "active" : ""}" title="PV-Überschuss: ${pvAllows ? "verfügbar" : "nicht verfügbar"}">
+									<ha-icon icon="mdi:solar-power"></ha-icon>
+								</div>
 							</div>
-							<div class="status-icon ${quiet ? "active" : ""}" title="Ruhezeit: ${quiet ? "an" : "aus"}">
-								<ha-icon icon="mdi:power-sleep"></ha-icon>
-							</div>						<div class="status-icon ${pvAllows ? "active" : ""}" title="PV-Überschuss: ${pvAllows ? "verfügbar" : "nicht verfügbar"}">
-							<ha-icon icon="mdi:solar-power"></ha-icon>
-						</div>						</div>
-					</div>
+						</div>
 					<div class="dial-core">
 						<div class="temp-current">${current != null ? current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
@@ -361,6 +393,8 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 					${tds != null ? `<div class="info-badge">TDS: ${tds}</div>` : ""}
 				</div>` : ""}
 			</div>
+			<!-- END quality -->
+			
 			
 			${(phPlusNum && phPlusNum > 0) || (phMinusNum && phMinusNum > 0) || (chlorDoseNum && chlorDoseNum > 0) ? `
 			<div class="maintenance">
@@ -412,8 +446,9 @@ const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
 				</div>
 			</div>` : ""}
 			</div>
-		</div>
+			<!-- END right-column -->
 	</div>
+	<!-- END content-grid -->
 </ha-card>`;
 
 	this._attachHandlers();
@@ -552,19 +587,9 @@ _attachHandlers() {		const tempButtons = this.shadowRoot.querySelectorAll(".temp
 
 	_hasRelevantChanges(oldHass, newHass) {
 		if (!this._config) return true;
-		// Prüfe nur relevante Entities
-		const entities = [
-			this._config.climate_entity,
-			this._config.aux_entity,
-			this._config.bathing_entity,
-			this._config.filter_entity,
-			this._config.chlorine_entity,
-			this._config.pause_entity,
-			this._config.ph_entity,
-			this._config.chlorine_value_entity,
-		].filter(Boolean);
-		
-		return entities.some(e => oldHass.states[e]?.state !== newHass.states[e]?.state);
+		// Einfacher: Bei JEDEM State-Change neu rendern
+		// Das verhindert das Problem, dass wichtige Entities nicht geprüft werden
+		return true;
 	}
 
 
