@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.27 - timer v2 + multi-instance services
+ * v1.5.28 - UI tweaks (compact dial + markers)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -557,13 +557,19 @@ class PoolControllerCard extends HTMLElement {
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
-			.scale-marker { position: absolute; top: -22px; transform: translateX(-50%); z-index: 10; }
+			/* Marker sollen im Balken sitzen (nicht über der Überschrift). */
+			.scale-marker { position: absolute; top: 8px; transform: translateX(-50%); z-index: 10; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
-			.marker-value::after { content: ""; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 12px solid #0b132b; }
+			.marker-value::after { content: ""; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 10px solid #0b132b; }
 			@container (max-width: 520px) {
-				.scale-marker { top: -20px; }
+				/* Schmal: Dial-UI leicht kompakter, Marker weiterhin im Balken. */
+				.temp-current { font-size: 42px; }
+				.status-icons { top: 18%; gap: 10px; }
+				.status-icon { width: 28px; height: 28px; }
+				.status-icon ha-icon { --mdc-icon-size: 16px; }
+				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
-				.marker-value::after { bottom: -8px; border-left-width: 4px; border-right-width: 4px; border-top-width: 10px; }
+				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
 			}
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
 			
