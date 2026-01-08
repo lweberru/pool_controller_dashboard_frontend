@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.24 - Full auto-discovery in card (YAML-only)
+ * v1.5.26 - i18n (de/en/es/fr)
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -18,10 +18,211 @@ const DEFAULTS = {
 	pause_max_mins: 120,
 };
 
+// ========================================
+// i18n (keep dependency-free / single-file)
+// ========================================
+const SUPPORTED_LANGS = ["de", "en", "es", "fr"];
+
+const I18N = {
+	de: {
+		errors: {
+			required_climate: "climate_entity ist erforderlich",
+			entity_not_found: "Entity {entity} nicht gefunden",
+		},
+		ui: {
+			frost: "Frostschutz",
+			quiet: "Ruhezeit",
+			pv: "PV-Überschuss",
+			additional_heater: "Zusatzheizung",
+			next_event: "Nächster Termin",
+			in_minutes: "in {mins} Minuten",
+			scheduled_start: "Geplanter Start",
+			water_quality: "Wasserqualität",
+			maintenance: "⚠️ Wartungsarbeiten",
+			ph: "pH-Wert",
+			chlorine: "Chlor",
+			salt: "Salzgehalt",
+			tds: "TDS",
+			add_ph_plus: "pH+ hinzufügen",
+			add_ph_minus: "pH- hinzufügen",
+			add_chlorine: "Chlor hinzufügen",
+			change_water: "Wasser wechseln",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Baden", filter: "Filtern", chlorine: "Chloren", pause: "Pause" },
+		status: { pause: "Pause", bathing: "Baden", chlorine: "Chloren", filter: "Filtern", heating: "Heizt", off: "Aus" },
+		dial: {
+			bathing_left: "Baden: noch {mins} min",
+			filter_left: "Filtern: noch {mins} min",
+			chlorine_left: "Chloren: noch {mins} min",
+			chlorine_active: "Chloren aktiv",
+			pause_left: "Pause: noch {mins} min",
+		},
+		editor: {
+			select_controller: "Pool Controller auswählen",
+			please_choose: "Bitte wählen...",
+			temp_min: "Temperatur-Minimum",
+			temp_max: "Temperatur-Maximum",
+			step: "Schrittweite",
+		},
+	},
+	en: {
+		errors: {
+			required_climate: "climate_entity is required",
+			entity_not_found: "Entity {entity} not found",
+		},
+		ui: {
+			frost: "Frost protection",
+			quiet: "Quiet hours",
+			pv: "PV surplus",
+			additional_heater: "Additional heater",
+			next_event: "Next event",
+			in_minutes: "in {mins} minutes",
+			scheduled_start: "Scheduled start",
+			water_quality: "Water quality",
+			maintenance: "⚠️ Maintenance",
+			ph: "pH",
+			chlorine: "Chlorine",
+			salt: "Salt",
+			tds: "TDS",
+			add_ph_plus: "Add pH+",
+			add_ph_minus: "Add pH-",
+			add_chlorine: "Add chlorine",
+			change_water: "Change water",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Bathing", filter: "Filter", chlorine: "Chlorine", pause: "Pause" },
+		status: { pause: "Pause", bathing: "Bathing", chlorine: "Chlorine", filter: "Filtering", heating: "Heating", off: "Off" },
+		dial: {
+			bathing_left: "Bathing: {mins} min left",
+			filter_left: "Filtering: {mins} min left",
+			chlorine_left: "Chlorine: {mins} min left",
+			chlorine_active: "Chlorine active",
+			pause_left: "Pause: {mins} min left",
+		},
+		editor: {
+			select_controller: "Select Pool Controller",
+			please_choose: "Please choose...",
+			temp_min: "Temperature minimum",
+			temp_max: "Temperature maximum",
+			step: "Step",
+		},
+	},
+	es: {
+		errors: {
+			required_climate: "climate_entity es obligatorio",
+			entity_not_found: "Entidad {entity} no encontrada",
+		},
+		ui: {
+			frost: "Protección contra heladas",
+			quiet: "Horas silenciosas",
+			pv: "Excedente FV",
+			additional_heater: "Calentador auxiliar",
+			next_event: "Próximo evento",
+			in_minutes: "en {mins} minutos",
+			scheduled_start: "Inicio programado",
+			water_quality: "Calidad del agua",
+			maintenance: "⚠️ Mantenimiento",
+			ph: "pH",
+			chlorine: "Cloro",
+			salt: "Sal",
+			tds: "TDS",
+			add_ph_plus: "Añadir pH+",
+			add_ph_minus: "Añadir pH-",
+			add_chlorine: "Añadir cloro",
+			change_water: "Cambiar agua",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Baño", filter: "Filtrar", chlorine: "Cloro", pause: "Pausa" },
+		status: { pause: "Pausa", bathing: "Baño", chlorine: "Cloro", filter: "Filtrar", heating: "Calentando", off: "Apagado" },
+		dial: {
+			bathing_left: "Baño: quedan {mins} min",
+			filter_left: "Filtrar: quedan {mins} min",
+			chlorine_left: "Cloro: quedan {mins} min",
+			chlorine_active: "Cloro activo",
+			pause_left: "Pausa: quedan {mins} min",
+		},
+		editor: {
+			select_controller: "Seleccionar Pool Controller",
+			please_choose: "Por favor elige...",
+			temp_min: "Temperatura mínima",
+			temp_max: "Temperatura máxima",
+			step: "Paso",
+		},
+	},
+	fr: {
+		errors: {
+			required_climate: "climate_entity est requis",
+			entity_not_found: "Entité {entity} introuvable",
+		},
+		ui: {
+			frost: "Protection antigel",
+			quiet: "Heures calmes",
+			pv: "Surplus PV",
+			additional_heater: "Chauffage auxiliaire",
+			next_event: "Prochain événement",
+			in_minutes: "dans {mins} minutes",
+			scheduled_start: "Démarrage planifié",
+			water_quality: "Qualité de l'eau",
+			maintenance: "⚠️ Entretien",
+			ph: "pH",
+			chlorine: "Chlore",
+			salt: "Sel",
+			tds: "TDS",
+			add_ph_plus: "Ajouter pH+",
+			add_ph_minus: "Ajouter pH-",
+			add_chlorine: "Ajouter du chlore",
+			change_water: "Changer l'eau",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Bain", filter: "Filtrer", chlorine: "Chlore", pause: "Pause" },
+		status: { pause: "Pause", bathing: "Bain", chlorine: "Chlore", filter: "Filtrer", heating: "Chauffe", off: "Arrêt" },
+		dial: {
+			bathing_left: "Bain : {mins} min restantes",
+			filter_left: "Filtrer : {mins} min restantes",
+			chlorine_left: "Chlore : {mins} min restantes",
+			chlorine_active: "Chlore actif",
+			pause_left: "Pause : {mins} min restantes",
+		},
+		editor: {
+			select_controller: "Sélectionner Pool Controller",
+			please_choose: "Veuillez choisir...",
+			temp_min: "Température minimum",
+			temp_max: "Température maximum",
+			step: "Pas",
+		},
+	},
+};
+
+function _normalizeLang(lang) {
+	const raw = String(lang || "").trim();
+	if (!raw) return "de";
+	const base = raw.toLowerCase().split("-")[0];
+	return SUPPORTED_LANGS.includes(base) ? base : "de";
+}
+
+function _langFromHass(hass) {
+	return _normalizeLang(hass?.language || hass?.locale?.language);
+}
+
+function _t(lang, key, vars = {}) {
+	const dict = I18N[lang] || I18N.de;
+	const parts = String(key).split(".");
+	let cur = dict;
+	for (const p of parts) {
+		cur = cur?.[p];
+	}
+	let str = (typeof cur === "string") ? cur : key;
+	for (const [k, v] of Object.entries(vars || {})) {
+		str = str.replaceAll(`{${k}}`, String(v));
+	}
+	return str;
+}
+
 class PoolControllerCard extends HTMLElement {
 	setConfig(config) {
 		if (!config || !config.climate_entity) {
-			throw new Error("climate_entity ist erforderlich");
+			throw new Error(_t("de", "errors.required_climate"));
 		}
 		this._config = { ...DEFAULTS, ...config };
 		this._derivedEntities = null;
@@ -56,9 +257,10 @@ class PoolControllerCard extends HTMLElement {
 		if (!this._hass || !this._config) return;
 		const h = this._hass;
 		const c = this._config;
+		const lang = _langFromHass(h);
 		const climate = h.states[c.climate_entity];
 		if (!climate) {
-			this._renderError(`Entity ${c.climate_entity} nicht gefunden`);
+			this._renderError(_t(lang, "errors.entity_not_found", { entity: c.climate_entity }));
 			return;
 		}
 
@@ -378,6 +580,7 @@ class PoolControllerCard extends HTMLElement {
 	// MODULAR: Linke Spalte (Dial + Controls)
 	// ========================================
 	_renderLeftColumn(d, c) {
+		const lang = _langFromHass(this._hass);
 		const RING_CX = 50;
 		const RING_CY = 50;
 			const RING_R = 44;
@@ -410,13 +613,13 @@ class PoolControllerCard extends HTMLElement {
 								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
-							<div class="status-icon frost ${d.frost ? "active" : ""}" title="Frostschutz">
+							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}">
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
-							<div class="status-icon ${d.quiet ? "active" : ""}" title="Ruhezeit">
+							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}">
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
 							</div>
-							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="PV-Überschuss">
+							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}">
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
 						</div>
@@ -438,34 +641,34 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 				<div class="action-buttons">
 					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}">
-						<ha-icon icon="mdi:pool"></ha-icon><span>Baden</span>
+						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
 					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}">
-						<ha-icon icon="mdi:rotate-right"></ha-icon><span>Filtern</span>
+						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
 					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}">
-						<ha-icon icon="mdi:fan"></ha-icon><span>Chloren</span>
+						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
 					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}">
-						<ha-icon icon="mdi:pause-circle"></ha-icon><span>Pause</span>
+						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
 				</div>
 				<div class="aux-switch ${d.auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
 					<div class="aux-switch-label">
-						<ha-icon icon="mdi:fire"></ha-icon><span>Zusatzheizung</span>
+						<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
 					</div>
 					<div class="toggle"></div>
 				</div>
 				${(d.nextEventStart || d.nextStartMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div style="display:flex; justify-content:space-between; align-items:center;">
-						<div style="font-weight:700;">Nächster Termin</div>
-						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${d.nextStartMins != null ? `in ${d.nextStartMins} Minuten` : ''}</div>
+						<div style="font-weight:700;">${_t(lang, "ui.next_event")}</div>
+						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${d.nextStartMins != null ? _t(lang, "ui.in_minutes", { mins: d.nextStartMins }) : ''}</div>
 					</div>
 					${d.nextEventStart ? `
 					<div class="event" style="margin-top:10px;">
 						<div style="flex: 1;">
-							<div class="event-title">${d.nextEventSummary || "Geplanter Start"}</div>
+							<div class="event-title">${d.nextEventSummary || _t(lang, "ui.scheduled_start")}</div>
 							<div class="event-time" style="margin-top: 4px;">
 								${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
 							</div>
@@ -480,11 +683,12 @@ class PoolControllerCard extends HTMLElement {
 	// MODULAR: Rechte Spalte (Qualität + Wartung)
 	// ========================================
 	_renderRightColumn(d, c) {
+		const lang = _langFromHass(this._hass);
 		return `<div class="right-column">
 			<div class="quality">
-				<div class="section-title">Wasserqualität</div>
+				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
 				<div class="scale-container">
-					<div style="font-weight: 600; margin-bottom: 8px;">pH-Wert</div>
+					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.ph")}</div>
 					<div style="position: relative;">
 						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 0, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
 						<div class="scale-bar ph-bar">
@@ -498,7 +702,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 				
 				<div class="scale-container">
-					<div style="font-weight: 600; margin-bottom: 8px;">Chlor</div>
+					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.chlorine")}</div>
 					<div style="position: relative;">
 						${d.chlor != null ? `<div class="scale-marker" style="left: ${this._pct(d.chlor, 0, 1200)}%"><div class="marker-value">${d.chlor.toFixed(0)} mV</div></div>` : ""}
 						<div class="scale-bar chlor-bar">
@@ -513,7 +717,7 @@ class PoolControllerCard extends HTMLElement {
 				
 				${(d.salt != null) ? `
 				<div class="scale-container">
-					<div style="font-weight: 600; margin-bottom: 8px;">Salzgehalt</div>
+					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.salt")}</div>
 					<div style="position: relative;">
 						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)</div></div>
 						<div class="scale-bar salt-bar">
@@ -530,7 +734,7 @@ class PoolControllerCard extends HTMLElement {
 
 				${(d.tds != null) ? `
 				<div class="scale-container">
-					<div style="font-weight: 600; margin-bottom: 8px;">TDS</div>
+					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.tds")}</div>
 					<div style="position: relative;">
 						<div class="scale-marker" style="left: ${this._pct(d.tds, 0, 2000)}%"><div class="marker-value">${d.tds.toFixed(0)} ppm</div></div>
 						<div class="scale-bar tds-bar">
@@ -545,13 +749,13 @@ class PoolControllerCard extends HTMLElement {
 			
 			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
 			<div class="maintenance">
-				<div class="section-title">⚠️ Wartungsarbeiten</div>
+				<div class="section-title">${_t(lang, "ui.maintenance")}</div>
 				<div class="maintenance-items">
 					${d.phPlusNum && d.phPlusNum > 0 ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
-							<div class="maintenance-label">pH+ hinzufügen</div>
+							<div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div>
 							<div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div>
 						</div>
 					</div>` : ""}
@@ -559,7 +763,7 @@ class PoolControllerCard extends HTMLElement {
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:water"></ha-icon>
 						<div class="maintenance-text">
-							<div class="maintenance-label">Wasser wechseln</div>
+							<div class="maintenance-label">${_t(lang, "ui.change_water")}</div>
 							<div class="maintenance-value">${d.waterChangePercent}%${d.waterChangeLiters ? ` — ${d.waterChangeLiters} L` : ''}</div>
 						</div>
 					</div>` : ""}
@@ -567,7 +771,7 @@ class PoolControllerCard extends HTMLElement {
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:ph"></ha-icon>
 						<div class="maintenance-text">
-							<div class="maintenance-label">pH- hinzufügen</div>
+							<div class="maintenance-label">${_t(lang, "ui.add_ph_minus")}</div>
 							<div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div>
 						</div>
 					</div>` : ""}
@@ -575,7 +779,7 @@ class PoolControllerCard extends HTMLElement {
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:beaker"></ha-icon>
 						<div class="maintenance-text">
-							<div class="maintenance-label">Chlor hinzufügen</div>
+							<div class="maintenance-label">${_t(lang, "ui.add_chlorine")}</div>
 							<div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div>
 						</div>
 					</div>` : ""}
@@ -662,12 +866,13 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_getStatusText(hvac, hvacAction, bathing, filtering, chlorinating, paused) {
-		if (paused) return "Pause";
-		if (bathing) return "Baden";
-		if (chlorinating) return "Chloren";
-		if (filtering) return "Filtern";
-		if (hvacAction === "heating" || hvacAction === "heat") return "Heizt";
-		if (hvac === "off") return "Aus";
+		const lang = _langFromHass(this._hass);
+		if (paused) return _t(lang, "status.pause");
+		if (bathing) return _t(lang, "status.bathing");
+		if (chlorinating) return _t(lang, "status.chlorine");
+		if (filtering) return _t(lang, "status.filter");
+		if (hvacAction === "heating" || hvacAction === "heat") return _t(lang, "status.heating");
+		if (hvac === "off") return _t(lang, "status.off");
 		return hvac || "–";
 	}
 
@@ -683,33 +888,34 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_renderDialTimer(d) {
+		const lang = _langFromHass(this._hass);
 		if (d.bathingState?.active && d.bathingEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div></div>
-				<div class="timer-text">Baden: noch ${d.bathingEta} min</div>
+				<div class="timer-text">${_t(lang, "dial.bathing_left", { mins: d.bathingEta })}</div>
 			</div>`;
 		}
 		if (d.filterState?.active && d.filterEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.filterProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div></div>
-				<div class="timer-text">Filtern: noch ${d.filterEta} min</div>
+				<div class="timer-text">${_t(lang, "dial.filter_left", { mins: d.filterEta })}</div>
 			</div>`;
 		}
 		if (d.chlorState?.active && d.chlorEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div></div>
-				<div class="timer-text">Chloren: noch ${d.chlorEta} min</div>
+				<div class="timer-text">${_t(lang, "dial.chlorine_left", { mins: d.chlorEta })}</div>
 			</div>`;
 		}
 		if (d.chlorState?.active) {
 			return `<div class="dial-timer">
-				<div class="timer-text" style="font-weight: 600; color: #27ae60;">Chloren aktiv</div>
+				<div class="timer-text" style="font-weight: 600; color: #27ae60;">${_t(lang, "dial.chlorine_active")}</div>
 			</div>`;
 		}
 		if (d.pauseState?.active && d.pauseEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.pauseProgress * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div></div>
-				<div class="timer-text">Pause: noch ${d.pauseEta} min</div>
+				<div class="timer-text">${_t(lang, "dial.pause_left", { mins: d.pauseEta })}</div>
 			</div>`;
 		}
 		return "";
@@ -717,15 +923,16 @@ class PoolControllerCard extends HTMLElement {
 
 	_formatEventTime(startTs, endTs) {
 		if (!startTs) return "";
+		const locale = this._hass?.locale?.language || this._hass?.language || undefined;
 		const start = new Date(startTs);
 		if (isNaN(start.getTime())) {
 			return endTs && endTs !== startTs ? `${startTs} - ${endTs}` : startTs;
 		}
-		const startStr = start.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+		const startStr = start.toLocaleString(locale, { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 		if (!endTs) return startStr;
 		const end = new Date(endTs);
 		if (isNaN(end.getTime())) return `${startStr} - ${endTs}`;
-		const endStr = end.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+		const endStr = end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 		return `${startStr} - ${endStr}`;
 	}
 
@@ -997,6 +1204,7 @@ class PoolControllerCard extends HTMLElement {
 class PoolControllerCardEditor extends HTMLElement {
 	set hass(hass) {
 		this._hass = hass;
+		this._lang = _langFromHass(hass);
 		if (!this._initialized) {
 			this._render();
 			this._initialized = true;
@@ -1021,6 +1229,7 @@ class PoolControllerCardEditor extends HTMLElement {
 	_render() {
 		if (!this.shadowRoot) this.attachShadow({ mode: "open" });
 		const c = this._config || DEFAULTS;
+		const lang = this._lang || _langFromHass(this._hass);
 		this.shadowRoot.innerHTML = `
 		<style>
 			:host { display:block; }
@@ -1034,22 +1243,22 @@ class PoolControllerCardEditor extends HTMLElement {
 		</style>
 		<div class="wrapper">
 			<div class="row">
-				<label>Pool Controller auswählen</label>
+				<label>${_t(lang, "editor.select_controller")}</label>
 				<select id="controller-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
-					<option value="">Bitte wählen...</option>
+					<option value="">${_t(lang, "editor.please_choose")}</option>
 				</select>
 			</div>
 			<div class="grid2">
 				<div class="row">
-					<label>Temperatur-Minimum</label>
+					<label>${_t(lang, "editor.temp_min")}</label>
 					<input id="min_temp" type="number" step="0.5" value="${c.min_temp}">
 				</div>
 				<div class="row">
-					<label>Temperatur-Maximum</label>
+					<label>${_t(lang, "editor.temp_max")}</label>
 					<input id="max_temp" type="number" step="0.5" value="${c.max_temp}">
 				</div>
 				<div class="row">
-					<label>Schrittweite</label>
+					<label>${_t(lang, "editor.step")}</label>
 					<input id="step" type="number" step="0.1" value="${c.step || 0.5}">
 				</div>
 			</div>
@@ -1070,6 +1279,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!this._hass) return;
 		const select = this.shadowRoot.querySelector("#controller-select");
 		if (!select) return;
+		const lang = this._lang || _langFromHass(this._hass);
 
 		const reg = await this._getEntityRegistry();
 		const poolControllers = reg.filter((r) => 
@@ -1077,7 +1287,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			r.entity_id.startsWith("climate.")
 		);
 
-		select.innerHTML = '<option value="">Bitte wählen...</option>';
+		select.innerHTML = `<option value="">${_t(lang, "editor.please_choose")}</option>`;
 		poolControllers.forEach((entity) => {
 			const state = this._hass.states[entity.entity_id];
 			const name = state?.attributes?.friendly_name || entity.entity_id;
