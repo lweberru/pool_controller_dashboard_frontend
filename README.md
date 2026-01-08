@@ -78,7 +78,7 @@ If entity registry access is blocked/unavailable, only explicitly configured ent
 - **Chlorine**: start/stop quick chlorine
 - **Pause**: pause automation
 
-Depending on the mapped entity type, the card will call `button.press`, `switch.turn_on/off`, or `input_boolean.turn_on/off`.
+The card prefers calling the `pool_controller` services (`start_*` / `stop_*`) and includes `climate_entity` in the payload so multi-instance setups are routed correctly. If the services are not available (older backend), it falls back to entity triggers (`button.press`, `switch.turn_on/off`, `input_boolean.turn_on/off`).
 
 ### AUX heater
 
@@ -110,12 +110,18 @@ Required:
 Common optional keys (usually filled by the UI editor auto-mapping):
 
 - `aux_entity`
+- `manual_timer_entity` (shared manual timer; attributes: `active`, `duration_minutes`, `type`)
+- `auto_filter_timer_entity`
+- `pause_timer_entity`
+- `ph_entity`, `chlorine_value_entity`, `salt_entity`, `tds_entity`
+- `tds_assessment_entity`, `water_change_percent_entity`, `water_change_liters_entity`
+
+Legacy (older backend, still supported as fallback):
+
 - `bathing_start`, `bathing_stop`, `bathing_until`, `bathing_active_binary`
 - `filter_start`, `filter_stop`, `filter_until`, `next_filter_in`
 - `chlorine_start`, `chlorine_stop`, `chlorine_until`, `chlorine_active_entity`
 - `pause_start`, `pause_stop`, `pause_until`, `pause_active_entity`
-- `ph_entity`, `chlorine_value_entity`, `salt_entity`, `tds_entity`
-- `tds_assessment_entity`, `water_change_percent_entity`, `water_change_liters_entity`
 
 ## Troubleshooting
 
@@ -192,7 +198,7 @@ Danach im visuellen Editor der Karte den Controller auswählen. Wenn möglich we
 - **Chloren**: startet/stoppt „Quick Chlor“
 - **Pause**: pausiert Automatik
 
-Die Buttons rufen – je nach Entity-Typ – `button.press` oder `switch.turn_on/off` bzw. `input_boolean.turn_on/off` auf.
+Die Card nutzt bevorzugt die `pool_controller`-Services (`start_*` / `stop_*`) und übergibt `climate_entity`, damit es auch mit mehreren Instanzen eindeutig ist. Falls die Services nicht verfügbar sind (älteres Backend), wird auf Entity-Trigger (`button.press`, `switch.turn_on/off`, `input_boolean.turn_on/off`) zurückgefallen.
 
 ### Zusatzheizung
 
@@ -228,12 +234,18 @@ Minimal erforderlich:
 Optional (typische Beispiele, werden oft automatisch abgeleitet):
 
 - `aux_entity`
+- `manual_timer_entity` (gemeinsamer manueller Timer; Attribute: `active`, `duration_minutes`, `type`)
+- `auto_filter_timer_entity`
+- `pause_timer_entity`
+- `ph_entity`, `chlorine_value_entity`, `salt_entity`, `tds_entity`
+- `tds_assessment_entity`, `water_change_percent_entity`, `water_change_liters_entity`
+
+Legacy (älteres Backend, als Fallback weiterhin unterstützt):
+
 - `bathing_start`, `bathing_stop`, `bathing_until`, `bathing_active_binary`
 - `filter_start`, `filter_stop`, `filter_until`, `next_filter_in`
 - `chlorine_start`, `chlorine_stop`, `chlorine_until`, `chlorine_active_entity`
 - `pause_start`, `pause_stop`, `pause_until`, `pause_active_entity`
-- `ph_entity`, `chlorine_value_entity`, `salt_entity`, `tds_entity`
-- `tds_assessment_entity`, `water_change_percent_entity`, `water_change_liters_entity`
 
 ## Troubleshooting
 

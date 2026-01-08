@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.26 - i18n (de/en/es/fr)
+ * v1.5.27 - timer v2 + multi-instance services
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -298,23 +298,33 @@ class PoolControllerCard extends HTMLElement {
 		const hvacAction = climate.attributes.hvac_action;
 		const climateOff = hvac === "off" || hvac === "unavailable" || hvac === "unknown";
 		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");
-		
-		const bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
-		const filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
-		const chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity); // quick_chlorine_until Sensor verwenden!
-		const pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
-		
-		// Debug Chloren
-		if (chlorState.active || chlorState.eta) {
-			console.log('Chloren Debug:', {
-				chlorine_entity: c.chlorine_entity,
-				chlorine_until: c.chlorine_until,
-				chlorine_until_state: c.chlorine_until ? h.states[c.chlorine_until]?.state : 'fehlt',
-				chlorine_active_entity: c.chlorine_active_entity,
-				chlorine_active_state: c.chlorine_active_entity ? h.states[c.chlorine_active_entity]?.state : 'fehlt',
-				chlorState,
-				note: 'Verwende sensor.pool_quick_chlorine_until für Timer'
-			});
+
+		// Timer-States: bevorzugt neue Minuten-Sensoren (v2 Timer-Refactor), mit Fallback auf alte *_until Sensoren.
+		const manualTimerEntity = c.manual_timer_entity;
+		const autoFilterTimerEntity = c.auto_filter_timer_entity;
+		const pauseTimerEntity = c.pause_timer_entity;
+		const hasNewTimerSensors = (
+			(manualTimerEntity && h.states[manualTimerEntity]) ||
+			(autoFilterTimerEntity && h.states[autoFilterTimerEntity]) ||
+			(pauseTimerEntity && h.states[pauseTimerEntity])
+		);
+
+		let bathingState;
+		let filterState;
+		let chlorState;
+		let pauseState;
+		if (hasNewTimerSensors) {
+			bathingState = this._manualTimerState(h, manualTimerEntity, "bathing");
+			chlorState = this._manualTimerState(h, manualTimerEntity, "chlorine");
+			const manualFilterState = this._manualTimerState(h, manualTimerEntity, "filter");
+			const autoFilterState = this._simpleTimerState(h, autoFilterTimerEntity);
+			filterState = (manualFilterState.active ? manualFilterState : autoFilterState);
+			pauseState = this._simpleTimerState(h, pauseTimerEntity);
+		} else {
+			bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
+			filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
+			chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
+			pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
 		}
 		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
@@ -415,12 +425,13 @@ class PoolControllerCard extends HTMLElement {
 		const chlorEta = chlorState.eta;
 		const pauseEta = pauseState.eta;
 		
-		const bathingMaxMins = c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null;
-		const filterMaxMins = c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null;
-		const chlorMaxMins = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
-		const pauseMaxMins = c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null;
+		// Dauer: bevorzugt vom Timer-Sensor (duration_minutes), sonst ggf. alte Duration-Entities, sonst DEFAULTS.
+		const bathingMaxMins = this._num(bathingState.duration_minutes) ?? (c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null);
+		const filterMaxMins = this._num(filterState.duration_minutes) ?? (c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null);
+		const chlorMaxMins = this._num(chlorState.duration_minutes) ?? (c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null);
+		const pauseMaxMins = this._num(pauseState.duration_minutes) ?? (c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null);
 		
-		// Fallback: Verwende ETA als Max wenn keine Duration-Entity vorhanden (Timer gerade gestartet)
+		// Progress = verbleibender Anteil
 		const bathingProgress = bathingEta != null ? this._clamp(bathingEta / (bathingMaxMins || bathingEta || c.bathing_max_mins), 0, 1) : 0;
 		const filterProgress = filterEta != null ? this._clamp(filterEta / (filterMaxMins || filterEta || c.filter_max_mins), 0, 1) : 0;
 		const chlorProgress = chlorEta != null ? this._clamp(chlorEta / (chlorMaxMins || chlorEta || c.chlor_max_mins), 0, 1) : 0;
@@ -640,16 +651,16 @@ class PoolControllerCard extends HTMLElement {
 					<button class="temp-btn" data-action="inc">+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}">
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="60" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
-					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}">
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="30" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}">
 						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
-					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}">
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="5" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}">
 						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
-					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}">
+					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="60" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}">
 						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
 				</div>
@@ -824,13 +835,28 @@ class PoolControllerCard extends HTMLElement {
 		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
 		actionButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
+				const mode = btn.dataset.mode;
+				const duration = Number(btn.dataset.duration);
+				const active = btn.dataset.active === "true";
 				const start = btn.dataset.start;
 				const stop = btn.dataset.stop;
-				const active = btn.dataset.active === "true";
+
+				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
+				if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
+					const svc = active ? `stop_${mode}` : `start_${mode}`;
+					const data = active
+						? { climate_entity: this._config?.climate_entity }
+						: { climate_entity: this._config?.climate_entity, duration_minutes: Number.isFinite(duration) ? duration : undefined };
+					this._hass.callService("pool_controller", svc, data);
+					return;
+				}
+
 				if (active && stop) {
 					this._triggerEntity(stop, false);
-				} else if (start) {
+				} else if (!active && start) {
 					this._triggerEntity(start, true);
+				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
+					this._hass.callService("pool_controller", `stop_${mode}`, { climate_entity: this._config?.climate_entity });
 				}
 			});
 		});
@@ -863,6 +889,11 @@ class PoolControllerCard extends HTMLElement {
 			return;
 		}
 		this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
+	}
+
+	_hasService(domain, service) {
+		const services = this._hass?.services;
+		return !!(services && services[domain] && services[domain][service]);
 	}
 
 	_getStatusText(hvac, hvacAction, bathing, filtering, chlorinating, paused) {
@@ -956,6 +987,28 @@ class PoolControllerCard extends HTMLElement {
 		return { active, eta };
 	}
 
+	_simpleTimerState(h, timerEntity) {
+		if (!timerEntity || !h.states[timerEntity]) return { active: false, eta: null, duration_minutes: null };
+		const st = h.states[timerEntity];
+		const eta = this._num(st.state);
+		const duration = this._num(st.attributes?.duration_minutes);
+		const activeAttr = st.attributes?.active;
+		const active = (activeAttr === true || activeAttr === "true") || (eta != null && eta > 0);
+		return { active, eta: (eta != null ? Math.max(0, Math.round(eta)) : null), duration_minutes: duration };
+	}
+
+	_manualTimerState(h, timerEntity, expectedType) {
+		if (!timerEntity || !h.states[timerEntity]) return { active: false, eta: null, duration_minutes: null };
+		const st = h.states[timerEntity];
+		const eta = this._num(st.state);
+		const duration = this._num(st.attributes?.duration_minutes);
+		const type = st.attributes?.type;
+		const activeAttr = st.attributes?.active;
+		const activeBase = (activeAttr === true || activeAttr === "true") || (eta != null && eta > 0);
+		const active = activeBase && (!expectedType || type === expectedType);
+		return { active, eta: (active && eta != null ? Math.max(0, Math.round(eta)) : null), duration_minutes: duration, type };
+	}
+
 	_calcDial(val, min, max) {
 		const pct = this._clamp((val - min) / (max - min), 0, 1);
 		return Math.round(pct * 270);
@@ -1003,6 +1056,10 @@ class PoolControllerCard extends HTMLElement {
 		const relevantEntities = [
 			this._config.climate_entity,
 			this._config.aux_entity,
+			this._config.manual_timer_entity,
+			this._config.auto_filter_timer_entity,
+			this._config.pause_timer_entity,
+			// Legacy timer model (backward compatible)
 			this._config.bathing_entity,
 			this._config.bathing_until,
 			this._config.bathing_active_binary,
@@ -1060,6 +1117,9 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			manual_timer_entity: prefer('manual_timer_entity'),
+			auto_filter_timer_entity: prefer('auto_filter_timer_entity'),
+			pause_timer_entity: prefer('pause_timer_entity'),
 			aux_entity: prefer('aux_entity'),
 			aux_binary: prefer('aux_binary'),
 			bathing_entity: prefer('bathing_entity'),
@@ -1142,6 +1202,11 @@ class PoolControllerCard extends HTMLElement {
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			// New v2 timers (minutes sensor)
+			manual_timer_entity: this._pickEntity(entries, "sensor", ["manual_timer_mins"]) || null,
+			auto_filter_timer_entity: this._pickEntity(entries, "sensor", ["auto_filter_timer_mins"]) || null,
+			pause_timer_entity: this._pickEntity(entries, "sensor", ["pause_timer_mins"]) || null,
+
 			// Core / controls
 			climate_entity: this._pickEntity(entries, "climate", ["climate"]) || null,
 			aux_entity: this._pickEntity(entries, "switch", ["aux"]) || null,
@@ -1151,12 +1216,12 @@ class PoolControllerCard extends HTMLElement {
 			bathing_until: this._pickEntity(entries, "sensor", ["bathing_until"]) || null,
 			bathing_active_binary: this._pickEntity(entries, "binary_sensor", ["is_bathing"]) || null,
 			filter_entity: this._pickEntity(entries, "binary_sensor", ["filter_active"]) || null,
-			filter_start: this._pickEntity(entries, "button", ["filter_60", "filter_30"]) || null,
+			filter_start: this._pickEntity(entries, "button", ["filter_30", "filter_60"]) || null,
 			filter_stop: this._pickEntity(entries, "button", ["filter_stop"]) || null,
 			filter_until: this._pickEntity(entries, "sensor", ["filter_until"]) || null,
 			next_filter_in: this._pickEntity(entries, "sensor", ["next_filter_mins"]) || null,
 			chlorine_entity: this._pickEntity(entries, "binary_sensor", ["is_quick_chlor"]) || null,
-			chlorine_start: this._pickEntity(entries, "button", ["quick_chlor"]) || null,
+			chlorine_start: this._pickEntity(entries, "button", ["chlorine_5", "quick_chlor"]) || null,
 			chlorine_stop: this._pickEntity(entries, "button", ["quick_chlor_stop"]) || null,
 			chlorine_until: this._pickEntity(entries, "sensor", ["quick_chlorine_until"]) || null,
 			chlorine_active_entity: this._pickEntity(entries, "binary_sensor", ["is_quick_chlor"]) || null,
@@ -1332,6 +1397,10 @@ class PoolControllerCardEditor extends HTMLElement {
 		const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
+			// New v2 timers (minutes sensor)
+			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
+			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
+			pause_timer_entity: pick("sensor", "pause_timer_mins") || this._config.pause_timer_entity,
 			aux_entity: pick("switch", "aux") || this._config.aux_entity,
 			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
 			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
@@ -1339,12 +1408,12 @@ class PoolControllerCardEditor extends HTMLElement {
 			bathing_until: pick("sensor", "bathing_until") || this._config.bathing_until,
 			bathing_active_binary: pick("binary_sensor", "is_bathing") || this._config.bathing_active_binary,
 			filter_entity: pick("binary_sensor", "filter_active") || this._config.filter_entity,
-			filter_start: pick("button", "filter_60") || pick("button", "filter_30") || this._config.filter_start,
+			filter_start: pick("button", "filter_30") || pick("button", "filter_60") || this._config.filter_start,
 			filter_stop: pick("button", "filter_stop") || this._config.filter_stop,
 			filter_until: pick("sensor", "filter_until") || this._config.filter_until,
 			next_filter_in: pick("sensor", "next_filter_mins") || this._config.next_filter_in,
 			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
-			chlorine_start: pick("button", "quick_chlor") || this._config.chlorine_start,
+			chlorine_start: pick("button", "chlorine_5") || pick("button", "quick_chlor") || this._config.chlorine_start,
 			chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,
 			chlorine_until: pick("sensor", "quick_chlorine_until") || this._config.chlorine_until,
 			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
