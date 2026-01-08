@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.31 - UI: click elements open HA more-info popups
+ * v1.5.32 - UI: avoid z-layer issues with HA popups
  */
 
-const VERSION = "1.5.31";
+const VERSION = "1.5.32";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -528,13 +528,13 @@ class PoolControllerCard extends HTMLElement {
 			
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
-			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 5; }
+			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-core { position: absolute; top: 52%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 10; }
+			.dial-core { position: absolute; top: 52%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
@@ -544,7 +544,7 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-left, .temp-target-right { font-weight: 600; white-space: nowrap; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 44%; max-width: 120px; z-index: 9; }
+			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 44%; max-width: 120px; z-index: 1; }
 			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -588,7 +588,7 @@ class PoolControllerCard extends HTMLElement {
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
 			/* Marker sollen im Balken sitzen (nicht über der Überschrift). */
-			.scale-marker { position: absolute; top: 8px; transform: translateX(-50%); z-index: 10; }
+			.scale-marker { position: absolute; top: 8px; transform: translateX(-50%); z-index: 1; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
 			.marker-value::after { content: ""; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 10px solid #0b132b; }
 			@container (max-width: 520px) {
