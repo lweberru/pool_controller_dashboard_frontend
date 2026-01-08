@@ -336,6 +336,7 @@ class PoolControllerCard extends HTMLElement {
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
 		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
+		const pvPowerEntityId = c.pv_power_entity || null;
 		
 		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
 		const auxPower = c.aux_power_entity ? this._num(h.states[c.aux_power_entity]?.state) : null;
@@ -457,6 +458,7 @@ class PoolControllerCard extends HTMLElement {
 			frostEntityId: c.frost_entity || null,
 			quietEntityId: c.quiet_entity || null,
 			pvAllowsEntityId: c.pv_entity || null,
+			pvPowerEntityId: pvPowerEntityId,
 			mainPowerEntityId: c.main_power_entity || null,
 			powerEntityId: c.power_entity || null,
 
@@ -656,7 +658,7 @@ class PoolControllerCard extends HTMLElement {
 							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
 							</div>
-							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}" ${d.pvAllowsEntityId ? `data-more-info="${d.pvAllowsEntityId}"` : ''}>
+							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
 						</div>
@@ -1154,6 +1156,7 @@ class PoolControllerCard extends HTMLElement {
 			this._config.frost_entity,
 			this._config.quiet_entity,
 			this._config.pv_entity,
+			this._config.pv_power_entity,
 			this._config.main_power_entity,
 			this._config.aux_power_entity,
 			this._config.power_entity,
@@ -1323,6 +1326,7 @@ class PoolControllerCard extends HTMLElement {
 			frost_entity: prefer('frost_entity'),
 			quiet_entity: prefer('quiet_entity'),
 			pv_entity: prefer('pv_entity'),
+			pv_power_entity: prefer('pv_power_entity'),
 			main_power_entity: prefer('main_power_entity'),
 			aux_power_entity: prefer('aux_power_entity'),
 			power_entity: prefer('power_entity'),
@@ -1415,6 +1419,7 @@ class PoolControllerCard extends HTMLElement {
 			pv_entity: this._pickEntity(entries, "binary_sensor", ["pv_allows"]) || null,
 
 			// Power
+			pv_power_entity: this._pickEntity(entries, "sensor", ["pv_power"]) || null,
 			main_power_entity: this._pickEntity(entries, "sensor", ["main_power"]) || null,
 			aux_power_entity: this._pickEntity(entries, "sensor", ["aux_power"]) || null,
 
@@ -1605,6 +1610,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			main_power_entity: pick("sensor", "main_power") || this._config.main_power_entity,
 			aux_power_entity: pick("sensor", "aux_power") || this._config.aux_power_entity,
 			pv_entity: pick("binary_sensor", "pv_allows") || this._config.pv_entity,
+			pv_power_entity: pick("sensor", "pv_power") || this._config.pv_power_entity,
 			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
 			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
 			salt_entity: pick("sensor", "salt_val") || this._config.salt_entity,
