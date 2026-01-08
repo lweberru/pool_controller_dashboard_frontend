@@ -1,7 +1,15 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.30 - UI: click elements open HA more-info popups
+ * v1.5.31 - UI: click elements open HA more-info popups
  */
+
+const VERSION = "1.5.31";
+try {
+	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
+	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
+} catch (_e) {
+	// ignore
+}
 
 const CARD_TYPE = "pc-pool-controller";
 const DEFAULTS = {
@@ -950,17 +958,35 @@ class PoolControllerCard extends HTMLElement {
 
 	_openMoreInfo(entityId) {
 		if (!entityId) return;
-		// Primary: HA listens for this event.
-		this.dispatchEvent(new CustomEvent("hass-more-info", {
+		const ev = new CustomEvent("hass-more-info", {
 			detail: { entityId },
 			bubbles: true,
 			composed: true,
-		}));
-		// Fallback (some HA contexts / wrappers behave differently): setting moreInfoEntityId
-		// is commonly supported and opens the dialog.
+		});
+
+		// Primary: dispatch from this card element.
+		this.dispatchEvent(ev);
+
+		// Extra robustness: also dispatch from the HA root element (some wrappers/listeners are finicky).
+		try {
+			const haRoot = document.querySelector("home-assistant");
+			haRoot?.dispatchEvent?.(ev);
+		} catch (_e) {
+			// ignore
+		}
+
+		// Fallback: setting moreInfoEntityId is commonly supported.
 		try {
 			if (this._hass && ("moreInfoEntityId" in this._hass)) {
 				this._hass.moreInfoEntityId = entityId;
+			}
+		} catch (_e) {
+			// ignore
+		}
+		try {
+			const haRoot = document.querySelector("home-assistant");
+			if (haRoot?.hass && ("moreInfoEntityId" in haRoot.hass)) {
+				haRoot.hass.moreInfoEntityId = entityId;
 			}
 		} catch (_e) {
 			// ignore
@@ -1679,7 +1705,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
 	type: CARD_TYPE,
 	name: "Pool Controller",
-	description: "Whirlpool/Pool Steuerung ohne iFrame.",
+	description: `Whirlpool/Pool Steuerung ohne iFrame. (v${VERSION})`,
 });
 
 class PoolControllerCardWrapper extends HTMLElement {
