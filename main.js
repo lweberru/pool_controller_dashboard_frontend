@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.28 - UI tweaks (compact dial + markers)
+ * v1.5.29 - UI: dial ring target control + reduced rerenders + next filter cycle
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -35,6 +35,7 @@ const I18N = {
 			pv: "PV-Überschuss",
 			additional_heater: "Zusatzheizung",
 			next_event: "Nächster Termin",
+			next_filter_cycle: "Nächster Filter-Zyklus",
 			in_minutes: "in {mins} Minuten",
 			scheduled_start: "Geplanter Start",
 			water_quality: "Wasserqualität",
@@ -77,6 +78,7 @@ const I18N = {
 			pv: "PV surplus",
 			additional_heater: "Additional heater",
 			next_event: "Next event",
+			next_filter_cycle: "Next filter cycle",
 			in_minutes: "in {mins} minutes",
 			scheduled_start: "Scheduled start",
 			water_quality: "Water quality",
@@ -119,6 +121,7 @@ const I18N = {
 			pv: "Excedente FV",
 			additional_heater: "Calentador auxiliar",
 			next_event: "Próximo evento",
+			next_filter_cycle: "Próximo ciclo de filtración",
 			in_minutes: "en {mins} minutos",
 			scheduled_start: "Inicio programado",
 			water_quality: "Calidad del agua",
@@ -161,6 +164,7 @@ const I18N = {
 			pv: "Surplus PV",
 			additional_heater: "Chauffage auxiliaire",
 			next_event: "Prochain événement",
+			next_filter_cycle: "Prochain cycle de filtration",
 			in_minutes: "dans {mins} minutes",
 			scheduled_start: "Démarrage planifié",
 			water_quality: "Qualité de l'eau",
@@ -236,6 +240,8 @@ class PoolControllerCard extends HTMLElement {
 	set hass(hass) {
 		const oldHass = this._hass;
 		this._hass = hass;
+		// Während Dial-Drag: UI nicht neu aufbauen (würde Pointer-Interaktion / Hover stören)
+		if (this._isDraggingDial) return;
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
 			this._render();
@@ -413,6 +419,7 @@ class PoolControllerCard extends HTMLElement {
 		const chlorDoseUnit = chlorDoseStateObj?.attributes?.unit_of_measurement || 'Messlöffel';
 
 		const nextStartMins = c.next_start_entity ? this._num(h.states[c.next_start_entity]?.state) : null;
+		const nextFilterMins = c.next_filter_in ? this._num(h.states[c.next_filter_in]?.state) : null;
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
@@ -448,7 +455,7 @@ class PoolControllerCard extends HTMLElement {
 			ph, chlor, salt, tds,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
-			nextStartMins, nextEventStart, nextEventEnd, nextEventSummary,
+			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
 			dialAngle, targetAngle,
 			bathingEta, filterEta, chlorEta, pauseEta,
 			bathingMaxMins, filterMaxMins, chlorMaxMins, pauseMaxMins,
@@ -610,7 +617,7 @@ class PoolControllerCard extends HTMLElement {
 		const RING_START_DEG = 135;
 		return `<div class="left-column">
 			<div class="dial-container">
-				<div class="dial" style="--accent:${accent}; --target-accent:${targetAccent}">
+				<div class="dial" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
@@ -676,12 +683,17 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 					<div class="toggle"></div>
 				</div>
-				${(d.nextEventStart || d.nextStartMins != null) ? `
+				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div style="display:flex; justify-content:space-between; align-items:center;">
 						<div style="font-weight:700;">${_t(lang, "ui.next_event")}</div>
 						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${d.nextStartMins != null ? _t(lang, "ui.in_minutes", { mins: d.nextStartMins }) : ''}</div>
 					</div>
+					${d.nextFilterMins != null ? `
+					<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+						<div style="font-weight:600;">${_t(lang, "ui.next_filter_cycle")}</div>
+						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${_t(lang, "ui.in_minutes", { mins: d.nextFilterMins })}</div>
+					</div>` : ''}
 					${d.nextEventStart ? `
 					<div class="event" style="margin-top:10px;">
 						<div style="flex: 1;">
@@ -837,6 +849,33 @@ class PoolControllerCard extends HTMLElement {
 				});
 			});
 		});
+
+		// Dial: Target-Temperatur per Klick/Drag am Ring setzen (ähnlich HA Climate Card)
+		const dial = this.shadowRoot.querySelector("[data-dial]");
+		if (dial) {
+			const onPointerDown = (ev) => {
+				if (!this._hass || !this._config) return;
+				// Nur primäre Taste/Touch
+				if (ev.pointerType === "mouse" && ev.button !== 0) return;
+				this._isDraggingDial = true;
+				dial.setPointerCapture?.(ev.pointerId);
+				this._updateDialPreviewFromPointer(ev);
+			};
+			const onPointerMove = (ev) => {
+				if (!this._isDraggingDial) return;
+				this._updateDialPreviewFromPointer(ev);
+			};
+			const onPointerUp = (ev) => {
+				if (!this._isDraggingDial) return;
+				this._isDraggingDial = false;
+				dial.releasePointerCapture?.(ev.pointerId);
+				this._commitDialTargetIfAny();
+			};
+			dial.addEventListener("pointerdown", onPointerDown);
+			dial.addEventListener("pointermove", onPointerMove);
+			dial.addEventListener("pointerup", onPointerUp);
+			dial.addEventListener("pointercancel", onPointerUp);
+		}
 
 		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
 		actionButtons.forEach((btn) => {
@@ -1106,10 +1145,109 @@ class PoolControllerCard extends HTMLElement {
 		return allRelevant.some(entityId => {
 			const oldState = oldHass.states[entityId];
 			const newState = newHass.states[entityId];
+			// Optional / nicht vorhandene Entities sollen keine Dauer-Re-Renders auslösen.
+			if (!oldState && !newState) return false;
 			if (!oldState || !newState) return true;
-			return oldState.state !== newState.state || 
-			       JSON.stringify(oldState.attributes) !== JSON.stringify(newState.attributes);
+			return this._stateSig(entityId, oldState) !== this._stateSig(entityId, newState);
 		});
+	}
+
+	_stateSig(entityId, st) {
+		if (!st) return "";
+		const [domain] = String(entityId).split(".");
+		const a = st.attributes || {};
+		const sig = { s: st.state };
+		if (domain === "climate") {
+			sig.a = {
+				current_temperature: a.current_temperature,
+				temperature: a.temperature,
+				target_temp: a.target_temp,
+				max_temp: a.max_temp,
+				hvac_action: a.hvac_action,
+				friendly_name: a.friendly_name,
+			};
+		} else if (domain === "sensor" && String(entityId).includes("timer_mins")) {
+			sig.a = { active: a.active, duration_minutes: a.duration_minutes, type: a.type };
+		}
+		return JSON.stringify(sig);
+	}
+
+	_updateDialPreviewFromPointer(ev) {
+		if (!this._hass || !this._config) return;
+		const dial = this.shadowRoot?.querySelector("[data-dial]");
+		if (!dial) return;
+		const rect = dial.getBoundingClientRect();
+		const c = this._config;
+		const step = Number(c.step || 0.5);
+		const progress = this._dialProgressFromClientXY(ev.clientX, ev.clientY, rect);
+		if (progress == null) return;
+		const temp = this._tempFromDialProgress(progress, c.min_temp, c.max_temp, step);
+		this._dialDragTemp = temp;
+		this._updateDialPreview(temp);
+	}
+
+	_commitDialTargetIfAny() {
+		if (!this._hass || !this._config) return;
+		if (this._dialDragTemp == null) return;
+		const newTemp = this._dialDragTemp;
+		this._dialDragTemp = null;
+		const climate = this._hass.states[this._config.climate_entity];
+		if (climate) {
+			const optimisticState = { ...climate };
+			optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
+			this._hass.states[this._config.climate_entity] = optimisticState;
+			this._render();
+		}
+		this._hass.callService("climate", "set_temperature", {
+			entity_id: this._config.climate_entity,
+			temperature: newTemp,
+		});
+	}
+
+	_dialProgressFromClientXY(clientX, clientY, rect) {
+		if (!rect || !Number.isFinite(rect.width) || rect.width <= 0) return null;
+		const cx = rect.left + rect.width / 2;
+		const cy = rect.top + rect.height / 2;
+		const dx = clientX - cx;
+		const dy = clientY - cy;
+		let deg = (Math.atan2(dy, dx) * 180) / Math.PI; // -180..180
+		deg = (deg + 360) % 360; // 0..359 (0°=3 Uhr, 90°=6 Uhr)
+		// Arc: Start 135°, Sweep 270° bis 45° (Gap 45°..135°)
+		if (deg > 45 && deg < 135) {
+			// Im Gap: zum nächstgelegenen Ende snappen
+			return (deg < 90) ? 270 : 0;
+		}
+		// Map 135..360 -> 0..225, 0..45 -> 225..270
+		return (deg >= 135) ? (deg - 135) : (225 + deg);
+	}
+
+	_tempFromDialProgress(progress, min, max, step) {
+		const pct = this._clamp(progress / 270, 0, 1);
+		let t = min + pct * (max - min);
+		const s = Number(step) || 0.5;
+		t = Math.round(t / s) * s;
+		// 0.1er Floating-Fehler sauber machen
+		t = Math.round(t * 10) / 10;
+		return this._clamp(t, min, max);
+	}
+
+	_updateDialPreview(newTemp) {
+		const c = this._config;
+		const min = Number(c.min_temp);
+		const max = Number(c.max_temp);
+		const progress = 270 * this._clamp((newTemp - min) / (max - min), 0, 1);
+		const angle = 135 + progress;
+		const dot = this.shadowRoot?.querySelector("circle.ring-dot-target");
+		if (dot) {
+			const cx = 50 + 44 * Math.cos(angle * Math.PI / 180);
+			const cy = 50 + 44 * Math.sin(angle * Math.PI / 180);
+			dot.setAttribute("cx", String(cx));
+			dot.setAttribute("cy", String(cy));
+		}
+		const label = this.shadowRoot?.querySelector(".temp-target-left");
+		if (label) {
+			label.textContent = `${Number(newTemp).toFixed(1)}°C`;
+		}
 	}
 
 	_withDerivedConfig(c) {
