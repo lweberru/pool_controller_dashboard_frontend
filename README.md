@@ -75,7 +75,7 @@ If entity registry access is blocked/unavailable, only explicitly configured ent
 
 ### Status icons (inside the dial)
 
-- Frost: frost protection active
+- Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state)
 - Moon: quiet hours active
 - Solar: PV surplus allows heating/filtering
 
