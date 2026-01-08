@@ -884,6 +884,9 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass || !this._config) return;
 				// Nur primäre Taste/Touch
 				if (ev.pointerType === "mouse" && ev.button !== 0) return;
+				// Nur wenn auf dem Ring gedrückt wurde (nicht in der Mitte).
+				const rect = dial.getBoundingClientRect();
+				if (!this._isPointerOnDialRing(ev.clientX, ev.clientY, rect)) return;
 				this._isDraggingDial = true;
 				dial.setPointerCapture?.(ev.pointerId);
 				this._updateDialPreviewFromPointer(ev);
@@ -947,11 +950,21 @@ class PoolControllerCard extends HTMLElement {
 
 	_openMoreInfo(entityId) {
 		if (!entityId) return;
+		// Primary: HA listens for this event.
 		this.dispatchEvent(new CustomEvent("hass-more-info", {
 			detail: { entityId },
 			bubbles: true,
 			composed: true,
 		}));
+		// Fallback (some HA contexts / wrappers behave differently): setting moreInfoEntityId
+		// is commonly supported and opens the dialog.
+		try {
+			if (this._hass && ("moreInfoEntityId" in this._hass)) {
+				this._hass.moreInfoEntityId = entityId;
+			}
+		} catch (_e) {
+			// ignore
+		}
 	}
 
 	_triggerEntity(entityId, turnOn = true) {
@@ -1256,6 +1269,21 @@ class PoolControllerCard extends HTMLElement {
 		}
 		// Map 135..360 -> 0..225, 0..45 -> 225..270
 		return (deg >= 135) ? (deg - 135) : (225 + deg);
+	}
+
+	_isPointerOnDialRing(clientX, clientY, rect) {
+		if (!rect || !Number.isFinite(rect.width) || rect.width <= 0) return false;
+		const cx = rect.left + rect.width / 2;
+		const cy = rect.top + rect.height / 2;
+		const dx = clientX - cx;
+		const dy = clientY - cy;
+		const r = Math.sqrt(dx * dx + dy * dy);
+		const outer = Math.min(rect.width, rect.height) / 2;
+		if (outer <= 0) return false;
+		const ratio = r / outer;
+		// Ring sits close to the outer edge (SVG radius 44 in a 100x100 box => ~0.88 of outer radius).
+		// Use a tolerant band so it feels natural across sizes.
+		return ratio >= 0.72 && ratio <= 1.02;
 	}
 
 	_tempFromDialProgress(progress, min, max, step) {
