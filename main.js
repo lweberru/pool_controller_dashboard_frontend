@@ -1,6 +1,6 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.29 - UI: dial ring target control + reduced rerenders + next filter cycle
+ * v1.5.30 - UI: click elements open HA more-info popups
  */
 
 const CARD_TYPE = "pc-pool-controller";
@@ -448,6 +448,18 @@ class PoolControllerCard extends HTMLElement {
 		const statusText = this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active);
 
 		return {
+			// Entity IDs (for HA more-info popups)
+			climateEntityId: c.climate_entity,
+			phEntityId: c.ph_entity || null,
+			chlorEntityId: c.chlorine_value_entity || null,
+			saltEntityId: saltEntityId || null,
+			tdsEntityId: tdsEntityId || null,
+			frostEntityId: c.frost_entity || null,
+			quietEntityId: c.quiet_entity || null,
+			pvAllowsEntityId: c.pv_entity || null,
+			mainPowerEntityId: c.main_power_entity || null,
+			powerEntityId: c.power_entity || null,
+
 			current, target, hvac, hvacAction, climateOff, auxOn,
 			bathingState, filterState, chlorState, pauseState,
 			frost, quiet, pvAllows,
@@ -470,6 +482,7 @@ class PoolControllerCard extends HTMLElement {
 	_getStyles() {
 		return `<style>
 			:host { display: block; }
+			[data-more-info] { cursor: pointer; }
 			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); container-type: inline-size; }
 			* { box-sizing: border-box; }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
@@ -637,24 +650,24 @@ class PoolControllerCard extends HTMLElement {
 								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
-							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}">
+							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}" ${d.frostEntityId ? `data-more-info="${d.frostEntityId}"` : ''}>
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
-							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}">
+							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
 							</div>
-							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}">
+							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}" ${d.pvAllowsEntityId ? `data-more-info="${d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
 						</div>
 					</div>
 					<div class="dial-core">
-						<div class="temp-current">${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
+						<div class="temp-current" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
 						<div class="temp-target-row">
-							<span class="temp-target-left">${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
+							<span class="temp-target-left" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
 							<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
-							<span class="temp-target-right">${d.mainPower !== null ? `${d.mainPower}W` : d.powerVal !== null ? `${d.powerVal}W` : ''}</span>
+							<span class="temp-target-right" ${(d.mainPowerEntityId || d.powerEntityId) ? `data-more-info="${d.mainPowerEntityId || d.powerEntityId}"` : ''}>${d.mainPower !== null ? `${d.mainPower}W` : d.powerVal !== null ? `${d.powerVal}W` : ''}</span>
 						</div>
 					</div>
 					${this._renderDialTimer(d)}
@@ -716,7 +729,7 @@ class PoolControllerCard extends HTMLElement {
 		return `<div class="right-column">
 			<div class="quality">
 				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
-				<div class="scale-container">
+				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
 					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.ph")}</div>
 					<div style="position: relative;">
 						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 0, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
@@ -730,7 +743,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				
-				<div class="scale-container">
+				<div class="scale-container" ${d.chlorEntityId ? `data-more-info="${d.chlorEntityId}"` : ''}>
 					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.chlorine")}</div>
 					<div style="position: relative;">
 						${d.chlor != null ? `<div class="scale-marker" style="left: ${this._pct(d.chlor, 0, 1200)}%"><div class="marker-value">${d.chlor.toFixed(0)} mV</div></div>` : ""}
@@ -745,7 +758,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 				
 				${(d.salt != null) ? `
-				<div class="scale-container">
+				<div class="scale-container" ${d.saltEntityId ? `data-more-info="${d.saltEntityId}"` : ''}>
 					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.salt")}</div>
 					<div style="position: relative;">
 						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)</div></div>
@@ -762,7 +775,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>` : ""}
 
 				${(d.tds != null) ? `
-				<div class="scale-container">
+				<div class="scale-container" ${d.tdsEntityId ? `data-more-info="${d.tdsEntityId}"` : ''}>
 					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.tds")}</div>
 					<div style="position: relative;">
 						<div class="scale-marker" style="left: ${this._pct(d.tds, 0, 2000)}%"><div class="marker-value">${d.tds.toFixed(0)} ppm</div></div>
@@ -823,6 +836,18 @@ class PoolControllerCard extends HTMLElement {
 	// Event Handlers
 	// ========================================
 	_attachHandlers() {
+		// More-info popups (Home Assistant entity details)
+		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
+			const entityId = el.getAttribute("data-more-info");
+			if (!entityId) return;
+			// Prevent dial drag when clicking on inner elements (icons, numbers)
+			el.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+			el.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				this._openMoreInfo(entityId);
+			});
+		});
+
 		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
 		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
@@ -916,6 +941,15 @@ class PoolControllerCard extends HTMLElement {
 				}
 			});
 		}
+	}
+
+	_openMoreInfo(entityId) {
+		if (!entityId) return;
+		this.dispatchEvent(new CustomEvent("hass-more-info", {
+			detail: { entityId },
+			bubbles: true,
+			composed: true,
+		}));
 	}
 
 	_triggerEntity(entityId, turnOn = true) {
