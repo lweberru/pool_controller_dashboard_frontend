@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.32 - UI: avoid z-layer issues with HA popups
+ * v1.5.34 - UI: maintenance mode warning banner
  */
 
-const VERSION = "1.5.32";
+const VERSION = "1.5.34";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -48,6 +48,8 @@ const I18N = {
 			scheduled_start: "Geplanter Start",
 			water_quality: "Wasserqualität",
 			maintenance: "⚠️ Wartungsarbeiten",
+			maintenance_mode_title: "Wartung aktiv",
+			maintenance_mode_text: "Automatik, Filter, PV und Frostschutz sind deaktiviert.",
 			ph: "pH-Wert",
 			chlorine: "Chlor",
 			salt: "Salzgehalt",
@@ -59,7 +61,7 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Baden", filter: "Filtern", chlorine: "Chloren", pause: "Pause" },
-		status: { pause: "Pause", bathing: "Baden", chlorine: "Chloren", filter: "Filtern", heating: "Heizt", off: "Aus" },
+		status: { maintenance: "Wartung", pause: "Pause", bathing: "Baden", chlorine: "Chloren", filter: "Filtern", heating: "Heizt", off: "Aus" },
 		dial: {
 			bathing_left: "Baden: noch {mins} min",
 			filter_left: "Filtern: noch {mins} min",
@@ -91,6 +93,8 @@ const I18N = {
 			scheduled_start: "Scheduled start",
 			water_quality: "Water quality",
 			maintenance: "⚠️ Maintenance",
+			maintenance_mode_title: "Maintenance active",
+			maintenance_mode_text: "Automation, filter, PV and frost protection are disabled.",
 			ph: "pH",
 			chlorine: "Chlorine",
 			salt: "Salt",
@@ -102,7 +106,7 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Bathing", filter: "Filter", chlorine: "Chlorine", pause: "Pause" },
-		status: { pause: "Pause", bathing: "Bathing", chlorine: "Chlorine", filter: "Filtering", heating: "Heating", off: "Off" },
+		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bathing", chlorine: "Chlorine", filter: "Filtering", heating: "Heating", off: "Off" },
 		dial: {
 			bathing_left: "Bathing: {mins} min left",
 			filter_left: "Filtering: {mins} min left",
@@ -134,6 +138,8 @@ const I18N = {
 			scheduled_start: "Inicio programado",
 			water_quality: "Calidad del agua",
 			maintenance: "⚠️ Mantenimiento",
+			maintenance_mode_title: "Mantenimiento activo",
+			maintenance_mode_text: "La automatización, filtrado, FV y protección contra heladas están desactivados.",
 			ph: "pH",
 			chlorine: "Cloro",
 			salt: "Sal",
@@ -145,7 +151,7 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Baño", filter: "Filtrar", chlorine: "Cloro", pause: "Pausa" },
-		status: { pause: "Pausa", bathing: "Baño", chlorine: "Cloro", filter: "Filtrar", heating: "Calentando", off: "Apagado" },
+		status: { maintenance: "Mantenimiento", pause: "Pausa", bathing: "Baño", chlorine: "Cloro", filter: "Filtrar", heating: "Calentando", off: "Apagado" },
 		dial: {
 			bathing_left: "Baño: quedan {mins} min",
 			filter_left: "Filtrar: quedan {mins} min",
@@ -177,6 +183,8 @@ const I18N = {
 			scheduled_start: "Démarrage planifié",
 			water_quality: "Qualité de l'eau",
 			maintenance: "⚠️ Entretien",
+			maintenance_mode_title: "Maintenance active",
+			maintenance_mode_text: "L'automatisation, la filtration, le PV et la protection antigel sont désactivés.",
 			ph: "pH",
 			chlorine: "Chlore",
 			salt: "Sel",
@@ -188,7 +196,7 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Bain", filter: "Filtrer", chlorine: "Chlore", pause: "Pause" },
-		status: { pause: "Pause", bathing: "Bain", chlorine: "Chlore", filter: "Filtrer", heating: "Chauffe", off: "Arrêt" },
+		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bain", chlorine: "Chlore", filter: "Filtrer", heating: "Chauffe", off: "Arrêt" },
 		dial: {
 			bathing_left: "Bain : {mins} min restantes",
 			filter_left: "Filtrer : {mins} min restantes",
@@ -292,6 +300,11 @@ class PoolControllerCard extends HTMLElement {
 			<div class="header">
 				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
 			</div>
+			${data.maintenanceActive ? `
+			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
+				<div class="maintenance-mode-title">${_t(lang, "ui.maintenance_mode_title")}</div>
+				<div class="maintenance-mode-text">${_t(lang, "ui.maintenance_mode_text")}</div>
+			</div>` : ""}
 			
 			<div class="content-grid">
 				${this._renderLeftColumn(data, effectiveConfig)}
@@ -312,6 +325,9 @@ class PoolControllerCard extends HTMLElement {
 		const hvacAction = climate.attributes.hvac_action;
 		const climateOff = hvac === "off" || hvac === "unavailable" || hvac === "unknown";
 		const auxOn = c.aux_entity ? this._isOn(h.states[c.aux_entity]) : (h.states[c.aux_binary]?.state === "on");
+
+		const maintenanceEntityId = c.maintenance_entity || this._derivedEntities?.maintenance_entity || null;
+		const maintenanceActive = maintenanceEntityId ? this._isOn(h.states[maintenanceEntityId]) : false;
 
 		// Timer-States: bevorzugt neue Minuten-Sensoren (v2 Timer-Refactor), mit Fallback auf alte *_until Sensoren.
 		const manualTimerEntity = c.manual_timer_entity;
@@ -453,12 +469,13 @@ class PoolControllerCard extends HTMLElement {
 		const chlorProgress = chlorEta != null ? this._clamp(chlorEta / (chlorMaxMins || chlorEta || c.chlor_max_mins), 0, 1) : 0;
 		const pauseProgress = pauseEta != null ? this._clamp(pauseEta / (pauseMaxMins || pauseEta || c.pause_max_mins), 0, 1) : 0;
 
-		const pillClass = bathingState.active || filterState.active || chlorState.active ? "active" : pauseState.active ? "warn" : frost ? "on" : "";
-		const statusText = this._getStatusText(hvac, hvacAction, bathingState.active, filterState.active, chlorState.active, pauseState.active);
+		const pillClass = maintenanceActive ? "active" : (bathingState.active || filterState.active || chlorState.active) ? "active" : pauseState.active ? "warn" : frost ? "on" : "";
+		const statusText = this._getStatusText(hvac, hvacAction, maintenanceActive, bathingState.active, filterState.active, chlorState.active, pauseState.active);
 
 		return {
 			// Entity IDs (for HA more-info popups)
 			climateEntityId: c.climate_entity,
+			maintenanceEntityId: maintenanceEntityId,
 			phEntityId: c.ph_entity || null,
 			chlorEntityId: c.chlorine_value_entity || null,
 			saltEntityId: saltEntityId || null,
@@ -470,6 +487,7 @@ class PoolControllerCard extends HTMLElement {
 			mainPowerEntityId: c.main_power_entity || null,
 			powerEntityId: c.power_entity || null,
 
+			maintenanceActive,
 			current, target, hvac, hvacAction, climateOff, auxOn,
 			bathingState, filterState, chlorState, pauseState,
 			frost, quiet, pvAllows,
@@ -497,6 +515,9 @@ class PoolControllerCard extends HTMLElement {
 			* { box-sizing: border-box; }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
 			.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
+			.maintenance-mode { border: 1px solid #f3c2a2; border-radius: 12px; padding: 12px 14px; background: #fff9f5; margin: 0 0 12px 0; }
+			.maintenance-mode-title { font-weight: 700; color: #c0392b; }
+			.maintenance-mode-text { margin-top: 4px; color: #8a3b32; font-weight: 500; }
 			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f4f6f8; color: #333; }
 			.pill.on { background: #d0f0d0; color: #0f6b2f; }
 			.pill.warn { background: #ffe5d5; color: #b44; }
@@ -1016,8 +1037,9 @@ class PoolControllerCard extends HTMLElement {
 		return !!(services && services[domain] && services[domain][service]);
 	}
 
-	_getStatusText(hvac, hvacAction, bathing, filtering, chlorinating, paused) {
+	_getStatusText(hvac, hvacAction, maintenance, bathing, filtering, chlorinating, paused) {
 		const lang = _langFromHass(this._hass);
+		if (maintenance) return _t(lang, "status.maintenance");
 		if (paused) return _t(lang, "status.pause");
 		if (bathing) return _t(lang, "status.bathing");
 		if (chlorinating) return _t(lang, "status.chlorine");
@@ -1175,6 +1197,7 @@ class PoolControllerCard extends HTMLElement {
 		
 		const relevantEntities = [
 			this._config.climate_entity,
+			this._config.maintenance_entity,
 			this._config.aux_entity,
 			this._config.manual_timer_entity,
 			this._config.auto_filter_timer_entity,
@@ -1352,6 +1375,7 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			maintenance_entity: prefer('maintenance_entity'),
 			manual_timer_entity: prefer('manual_timer_entity'),
 			auto_filter_timer_entity: prefer('auto_filter_timer_entity'),
 			pause_timer_entity: prefer('pause_timer_entity'),
@@ -1438,6 +1462,9 @@ class PoolControllerCard extends HTMLElement {
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			// Maintenance (hard lockout)
+			maintenance_entity: this._pickEntity(entries, "binary_sensor", ["maintenance_active"]) || null,
+
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: this._pickEntity(entries, "sensor", ["manual_timer_mins"]) || null,
 			auto_filter_timer_entity: this._pickEntity(entries, "sensor", ["auto_filter_timer_mins"]) || null,
@@ -1634,6 +1661,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
+			maintenance_entity: pick("binary_sensor", "maintenance_active") || this._config.maintenance_entity,
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
 			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,

@@ -17,6 +17,7 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Quick actions: **Bathing**, **Filtering**, **Chlorine**, **Pause**
 - Optional AUX heater toggle
 - Status indicators: Frost protection, Quiet hours, PV surplus
+- Maintenance mode warning banner (disables automation incl. frost protection)
 - Water quality: pH, ORP/Chlorine (mV), optional Salt (g/L + %) and TDS (ppm)
 - Maintenance hints (dosing + water change recommendation for high TDS)
 - Runtime auto-discovery from the entity registry (YAML-friendly)
@@ -79,6 +80,12 @@ If entity registry access is blocked/unavailable, only explicitly configured ent
 - Moon: quiet hours active
 - Solar: PV surplus allows heating/filtering
 
+### Maintenance mode (Wartung)
+
+If the backend exposes `binary_sensor.*_maintenance_active` and it is `on`, the card shows a prominent warning banner.
+
+Important: maintenance mode is a hard lockout in the backend and disables automation, including frost protection.
+
 ### Actions
 
 - **Bathing**: start/stop bathing mode
@@ -125,6 +132,7 @@ Required:
 Common optional keys (usually filled by the UI editor auto-mapping):
 
 - `aux_entity`
+- `maintenance_entity` (recommended; usually derived automatically)
 - `manual_timer_entity` (shared manual timer; attributes: `active`, `duration_minutes`, `type`)
 - `auto_filter_timer_entity`
 - `pause_timer_entity`
@@ -142,3 +150,7 @@ Legacy (older backend, still supported as fallback):
 
 - After updates: hard reload the browser (Ctrl+F5) and/or clear the HA frontend cache.
 - If auto-discovery does not work: verify `climate_entity` is the `pool_controller` climate entity and that the frontend can access the entity registry.
+
+## Contributing
+
+Development rules and release workflow (HACS via GitHub Releases): see [CONTRIBUTING.md](CONTRIBUTING.md).
