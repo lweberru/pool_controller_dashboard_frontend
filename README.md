@@ -74,6 +74,8 @@ If entity registry access is blocked/unavailable, only explicitly configured ent
 	- Click/drag on the ring sets the target temperature (calls `climate.set_temperature` on release)
 - `+` / `−` buttons: change target temperature (calls `climate.set_temperature`)
 
+Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `target_temp_step`, the card uses those values automatically. The config keys `min_temp`, `max_temp` and `step` remain as a fallback.
+
 ### Status icons (inside the dial)
 
 - Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state)
