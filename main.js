@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.34 - UI: maintenance mode warning banner
+ * v1.5.35 - UI: maintenance toggle + disable controls during maintenance
  */
 
-const VERSION = "1.5.34";
+const VERSION = "1.5.35";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -60,7 +60,7 @@ const I18N = {
 			change_water: "Wasser wechseln",
 			minutes_short: "min",
 		},
-		actions: { bathing: "Baden", filter: "Filtern", chlorine: "Chloren", pause: "Pause" },
+		actions: { bathing: "Baden", filter: "Filtern", chlorine: "Chloren", pause: "Pause", maintenance: "Wartung" },
 		status: { maintenance: "Wartung", pause: "Pause", bathing: "Baden", chlorine: "Chloren", filter: "Filtern", heating: "Heizt", off: "Aus" },
 		dial: {
 			bathing_left: "Baden: noch {mins} min",
@@ -105,7 +105,7 @@ const I18N = {
 			change_water: "Change water",
 			minutes_short: "min",
 		},
-		actions: { bathing: "Bathing", filter: "Filter", chlorine: "Chlorine", pause: "Pause" },
+		actions: { bathing: "Bathing", filter: "Filter", chlorine: "Chlorine", pause: "Pause", maintenance: "Maintenance" },
 		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bathing", chlorine: "Chlorine", filter: "Filtering", heating: "Heating", off: "Off" },
 		dial: {
 			bathing_left: "Bathing: {mins} min left",
@@ -150,7 +150,7 @@ const I18N = {
 			change_water: "Cambiar agua",
 			minutes_short: "min",
 		},
-		actions: { bathing: "Baño", filter: "Filtrar", chlorine: "Cloro", pause: "Pausa" },
+		actions: { bathing: "Baño", filter: "Filtrar", chlorine: "Cloro", pause: "Pausa", maintenance: "Mantenimiento" },
 		status: { maintenance: "Mantenimiento", pause: "Pausa", bathing: "Baño", chlorine: "Cloro", filter: "Filtrar", heating: "Calentando", off: "Apagado" },
 		dial: {
 			bathing_left: "Baño: quedan {mins} min",
@@ -195,7 +195,7 @@ const I18N = {
 			change_water: "Changer l'eau",
 			minutes_short: "min",
 		},
-		actions: { bathing: "Bain", filter: "Filtrer", chlorine: "Chlore", pause: "Pause" },
+		actions: { bathing: "Bain", filter: "Filtrer", chlorine: "Chlore", pause: "Pause", maintenance: "Maintenance" },
 		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bain", chlorine: "Chlore", filter: "Filtrer", heating: "Chauffe", off: "Arrêt" },
 		dial: {
 			bathing_left: "Bain : {mins} min restantes",
@@ -292,6 +292,7 @@ class PoolControllerCard extends HTMLElement {
 
 		// Daten vorbereiten
 		const data = this._prepareData(h, effectiveConfig, climate);
+		this._renderData = data;
 
 		// Komplettes Rendering
 		this.shadowRoot.innerHTML = `
@@ -299,6 +300,11 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
+				<div class="header-actions">
+					<button class="action-btn maintenance ${data.maintenanceActive ? "active" : ""}" data-action="maintenance-toggle" title="${_t(lang, "actions.maintenance")}">
+						<ha-icon icon="mdi:tools"></ha-icon><span>${_t(lang, "actions.maintenance")}</span>
+					</button>
+				</div>
 			</div>
 			${data.maintenanceActive ? `
 			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
@@ -514,6 +520,8 @@ class PoolControllerCard extends HTMLElement {
 			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); container-type: inline-size; }
 			* { box-sizing: border-box; }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
+			.header-actions { display: flex; align-items: center; gap: 10px; }
+			.header-actions .action-btn { padding: 8px 10px; font-size: 12px; }
 			.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
 			.maintenance-mode { border: 1px solid #f3c2a2; border-radius: 12px; padding: 12px 14px; background: #fff9f5; margin: 0 0 12px 0; }
 			.maintenance-mode-title { font-weight: 700; color: #c0392b; }
@@ -536,6 +544,7 @@ class PoolControllerCard extends HTMLElement {
 			
 			.dial-container { display: grid; place-items: center; }
 			.dial { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 280px; display: grid; place-items: center; }
+			.dial.disabled { opacity: 0.6; }
 			.ring { width: 100%; height: 100%; border-radius: 50%; position: relative; display: grid; place-items: center; padding: 20px; }
 			
 			/* SVG Ring */
@@ -576,17 +585,24 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
+			.action-btn.maintenance.active { background: #c0392b; border-color: #c0392b; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
 			.action-btn.chlorine.active { background: #27ae60; border-color: #27ae60; }
+			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: #d0d7de; }
+			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: #d0d7de; }
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
 			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
 			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
 			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
+			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: #d0d7de; }
+			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: #d0d7de; }
 			
 			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
 			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
+			.aux-switch.disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+			.aux-switch.disabled:hover { box-shadow: none; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
 			.aux-switch-label ha-icon { --mdc-icon-size: 20px; }
 			.toggle { width: 44px; height: 24px; background: #d0d7de; border-radius: 999px; position: relative; transition: background 200ms ease; }
@@ -649,6 +665,7 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_renderLeftColumn(d, c) {
 		const lang = _langFromHass(this._hass);
+		const disabled = !!d.maintenanceActive;
 		const RING_CX = 50;
 		const RING_CY = 50;
 			const RING_R = 44;
@@ -661,7 +678,7 @@ class PoolControllerCard extends HTMLElement {
 		const RING_START_DEG = 135;
 		return `<div class="left-column">
 			<div class="dial-container">
-				<div class="dial" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
+				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
@@ -704,24 +721,24 @@ class PoolControllerCard extends HTMLElement {
 					${this._renderDialTimer(d)}
 				</div>
 				<div class="temp-controls">
-					<button class="temp-btn" data-action="dec">−</button>
-					<button class="temp-btn" data-action="inc">+</button>
+					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
+					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="60" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}">
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="60" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""}>
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
-					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="30" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}">
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="30" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""}>
 						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
-					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="5" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}">
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="5" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""}>
 						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
-					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="60" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}">
+					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="60" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""}>
 						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
 				</div>
-				<div class="aux-switch ${d.auxOn ? "active" : ""}" data-entity="${c.aux_entity || ""}">
+				<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}">
 					<div class="aux-switch-label">
 						<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
 					</div>
@@ -867,6 +884,8 @@ class PoolControllerCard extends HTMLElement {
 	// Event Handlers
 	// ========================================
 	_attachHandlers() {
+		const maintenanceActive = !!this._renderData?.maintenanceActive;
+
 		// More-info popups (Home Assistant entity details)
 		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
 			const entityId = el.getAttribute("data-more-info");
@@ -879,9 +898,28 @@ class PoolControllerCard extends HTMLElement {
 			});
 		});
 
+		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
+		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
+		if (maintenanceBtn) {
+			maintenanceBtn.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				if (!this._hass) return;
+				const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
+				if (this._hasService("pool_controller", svc)) {
+					this._hass.callService("pool_controller", svc, { climate_entity: this._config?.climate_entity });
+					return;
+				}
+				this._hass.callService("climate", "set_hvac_mode", {
+					entity_id: this._config?.climate_entity,
+					hvac_mode: maintenanceActive ? "heat" : "off",
+				});
+			});
+		}
+
 		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
 		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
+				if (maintenanceActive) return;
 				const action = btn.dataset.action;
 				if (!this._hass) return;
 				const step = Number(this._config.step || 0.5);
@@ -911,6 +949,7 @@ class PoolControllerCard extends HTMLElement {
 		if (dial) {
 			const onPointerDown = (ev) => {
 				if (!this._hass || !this._config) return;
+				if (maintenanceActive) return;
 				// Nur primäre Taste/Touch
 				if (ev.pointerType === "mouse" && ev.button !== 0) return;
 				// Nur wenn auf dem Ring gedrückt wurde (nicht in der Mitte).
@@ -939,6 +978,8 @@ class PoolControllerCard extends HTMLElement {
 		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
 		actionButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
+				if (btn.dataset.action === "maintenance-toggle") return;
+				if (maintenanceActive) return;
 				const mode = btn.dataset.mode;
 				const duration = Number(btn.dataset.duration);
 				const active = btn.dataset.active === "true";
@@ -968,6 +1009,7 @@ class PoolControllerCard extends HTMLElement {
 		const auxSwitch = this.shadowRoot.querySelector(".aux-switch");
 		if (auxSwitch) {
 			auxSwitch.addEventListener("click", () => {
+				if (maintenanceActive) return;
 				const entity = auxSwitch.dataset.entity;
 				if (entity && this._hass) {
 					const isOn = this._isOn(this._hass.states[entity]);
