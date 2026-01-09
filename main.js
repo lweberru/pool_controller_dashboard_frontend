@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.35 - UI: maintenance toggle + disable controls during maintenance
+ * v1.5.36 - Use backend-provided min/max/step when available
  */
 
-const VERSION = "1.5.35";
+const VERSION = "1.5.36";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -325,6 +325,7 @@ class PoolControllerCard extends HTMLElement {
 	// MODULAR: Daten-Vorbereitung
 	// ========================================
 	_prepareData(h, c, climate) {
+		const tc = this._effectiveTempConfig();
 		const current = this._num(climate.attributes.current_temperature);
 		const target = this._num(climate.attributes.temperature) ?? this._num(climate.attributes.target_temp) ?? this._num(climate.attributes.max_temp);
 		const hvac = climate.state;
@@ -455,8 +456,8 @@ class PoolControllerCard extends HTMLElement {
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
 
-		const dialAngle = this._calcDial(current ?? c.min_temp, c.min_temp, c.max_temp);
-		const targetAngle = this._calcDial(target ?? current ?? c.min_temp, c.min_temp, c.max_temp);
+		const dialAngle = this._calcDial(current ?? tc.min_temp, tc.min_temp, tc.max_temp);
+		const targetAngle = this._calcDial(target ?? current ?? tc.min_temp, tc.min_temp, tc.max_temp);
 
 		const bathingEta = bathingState.eta;
 		const filterEta = filterState.eta;
@@ -502,11 +503,32 @@ class PoolControllerCard extends HTMLElement {
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
+			effectiveMinTemp: tc.min_temp,
+			effectiveMaxTemp: tc.max_temp,
+			effectiveStep: tc.step,
 			dialAngle, targetAngle,
 			bathingEta, filterEta, chlorEta, pauseEta,
 			bathingMaxMins, filterMaxMins, chlorMaxMins, pauseMaxMins,
 			bathingProgress, filterProgress, chlorProgress, pauseProgress,
 			pillClass, statusText
+		};
+	}
+
+	_effectiveTempConfig() {
+		const c = this._config || DEFAULTS;
+		const climate = this._hass?.states?.[c.climate_entity];
+		const a = climate?.attributes || {};
+		const min_temp = this._num(a.min_temp) ?? Number(c.min_temp);
+		const max_temp = this._num(a.max_temp) ?? Number(c.max_temp);
+		const step = (
+			this._num(a.target_temp_step) ??
+			this._num(a.target_temperature_step) ??
+			Number(c.step || 0.5)
+		);
+		return {
+			min_temp: Number.isFinite(min_temp) ? min_temp : Number(DEFAULTS.min_temp),
+			max_temp: Number.isFinite(max_temp) ? max_temp : Number(DEFAULTS.max_temp),
+			step: Number.isFinite(step) && step > 0 ? step : Number(DEFAULTS.step),
 		};
 	}
 
@@ -922,11 +944,12 @@ class PoolControllerCard extends HTMLElement {
 				if (maintenanceActive) return;
 				const action = btn.dataset.action;
 				if (!this._hass) return;
-				const step = Number(this._config.step || 0.5);
+				const tc = this._effectiveTempConfig();
+				const step = Number(tc.step || 0.5);
 				const climate = this._hass.states[this._config.climate_entity];
-				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? this._config.min_temp;
+				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
 				const next = action === "inc" ? currentTarget + step : currentTarget - step;
-				const newTemp = this._clamp(next, this._config.min_temp, this._config.max_temp);
+				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
 				
 				// Optimistic update: Sofort lokale Änderung anzeigen
 				if (climate) {
@@ -1318,11 +1341,10 @@ class PoolControllerCard extends HTMLElement {
 		const dial = this.shadowRoot?.querySelector("[data-dial]");
 		if (!dial) return;
 		const rect = dial.getBoundingClientRect();
-		const c = this._config;
-		const step = Number(c.step || 0.5);
+		const tc = this._effectiveTempConfig();
 		const progress = this._dialProgressFromClientXY(ev.clientX, ev.clientY, rect);
 		if (progress == null) return;
-		const temp = this._tempFromDialProgress(progress, c.min_temp, c.max_temp, step);
+		const temp = this._tempFromDialProgress(progress, tc.min_temp, tc.max_temp, tc.step);
 		this._dialDragTemp = temp;
 		this._updateDialPreview(temp);
 	}
@@ -1388,9 +1410,9 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_updateDialPreview(newTemp) {
-		const c = this._config;
-		const min = Number(c.min_temp);
-		const max = Number(c.max_temp);
+		const tc = this._effectiveTempConfig();
+		const min = Number(tc.min_temp);
+		const max = Number(tc.max_temp);
 		const progress = 270 * this._clamp((newTemp - min) / (max - min), 0, 1);
 		const angle = 135 + progress;
 		const dot = this.shadowRoot?.querySelector("circle.ring-dot-target");
