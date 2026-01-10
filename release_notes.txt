@@ -1,3 +1,7 @@
+## v1.5.43
+
+- Bugfix: Countdown bis zum nächsten Kalender-Termin bleibt korrekt (kein "0" mehr nur wegen überlappender/ganztägiger Events).
+
 ## 🐛 KRITISCHER BUGFIX: Auto-Discovery speichert Config nicht
 
 ### Problem

@@ -17,6 +17,8 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Quick actions: **Bathing**, **Filtering**, **Chlorine**, **Pause**
 - Optional AUX heater toggle
 - Status indicators: Frost protection, Quiet hours, PV surplus
+- Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and power)
+- Physical switch state row: shows if main/pump/aux switches are actually ON
 - Maintenance mode warning banner (disables automation incl. frost protection)
 - Water quality: pH, ORP/Chlorine (mV), optional Salt (g/L + %) and TDS (ppm)
 - Maintenance hints (dosing + water change recommendation for high TDS)
@@ -24,7 +26,7 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 
 ## Installation (HACS)
 
-1. In HACS → **Custom repositories** add this repo (Category: **Plugin**)
+1. In HACS → **Custom repositories** add this repo (Category: **Lovelace**)
 2. Install
 3. Ensure the resource is registered as a **JavaScript Module**:
 	- `/hacsfiles/pool_controller_dashboard_frontend/main.js`
@@ -82,7 +84,17 @@ Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `targ
 - Moon: quiet hours active
 - Solar: PV surplus allows heating/filtering
 
-### Maintenance mode (Wartung)
+### Reason icon + physical switch icons (inside the dial)
+
+- Mid icon (between target temperature and power):
+	- Shows *why heating is allowed* (Heat Reason) or *why the pool is running* (Run Reason)
+	- Tooltip explains the reason; click opens more-info for the underlying sensor
+- Row below: shows the **physical** switch states (mirrors from the backend)
+	- Main power (plug)
+	- Pump
+	- Aux heater (fire)
+
+### Maintenance mode
 
 If the backend exposes `binary_sensor.*_maintenance_active` and it is `on`, the card shows a prominent warning banner.
 
@@ -135,6 +147,8 @@ Common optional keys (usually filled by the UI editor auto-mapping):
 
 - `aux_entity`
 - `maintenance_entity` (recommended; usually derived automatically)
+- `heat_reason_entity`, `run_reason_entity` (recommended; usually derived automatically)
+- `main_switch_on_entity`, `pump_switch_on_entity`, `aux_heating_switch_on_entity` (physical switch mirrors; usually derived automatically)
 - `manual_timer_entity` (shared manual timer; attributes: `active`, `duration_minutes`, `type`)
 - `auto_filter_timer_entity`
 - `pause_timer_entity`

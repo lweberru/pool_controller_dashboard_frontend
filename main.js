@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.41 - show physical switch states (main/pump/aux)
+ * v1.5.43 - bugfix: next event countdown (avoid 0 due to overlapping events)
  */
 
-const VERSION = "1.5.41";
+const VERSION = "1.5.43";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -646,7 +646,7 @@ class PoolControllerCard extends HTMLElement {
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-core { position: absolute; top: 52%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
+			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
 			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
@@ -656,12 +656,12 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-left, .temp-target-right { font-weight: 600; white-space: nowrap; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 
-			.switch-icons-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 8px; }
+			.switch-icons-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 6px; }
 			.switch-icon { width: 26px; height: 26px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.45; transition: all 200ms ease; }
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 44%; max-width: 120px; z-index: 1; }
+			.dial-timer { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 44%; max-width: 140px; z-index: 1; }
 			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -726,6 +726,8 @@ class PoolControllerCard extends HTMLElement {
 				.status-icons { top: 18%; gap: 10px; }
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
+				.dial-core { top: 58%; }
+				.dial-timer { bottom: 6%; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
