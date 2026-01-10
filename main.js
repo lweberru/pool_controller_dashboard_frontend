@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.37 - pH scale labels + backend sensor semantics
+ * v1.5.41 - show physical switch states (main/pump/aux)
  */
 
-const VERSION = "1.5.37";
+const VERSION = "1.5.41";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -41,6 +41,9 @@ const I18N = {
 			frost: "Frostschutz",
 			quiet: "Ruhezeit",
 			pv: "PV-Überschuss",
+			main_switch: "Hauptschalter",
+			pump_switch: "Pumpe",
+			aux_heater_switch: "Zusatzheizung",
 			additional_heater: "Zusatzheizung",
 			next_event: "Nächster Termin",
 			next_filter_cycle: "Nächster Filter-Zyklus",
@@ -86,6 +89,9 @@ const I18N = {
 			frost: "Frost protection",
 			quiet: "Quiet hours",
 			pv: "PV surplus",
+			main_switch: "Main power",
+			pump_switch: "Pump",
+			aux_heater_switch: "Aux heater",
 			additional_heater: "Additional heater",
 			next_event: "Next event",
 			next_filter_cycle: "Next filter cycle",
@@ -131,6 +137,9 @@ const I18N = {
 			frost: "Protección contra heladas",
 			quiet: "Horas silenciosas",
 			pv: "Excedente FV",
+			main_switch: "Alimentación",
+			pump_switch: "Bomba",
+			aux_heater_switch: "Calentador auxiliar",
 			additional_heater: "Calentador auxiliar",
 			next_event: "Próximo evento",
 			next_filter_cycle: "Próximo ciclo de filtración",
@@ -176,6 +185,9 @@ const I18N = {
 			frost: "Protection antigel",
 			quiet: "Heures calmes",
 			pv: "Surplus PV",
+			main_switch: "Alimentation",
+			pump_switch: "Pompe",
+			aux_heater_switch: "Chauffage auxiliaire",
 			additional_heater: "Chauffage auxiliaire",
 			next_event: "Prochain événement",
 			next_filter_cycle: "Prochain cycle de filtration",
@@ -336,6 +348,19 @@ class PoolControllerCard extends HTMLElement {
 		const maintenanceEntityId = c.maintenance_entity || this._derivedEntities?.maintenance_entity || null;
 		const maintenanceActive = maintenanceEntityId ? this._isOn(h.states[maintenanceEntityId]) : false;
 
+		const heatReasonEntityId = c.heat_reason_entity || this._derivedEntities?.heat_reason_entity || null;
+		const runReasonEntityId = c.run_reason_entity || this._derivedEntities?.run_reason_entity || null;
+		const heatReason = heatReasonEntityId ? (h.states[heatReasonEntityId]?.state || null) : null;
+		const runReason = runReasonEntityId ? (h.states[runReasonEntityId]?.state || null) : null;
+
+		// Physical switch states (mirrored by backend as binary_sensors)
+		const mainSwitchOnEntityId = c.main_switch_on_entity || this._derivedEntities?.main_switch_on_entity || null;
+		const pumpSwitchOnEntityId = c.pump_switch_on_entity || this._derivedEntities?.pump_switch_on_entity || null;
+		const auxHeatingSwitchOnEntityId = c.aux_heating_switch_on_entity || this._derivedEntities?.aux_heating_switch_on_entity || null;
+		const mainSwitchOn = mainSwitchOnEntityId ? this._isOn(h.states[mainSwitchOnEntityId]) : false;
+		const pumpSwitchOn = pumpSwitchOnEntityId ? this._isOn(h.states[pumpSwitchOnEntityId]) : false;
+		const auxHeatingSwitchOn = auxHeatingSwitchOnEntityId ? this._isOn(h.states[auxHeatingSwitchOnEntityId]) : false;
+
 		// Timer-States: bevorzugt neue Minuten-Sensoren (v2 Timer-Refactor), mit Fallback auf alte *_until Sensoren.
 		const manualTimerEntity = c.manual_timer_entity;
 		const autoFilterTimerEntity = c.auto_filter_timer_entity;
@@ -369,9 +394,31 @@ class PoolControllerCard extends HTMLElement {
 		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
 		const pvPowerEntityId = c.pv_power_entity || null;
 		
-		const mainPower = c.main_power_entity ? this._num(h.states[c.main_power_entity]?.state) : null;
-		const auxPower = c.aux_power_entity ? this._num(h.states[c.aux_power_entity]?.state) : null;
+		const mainPowerEntityId = c.main_power_entity || null;
+		const auxPowerEntityId = c.aux_power_entity || null;
+		const mainPower = mainPowerEntityId ? this._num(h.states[mainPowerEntityId]?.state) : null;
+		const auxPower = auxPowerEntityId ? this._num(h.states[auxPowerEntityId]?.state) : null;
 		const powerVal = mainPower ?? (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
+
+		// Display power: prefer total (main + aux) if available, else fallback.
+		let displayPower = null;
+		let powerMoreInfoEntityId = null;
+		let powerTooltip = "";
+		if (mainPower != null || auxPower != null) {
+			displayPower = (mainPower ?? 0) + (auxPower ?? 0);
+			powerMoreInfoEntityId = mainPowerEntityId || auxPowerEntityId;
+			if (mainPower != null && auxPower != null) {
+				powerTooltip = `${mainPower}W + ${auxPower}W`;
+			} else if (mainPower != null) {
+				powerTooltip = `${mainPower}W`;
+			} else if (auxPower != null) {
+				powerTooltip = `${auxPower}W`;
+			}
+		} else if (powerVal != null) {
+			displayPower = powerVal;
+			powerMoreInfoEntityId = c.power_entity || null;
+			powerTooltip = `${powerVal}W`;
+		}
 
 		const ph = c.ph_entity ? this._num(h.states[c.ph_entity]?.state) : null;
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
@@ -483,6 +530,11 @@ class PoolControllerCard extends HTMLElement {
 			// Entity IDs (for HA more-info popups)
 			climateEntityId: c.climate_entity,
 			maintenanceEntityId: maintenanceEntityId,
+			heatReasonEntityId: heatReasonEntityId,
+			runReasonEntityId: runReasonEntityId,
+			mainSwitchOnEntityId,
+			pumpSwitchOnEntityId,
+			auxHeatingSwitchOnEntityId,
 			phEntityId: c.ph_entity || null,
 			chlorEntityId: c.chlorine_value_entity || null,
 			saltEntityId: saltEntityId || null,
@@ -491,14 +543,22 @@ class PoolControllerCard extends HTMLElement {
 			quietEntityId: c.quiet_entity || null,
 			pvAllowsEntityId: c.pv_entity || null,
 			pvPowerEntityId: pvPowerEntityId,
-			mainPowerEntityId: c.main_power_entity || null,
+			mainPowerEntityId: mainPowerEntityId,
+			auxPowerEntityId: auxPowerEntityId,
 			powerEntityId: c.power_entity || null,
+			powerMoreInfoEntityId,
 
 			maintenanceActive,
+			heatReason,
+			runReason,
+			mainSwitchOn,
+			pumpSwitchOn,
+			auxHeatingSwitchOn,
 			current, target, hvac, hvacAction, climateOff, auxOn,
 			bathingState, filterState, chlorState, pauseState,
 			frost, quiet, pvAllows,
 			mainPower, auxPower, powerVal,
+			displayPower, powerTooltip,
 			ph, chlor, salt, tds,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
@@ -595,6 +655,11 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-right { justify-self: end; }
 			.temp-target-left, .temp-target-right { font-weight: 600; white-space: nowrap; }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
+
+			.switch-icons-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 8px; }
+			.switch-icon { width: 26px; height: 26px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.45; transition: all 200ms ease; }
+			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
 			.dial-timer { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); width: 44%; max-width: 120px; z-index: 1; }
 			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
@@ -742,7 +807,18 @@ class PoolControllerCard extends HTMLElement {
 						<div class="temp-target-row">
 							<span class="temp-target-left" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
 							<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
-							<span class="temp-target-right" ${(d.mainPowerEntityId || d.powerEntityId) ? `data-more-info="${d.mainPowerEntityId || d.powerEntityId}"` : ''}>${d.mainPower !== null ? `${d.mainPower}W` : d.powerVal !== null ? `${d.powerVal}W` : ''}</span>
+							<span class="temp-target-right" ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''} ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>${d.displayPower !== null ? `${d.displayPower}W` : ''}</span>
+						</div>
+						<div class="switch-icons-row">
+							<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
+								<ha-icon icon="mdi:power-plug"></ha-icon>
+							</div>
+							<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
+								<ha-icon icon="mdi:pump"></ha-icon>
+							</div>
+							<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
+								<ha-icon icon="mdi:fire"></ha-icon>
+							</div>
 						</div>
 					</div>
 					${this._renderDialTimer(d)}
@@ -1122,8 +1198,156 @@ class PoolControllerCard extends HTMLElement {
 		return hvac || "–";
 	}
 
+	_heatReasonLabel(reason) {
+		const lang = _langFromHass(this._hass);
+		const r = String(reason || "").toLowerCase();
+		const labels = {
+			de: {
+				off: "Aus",
+				disabled: "Deaktiviert",
+				bathing: "Baden",
+				chlorine: "Chloren",
+				filter: "Filtern",
+				preheat: "Vorheizen (Kalender)",
+				pv: "PV-Überschuss",
+			},
+			en: {
+				off: "Off",
+				disabled: "Disabled",
+				bathing: "Bathing",
+				chlorine: "Chlorine",
+				filter: "Filter",
+				preheat: "Preheat (calendar)",
+				pv: "PV surplus",
+			},
+			es: {
+				off: "Apagado",
+				disabled: "Desactivado",
+				bathing: "Baño",
+				chlorine: "Cloro",
+				filter: "Filtrar",
+				preheat: "Precalentar (calendario)",
+				pv: "Excedente FV",
+			},
+			fr: {
+				off: "Arrêt",
+				disabled: "Désactivé",
+				bathing: "Bain",
+				chlorine: "Chlore",
+				filter: "Filtrer",
+				preheat: "Préchauffage (calendrier)",
+				pv: "Surplus PV",
+			},
+		};
+		return labels?.[lang]?.[r] || r || null;
+	}
+
+	_runReasonLabel(reason) {
+		const lang = _langFromHass(this._hass);
+		const r = String(reason || "").toLowerCase();
+		const labels = {
+			de: {
+				maintenance: "Wartung",
+				pause: "Pause",
+				bathing: "Baden",
+				chlorine: "Chloren",
+				filter: "Filtern",
+				preheat: "Vorheizen (Kalender)",
+				pv: "PV-Überschuss",
+				frost: "Frostschutz",
+				idle: "Leerlauf",
+			},
+			en: {
+				maintenance: "Maintenance",
+				pause: "Pause",
+				bathing: "Bathing",
+				chlorine: "Chlorine",
+				filter: "Filtering",
+				preheat: "Preheat (calendar)",
+				pv: "PV surplus",
+				frost: "Frost protection",
+				idle: "Idle",
+			},
+			es: {
+				maintenance: "Mantenimiento",
+				pause: "Pausa",
+				bathing: "Baño",
+				chlorine: "Cloro",
+				filter: "Filtrar",
+				preheat: "Precalentar (calendario)",
+				pv: "Excedente FV",
+				frost: "Protección contra heladas",
+				idle: "Inactivo",
+			},
+			fr: {
+				maintenance: "Maintenance",
+				pause: "Pause",
+				bathing: "Bain",
+				chlorine: "Chlore",
+				filter: "Filtration",
+				preheat: "Préchauffage (calendrier)",
+				pv: "Surplus PV",
+				frost: "Protection antigel",
+				idle: "Inactif",
+			},
+		};
+		return labels?.[lang]?.[r] || r || null;
+	}
+
 	_renderStatusMidIcon(d) {
 		const title = d.statusText || "";
+		const lang = _langFromHass(this._hass);
+		const heatReason = String(d.heatReason || "").toLowerCase();
+		const runReason = String(d.runReason || "").toLowerCase();
+
+		// Choose what to display:
+		// - if the backend explicitly says heating is disabled -> show that
+		// - else if heating has a specific reason (pv/preheat/bathing/...) -> show heat reason
+		// - else if the pool is running for a reason (filter/chlorine/...) -> show run reason
+		const showKey = (heatReason === "disabled")
+			? "disabled"
+			: (heatReason && heatReason !== "off")
+				? heatReason
+				: (runReason && runReason !== "idle")
+					? runReason
+					: "";
+		const isHeatKey = (heatReason === "disabled") || (heatReason && heatReason !== "off" && showKey === heatReason);
+
+		const label = isHeatKey ? this._heatReasonLabel(showKey) : this._runReasonLabel(showKey);
+		const heatPrefix = {
+			de: "Heizgrund",
+			en: "Heat reason",
+			es: "Motivo de calefacción",
+			fr: "Raison de chauffe",
+		}[lang] || "Heat reason";
+		const runPrefix = {
+			de: "Grund",
+			en: "Reason",
+			es: "Motivo",
+			fr: "Raison",
+		}[lang] || "Reason";
+		const tip = label ? `${isHeatKey ? heatPrefix : runPrefix}: ${label}` : title;
+		const moreInfo = (d.heatReasonEntityId && isHeatKey)
+			? `data-more-info="${d.heatReasonEntityId}"`
+			: (d.runReasonEntityId && !isHeatKey)
+				? `data-more-info="${d.runReasonEntityId}"`
+				: "";
+
+		if (showKey) {
+			if (showKey === "pv") return `<ha-icon icon="mdi:solar-power" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "preheat") return `<ha-icon icon="mdi:calendar-clock" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "bathing") return `<ha-icon icon="mdi:pool" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "chlorine") return `<ha-icon icon="mdi:fan" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "filter") return `<ha-icon icon="mdi:rotate-right" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "pause") return `<ha-icon icon="mdi:pause-circle" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "frost") return `<ha-icon icon="mdi:snowflake" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "maintenance") return `<ha-icon icon="mdi:tools" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "disabled") return `<ha-icon icon="mdi:radiator-off" title="${tip}" ${moreInfo}></ha-icon>`;
+			// Unknown value: show radiator with the raw label.
+			return `<ha-icon icon="mdi:radiator" title="${tip}" ${moreInfo}></ha-icon>`;
+		}
+
+		// Legacy fallback: infer from UI state
 		if (d.pauseState?.active) return `<ha-icon icon="mdi:pause-circle" title="${title}" style="color:#e67e22"></ha-icon>`;
 		if (d.bathingState?.active) return `<ha-icon icon="mdi:pool" title="${title}" style="color:#8a3b32"></ha-icon>`;
 		if (d.chlorState?.active) return `<ha-icon icon="mdi:fan" title="${title}" style="color:#27ae60"></ha-icon>`;
@@ -1271,6 +1495,8 @@ class PoolControllerCard extends HTMLElement {
 		const relevantEntities = [
 			this._config.climate_entity,
 			this._config.maintenance_entity,
+			this._config.heat_reason_entity,
+			this._config.run_reason_entity,
 			this._config.aux_entity,
 			this._config.manual_timer_entity,
 			this._config.auto_filter_timer_entity,
@@ -1340,6 +1566,8 @@ class PoolControllerCard extends HTMLElement {
 			};
 		} else if (domain === "sensor" && String(entityId).includes("timer_mins")) {
 			sig.a = { active: a.active, duration_minutes: a.duration_minutes, type: a.type };
+		} else if (domain === "sensor" && (String(entityId).endsWith("_heat_reason") || String(entityId).endsWith("_run_reason"))) {
+			sig.a = { friendly_name: a.friendly_name };
 		}
 		return JSON.stringify(sig);
 	}
@@ -1447,7 +1675,12 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			main_switch_on_entity: prefer('main_switch_on_entity'),
+			pump_switch_on_entity: prefer('pump_switch_on_entity'),
+			aux_heating_switch_on_entity: prefer('aux_heating_switch_on_entity'),
 			maintenance_entity: prefer('maintenance_entity'),
+			heat_reason_entity: prefer('heat_reason_entity'),
+			run_reason_entity: prefer('run_reason_entity'),
 			manual_timer_entity: prefer('manual_timer_entity'),
 			auto_filter_timer_entity: prefer('auto_filter_timer_entity'),
 			pause_timer_entity: prefer('pause_timer_entity'),
@@ -1534,8 +1767,17 @@ class PoolControllerCard extends HTMLElement {
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			// Physical switch states (mirrors)
+			main_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["main_switch_on"]) || null,
+			pump_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["pump_switch_on"]) || null,
+			aux_heating_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["aux_heating_switch_on"]) || null,
+
 			// Maintenance (hard lockout)
 			maintenance_entity: this._pickEntity(entries, "binary_sensor", ["maintenance_active"]) || null,
+
+			// Transparency
+			heat_reason_entity: this._pickEntity(entries, "sensor", ["heat_reason"]) || null,
+			run_reason_entity: this._pickEntity(entries, "sensor", ["run_reason"]) || null,
 
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: this._pickEntity(entries, "sensor", ["manual_timer_mins"]) || null,
@@ -1733,7 +1975,12 @@ class PoolControllerCardEditor extends HTMLElement {
 		const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
+			main_switch_on_entity: pick("binary_sensor", "main_switch_on") || this._config.main_switch_on_entity,
+			pump_switch_on_entity: pick("binary_sensor", "pump_switch_on") || this._config.pump_switch_on_entity,
+			aux_heating_switch_on_entity: pick("binary_sensor", "aux_heating_switch_on") || this._config.aux_heating_switch_on_entity,
 			maintenance_entity: pick("binary_sensor", "maintenance_active") || this._config.maintenance_entity,
+			heat_reason_entity: pick("sensor", "heat_reason") || this._config.heat_reason_entity,
+			run_reason_entity: pick("sensor", "run_reason") || this._config.run_reason_entity,
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
 			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
