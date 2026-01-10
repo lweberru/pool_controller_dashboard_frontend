@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.36 - Use backend-provided min/max/step when available
+ * v1.5.37 - pH scale labels + backend sensor semantics
  */
 
-const VERSION = "1.5.36";
+const VERSION = "1.5.37";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -646,6 +646,11 @@ class PoolControllerCard extends HTMLElement {
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
 			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			/* Absolute-positioned labels (used for pH 0-14 to avoid 2-digit misalignment) */
+			.scale-labels-abs { position: relative; height: 14px; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			.scale-label-abs { position: absolute; bottom: 0; transform: translateX(-50%); white-space: nowrap; }
+			.scale-label-abs.first { transform: translateX(0); }
+			.scale-label-abs.last { transform: translateX(-100%); }
 			/* Marker sollen im Balken sitzen (nicht über der Überschrift). */
 			.scale-marker { position: absolute; top: 8px; transform: translateX(-50%); z-index: 1; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
@@ -808,8 +813,11 @@ class PoolControllerCard extends HTMLElement {
 							${Array.from({length: 14}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("")}
 						</div>
 					</div>
-					<div class="scale-labels">
-						${[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(n => `<span>${n}</span>`).join("")}
+					<div class="scale-labels-abs">
+						${Array.from({ length: 15 }, (_, i) => {
+							const cls = `scale-label-abs${i === 0 ? " first" : ""}${i === 14 ? " last" : ""}`;
+							return `<span class="${cls}" style="left: ${(i / 14) * 100}%">${i}</span>`;
+						}).join("")}
 					</div>
 				</div>
 				
