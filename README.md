@@ -20,6 +20,7 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and power)
 - Physical switch state row: shows if main/pump/aux switches are actually ON
 - Maintenance mode warning banner (disables automation incl. frost protection)
+- Sanitizer mode badge (chlorine / saltwater / mixed) when provided by the backend
 - Water quality: pH, ORP/Chlorine (mV), optional Salt (g/L + %) and TDS (ppm)
 - Maintenance hints (dosing + water change recommendation for high TDS)
 - Runtime auto-discovery from the entity registry (YAML-friendly)
@@ -122,6 +123,9 @@ An optional “Next event” block is shown when the backend provides the corres
 
 ## Water quality (right)
 
+If available, the card shows a small “Sanitizer” badge (derived from `sensor.*_sanitizer_mode`).
+For saltwater/mixed systems the backend may also provide `tds_effective` (effective/non-salt TDS); the card will prefer that value when auto-discovered.
+
 - **pH**: scale 0–14
 - **Chlorine/ORP**: shown in mV (scale 0–1200)
 - **Salt** (optional): shown as g/L plus percent (g/L × 0.1 = %)
@@ -148,6 +152,7 @@ Common optional keys (usually filled by the UI editor auto-mapping):
 - `aux_entity`
 - `maintenance_entity` (recommended; usually derived automatically)
 - `heat_reason_entity`, `run_reason_entity` (recommended; usually derived automatically)
+- `sanitizer_mode_entity` (optional; usually derived automatically)
 - `main_switch_on_entity`, `pump_switch_on_entity`, `aux_heating_switch_on_entity` (physical switch mirrors; usually derived automatically)
 - `manual_timer_entity` (shared manual timer; attributes: `active`, `duration_minutes`, `type`)
 - `auto_filter_timer_entity`
