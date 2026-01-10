@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.43 - bugfix: next event countdown (avoid 0 due to overlapping events)
+ * v1.5.44 - show sanitizer mode badge + i18n
  */
 
-const VERSION = "1.5.43";
+const VERSION = "1.5.44";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -50,6 +50,10 @@ const I18N = {
 			in_minutes: "in {mins} Minuten",
 			scheduled_start: "Geplanter Start",
 			water_quality: "Wasserqualität",
+			sanitizer: "Desinfektion",
+			sanitizer_chlorine: "Chlor",
+			sanitizer_saltwater: "Salzwasser",
+			sanitizer_mixed: "Mischbetrieb",
 			maintenance: "⚠️ Wartungsarbeiten",
 			maintenance_mode_title: "Wartung aktiv",
 			maintenance_mode_text: "Automatik, Filter, PV und Frostschutz sind deaktiviert.",
@@ -98,6 +102,10 @@ const I18N = {
 			in_minutes: "in {mins} minutes",
 			scheduled_start: "Scheduled start",
 			water_quality: "Water quality",
+			sanitizer: "Sanitizer",
+			sanitizer_chlorine: "Chlorine",
+			sanitizer_saltwater: "Saltwater",
+			sanitizer_mixed: "Mixed",
 			maintenance: "⚠️ Maintenance",
 			maintenance_mode_title: "Maintenance active",
 			maintenance_mode_text: "Automation, filter, PV and frost protection are disabled.",
@@ -146,6 +154,10 @@ const I18N = {
 			in_minutes: "en {mins} minutos",
 			scheduled_start: "Inicio programado",
 			water_quality: "Calidad del agua",
+			sanitizer: "Desinfección",
+			sanitizer_chlorine: "Cloro",
+			sanitizer_saltwater: "Agua salada",
+			sanitizer_mixed: "Mixto",
 			maintenance: "⚠️ Mantenimiento",
 			maintenance_mode_title: "Mantenimiento activo",
 			maintenance_mode_text: "La automatización, filtrado, FV y protección contra heladas están desactivados.",
@@ -194,6 +206,10 @@ const I18N = {
 			in_minutes: "dans {mins} minutes",
 			scheduled_start: "Démarrage planifié",
 			water_quality: "Qualité de l'eau",
+			sanitizer: "Désinfection",
+			sanitizer_chlorine: "Chlore",
+			sanitizer_saltwater: "Eau salée",
+			sanitizer_mixed: "Mixte",
 			maintenance: "⚠️ Entretien",
 			maintenance_mode_title: "Maintenance active",
 			maintenance_mode_text: "L'automatisation, la filtration, le PV et la protection antigel sont désactivés.",
@@ -423,7 +439,13 @@ class PoolControllerCard extends HTMLElement {
 		const ph = c.ph_entity ? this._num(h.states[c.ph_entity]?.state) : null;
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
 		const saltEntityId = c.salt_entity || this._derivedEntities?.salt_entity;
-		const tdsEntityId = c.tds_entity || this._derivedEntities?.tds_entity;
+			const tdsEntityId = c.tds_entity || this._derivedEntities?.tds_entity;
+		const sanitizerModeEntityId = c.sanitizer_mode_entity || this._derivedEntities?.sanitizer_mode_entity || null;
+		const sanitizerModeRaw = sanitizerModeEntityId ? (h.states[sanitizerModeEntityId]?.state || null) : null;
+		const sanitizerMode = (sanitizerModeRaw && ["chlorine", "saltwater", "mixed"].includes(String(sanitizerModeRaw)))
+			? String(sanitizerModeRaw)
+			: null;
+		const sanitizerModeLabel = sanitizerMode ? this._sanitizerModeLabel(sanitizerMode) : null;
 		const salt = saltEntityId ? this._num(h.states[saltEntityId]?.state) : null;
 		const tds = tdsEntityId ? this._num(h.states[tdsEntityId]?.state) : null;
 
@@ -532,6 +554,7 @@ class PoolControllerCard extends HTMLElement {
 			maintenanceEntityId: maintenanceEntityId,
 			heatReasonEntityId: heatReasonEntityId,
 			runReasonEntityId: runReasonEntityId,
+			sanitizerModeEntityId,
 			mainSwitchOnEntityId,
 			pumpSwitchOnEntityId,
 			auxHeatingSwitchOnEntityId,
@@ -560,6 +583,8 @@ class PoolControllerCard extends HTMLElement {
 			mainPower, auxPower, powerVal,
 			displayPower, powerTooltip,
 			ph, chlor, salt, tds,
+			sanitizerMode,
+			sanitizerModeLabel,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
@@ -882,6 +907,7 @@ class PoolControllerCard extends HTMLElement {
 		return `<div class="right-column">
 			<div class="quality">
 				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
+				${d.sanitizerModeLabel ? `<div class="info-badge" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
 					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.ph")}</div>
 					<div style="position: relative;">
@@ -1244,6 +1270,15 @@ class PoolControllerCard extends HTMLElement {
 		return labels?.[lang]?.[r] || r || null;
 	}
 
+	_sanitizerModeLabel(mode) {
+		const lang = _langFromHass(this._hass);
+		const m = String(mode || "").toLowerCase();
+		if (m === "chlorine") return _t(lang, "ui.sanitizer_chlorine");
+		if (m === "saltwater") return _t(lang, "ui.sanitizer_saltwater");
+		if (m === "mixed") return _t(lang, "ui.sanitizer_mixed");
+		return m || null;
+	}
+
 	_runReasonLabel(reason) {
 		const lang = _langFromHass(this._hass);
 		const r = String(reason || "").toLowerCase();
@@ -1499,6 +1534,7 @@ class PoolControllerCard extends HTMLElement {
 			this._config.maintenance_entity,
 			this._config.heat_reason_entity,
 			this._config.run_reason_entity,
+			this._config.sanitizer_mode_entity,
 			this._config.aux_entity,
 			this._config.manual_timer_entity,
 			this._config.auto_filter_timer_entity,
@@ -1677,6 +1713,7 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			sanitizer_mode_entity: prefer('sanitizer_mode_entity'),
 			main_switch_on_entity: prefer('main_switch_on_entity'),
 			pump_switch_on_entity: prefer('pump_switch_on_entity'),
 			aux_heating_switch_on_entity: prefer('aux_heating_switch_on_entity'),
@@ -1769,6 +1806,7 @@ class PoolControllerCard extends HTMLElement {
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			sanitizer_mode_entity: this._pickEntity(entries, "sensor", ["sanitizer_mode"]) || null,
 			// Physical switch states (mirrors)
 			main_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["main_switch_on"]) || null,
 			pump_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["pump_switch_on"]) || null,
@@ -1824,7 +1862,7 @@ class PoolControllerCard extends HTMLElement {
 			ph_entity: this._pickEntity(entries, "sensor", ["ph_val"]) || null,
 			chlorine_value_entity: this._pickEntity(entries, "sensor", ["chlor_val"]) || null,
 			salt_entity: this._pickEntity(entries, "sensor", ["salt_val", "salt"]) || null,
-			tds_entity: this._pickEntity(entries, "sensor", ["tds_val", "tds", "tds_ppm"]) || null,
+			tds_entity: this._pickEntity(entries, "sensor", ["tds_effective", "tds_val", "tds", "tds_ppm"]) || null,
 			tds_assessment_entity: this._pickEntity(entries, "sensor", ["tds_status", "tds_assessment", "tds_state"]) || null,
 			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
 			water_change_percent_entity: this._pickEntity(entries, "sensor", ["tds_water_change_percent", "water_change_percent"]) || null,
@@ -1974,9 +2012,10 @@ class PoolControllerCardEditor extends HTMLElement {
 			const hit = entries.find((e) => e.entity_id.startsWith(`${domain}.`) && (suffix ? e.unique_id?.endsWith(`_${suffix}`) : true));
 			return hit?.entity_id;
 		};
-		const cfg = {
+			const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
+			sanitizer_mode_entity: pick("sensor", "sanitizer_mode") || this._config.sanitizer_mode_entity,
 			main_switch_on_entity: pick("binary_sensor", "main_switch_on") || this._config.main_switch_on_entity,
 			pump_switch_on_entity: pick("binary_sensor", "pump_switch_on") || this._config.pump_switch_on_entity,
 			aux_heating_switch_on_entity: pick("binary_sensor", "aux_heating_switch_on") || this._config.aux_heating_switch_on_entity,
@@ -2017,7 +2056,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
 			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
 			salt_entity: pick("sensor", "salt_val") || this._config.salt_entity,
-			tds_entity: pick("sensor", "tds_val") || this._config.tds_entity,
+				tds_entity: pick("sensor", "tds_effective") || pick("sensor", "tds_val") || this._config.tds_entity,
 			tds_assessment_entity: pick("sensor", "tds_status") || this._config.tds_assessment_entity,
 			water_change_liters_entity: pick("sensor", "tds_water_change_liters") || this._config.water_change_liters_entity,
 			water_change_percent_entity: pick("sensor", "tds_water_change_percent") || this._config.water_change_percent_entity,
