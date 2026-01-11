@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.50 - frost icon opens Frostgefahr sensor
+ * v1.5.51 - smarter maintenance hints for saltwater/mixed
  */
 
-const VERSION = "1.5.50";
+const VERSION = "1.5.51";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -35,6 +35,9 @@ const I18N = {
 	de: {
 		errors: {
 			required_climate: "climate_entity ist erforderlich",
+			low_chlorine: "Chlor zu niedrig",
+			saltwater_chlor_hint: "Salzumwandlung prüfen (Zelle/Schalter/Laufzeit).",
+			mixed_chlor_hint: "Salzumwandlung prüfen oder Chlor dosieren.",
 			entity_not_found: "Entity {entity} nicht gefunden",
 		},
 		ui: {
@@ -89,6 +92,9 @@ const I18N = {
 	en: {
 		errors: {
 			required_climate: "climate_entity is required",
+			low_chlorine: "Chlorine too low",
+			saltwater_chlor_hint: "Check chlorinator/salt conversion (cell/switch/runtime).",
+			mixed_chlor_hint: "Check salt conversion or dose chlorine.",
 			entity_not_found: "Entity {entity} not found",
 		},
 		ui: {
@@ -143,6 +149,9 @@ const I18N = {
 	es: {
 		errors: {
 			required_climate: "climate_entity es obligatorio",
+			low_chlorine: "Cloro demasiado bajo",
+			saltwater_chlor_hint: "Revisa el clorador/la conversión de sal (celda/interruptor/tiempo).",
+			mixed_chlor_hint: "Revisa la conversión de sal o añade cloro.",
 			entity_not_found: "Entidad {entity} no encontrada",
 		},
 		ui: {
@@ -197,6 +206,9 @@ const I18N = {
 	fr: {
 		errors: {
 			required_climate: "climate_entity est requis",
+			low_chlorine: "Chlore trop bas",
+			saltwater_chlor_hint: "Vérifiez le chlorinateur/la conversion sel (cellule/interrupteur/durée).",
+			mixed_chlor_hint: "Vérifiez la conversion sel ou dosez du chlore.",
 			entity_not_found: "Entité {entity} introuvable",
 		},
 		ui: {
@@ -957,6 +969,17 @@ class PoolControllerCard extends HTMLElement {
 				? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)`
 				: `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
+
+		const chlorOkMin = Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min;
+		const chlorLow = (d.chlor != null) && (chlorOkMin != null) && (Number(d.chlor) < Number(chlorOkMin));
+		const isSaltwater = d.sanitizerMode === "saltwater";
+		const isMixed = d.sanitizerMode === "mixed";
+		const saltAddNeeded = !!saltAddDisplay;
+		// If salt is missing, the primary recommendation should be "add salt" (no extra hint noise).
+		const showSaltwaterHint = isSaltwater && chlorLow && !saltAddNeeded;
+		const showMixedHint = isMixed && chlorLow && !saltAddNeeded;
+		// Safety: never show manual chlorine dosing recommendation in pure saltwater mode.
+		const showChlorDose = (d.chlorDoseNum != null && d.chlorDoseNum > 0) && !isSaltwater;
 		return `<div class="right-column">
 			<div class="quality">
 				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
@@ -1024,7 +1047,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>` : ""}
 			</div>
 			
-			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) || (saltAddDisplay) || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
+			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || showChlorDose || (saltAddDisplay) || showSaltwaterHint || showMixedHint || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
 			<div class="maintenance">
 				<div class="section-title">${_t(lang, "ui.maintenance")}</div>
 				<div class="maintenance-items">
@@ -1034,6 +1057,22 @@ class PoolControllerCard extends HTMLElement {
 						<div class="maintenance-text">
 							<div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div>
 							<div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div>
+						</div>
+					</div>` : ""}
+					${showSaltwaterHint ? `
+					<div class="maintenance-item" ${(d.chlorEntityId || d.sanitizerModeEntityId) ? `data-more-info="${d.chlorEntityId || d.sanitizerModeEntityId}"` : ''}>
+						<ha-icon icon="mdi:sync"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">${_t(lang, "ui.low_chlorine")}</div>
+							<div class="maintenance-value">${_t(lang, "ui.saltwater_chlor_hint")}</div>
+						</div>
+					</div>` : ""}
+					${showMixedHint ? `
+					<div class="maintenance-item" ${(d.chlorEntityId || d.sanitizerModeEntityId) ? `data-more-info="${d.chlorEntityId || d.sanitizerModeEntityId}"` : ''}>
+						<ha-icon icon="mdi:sync-alert"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">${_t(lang, "ui.low_chlorine")}</div>
+							<div class="maintenance-value">${_t(lang, "ui.mixed_chlor_hint")}</div>
 						</div>
 					</div>` : ""}
 					${saltAddDisplay ? `
@@ -1060,7 +1099,7 @@ class PoolControllerCard extends HTMLElement {
 							<div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div>
 						</div>
 					</div>` : ""}
-					${d.chlorDoseNum && d.chlorDoseNum > 0 ? `
+					${showChlorDose ? `
 					<div class="maintenance-item">
 						<ha-icon icon="mdi:beaker"></ha-icon>
 						<div class="maintenance-text">

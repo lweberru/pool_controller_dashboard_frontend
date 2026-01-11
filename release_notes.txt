@@ -1,3 +1,8 @@
+## v1.5.51
+
+- UX: Im Modus "Salzwasser" kein "Chlor hinzufügen" mehr; stattdessen Hinweis zur Salzumwandlung.
+- UX: Im Modus "Mischbetrieb" smarter Hinweis (Salzumwandlung prüfen oder Chlor dosieren).
+
 ## v1.5.50
 
 - Bugfix: Frost-Icon öffnet More-Info für "Frostgefahr" (statt Laufgrund).
