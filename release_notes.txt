@@ -1,3 +1,8 @@
+## v1.5.47
+
+- UX: Power badge moved further inside the ring and made smaller.
+- UX: Current temperature font size reduced a bit more.
+
 ## v1.5.46
 
 - Bugfix: Mid-icon now opens More-Info reliably (falls back to climate entity if run/heat reason sensors are not available).

@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.46 - fix more-info + compact dial + better upcoming alignment
+ * v1.5.47 - dial spacing tweak (power + current temp)
  */
 
-const VERSION = "1.5.46";
+const VERSION = "1.5.47";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -677,16 +677,17 @@ class PoolControllerCard extends HTMLElement {
 			
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
-			.power-top { position: absolute; top: 7%; left: 50%; transform: translateX(-50%); z-index: 2; }
-			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.92); border: 1px solid #e0e6ed; color: #4a5568; }
-			.status-icons { position: absolute; top: 23%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
+			/* Power badge: keep inside ring (avoid overlapping arc on small screens) */
+			.power-top { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); z-index: 2; }
+			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.94); border: 1px solid #e0e6ed; color: #4a5568; }
+			.status-icons { position: absolute; top: 26%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-core { position: absolute; top: 57%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
-			.temp-current { font-size: 44px; font-weight: 700; line-height: 1; }
+			.dial-core { position: absolute; top: 58%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
+			.temp-current { font-size: 42px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
@@ -761,13 +762,13 @@ class PoolControllerCard extends HTMLElement {
 			.marker-value::after { content: ""; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 10px solid #0b132b; }
 			@container (max-width: 520px) {
 				/* Schmal: Dial-UI leicht kompakter, Marker weiterhin im Balken. */
-				.temp-current { font-size: 40px; }
-				.status-icons { top: 22%; gap: 10px; }
-				.power-top { top: 6%; }
-				.power-pill { font-size: 11px; padding: 3px 8px; }
+				.temp-current { font-size: 38px; }
+				.status-icons { top: 26%; gap: 10px; }
+				.power-top { top: 12%; }
+				.power-pill { font-size: 10px; padding: 2px 7px; }
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
-				.dial-core { top: 59%; }
+				.dial-core { top: 60%; }
 				.dial-timer { bottom: 6%; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
