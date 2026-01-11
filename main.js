@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.45 - frost run countdown + outdoor temp + dial layout tweaks
+ * v1.5.46 - fix more-info + compact dial + better upcoming alignment
  */
 
-const VERSION = "1.5.45";
+const VERSION = "1.5.46";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -677,16 +677,16 @@ class PoolControllerCard extends HTMLElement {
 			
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
-			.power-top { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); z-index: 2; }
-			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: rgba(255,255,255,0.9); border: 1px solid #e0e6ed; color: #4a5568; }
-			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
+			.power-top { position: absolute; top: 7%; left: 50%; transform: translateX(-50%); z-index: 2; }
+			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.92); border: 1px solid #e0e6ed; color: #4a5568; }
+			.status-icons { position: absolute; top: 23%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
-			.dial-core { position: absolute; top: 56%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
-			.temp-current { font-size: 48px; font-weight: 700; line-height: 1; }
+			.dial-core { position: absolute; top: 57%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
+			.temp-current { font-size: 44px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
@@ -761,13 +761,13 @@ class PoolControllerCard extends HTMLElement {
 			.marker-value::after { content: ""; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 10px solid #0b132b; }
 			@container (max-width: 520px) {
 				/* Schmal: Dial-UI leicht kompakter, Marker weiterhin im Balken. */
-				.temp-current { font-size: 42px; }
-				.status-icons { top: 18%; gap: 10px; }
-				.power-top { top: 10%; }
-				.power-pill { font-size: 12px; padding: 3px 9px; }
+				.temp-current { font-size: 40px; }
+				.status-icons { top: 22%; gap: 10px; }
+				.power-top { top: 6%; }
+				.power-pill { font-size: 11px; padding: 3px 8px; }
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
-				.dial-core { top: 58%; }
+				.dial-core { top: 59%; }
 				.dial-timer { bottom: 6%; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
@@ -792,12 +792,24 @@ class PoolControllerCard extends HTMLElement {
 			.next-start { background: #e8f5e9; border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
 			.next-start-label { font-weight: 600; color: #0f6b2f; }
 			.next-start-time { color: #0f6b2f; font-size: 14px; }
+
+			/* Upcoming rows: align title | value like a table */
+			.next-rows { display: grid; gap: 8px; }
+			.next-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+			.next-row-title { font-weight: 700; }
+			.next-row-value { color: var(--secondary-text-color); font-weight: 700; white-space: nowrap; }
 		</style>`;
 	}
 
 	// ========================================
 	// MODULAR: Linke Spalte (Dial + Controls)
 	// ========================================
+	_formatMinsShort(lang, mins) {
+		const m = this._num(mins);
+		if (m == null) return "";
+		return `${Math.round(m)} ${_t(lang, "ui.minutes_short")}`;
+	}
+
 	_renderLeftColumn(d, c) {
 		const lang = _langFromHass(this._hass);
 		const disabled = !!d.maintenanceActive;
@@ -895,20 +907,22 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
-					<div style="display:flex; justify-content:space-between; align-items:center;">
-						<div style="font-weight:700;">${_t(lang, "ui.next_event")}</div>
-						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${d.nextStartMins != null ? _t(lang, "ui.in_minutes", { mins: d.nextStartMins }) : ''}</div>
+					<div class="next-rows">
+						<div class="next-row">
+							<div class="next-row-title">${_t(lang, "ui.next_event")}</div>
+							<div class="next-row-value">${d.nextStartMins != null ? this._formatMinsShort(lang, d.nextStartMins) : ''}</div>
+						</div>
+						${d.nextFilterMins != null ? `
+						<div class="next-row">
+							<div class="next-row-title">${_t(lang, "ui.next_filter_cycle")}</div>
+							<div class="next-row-value">${this._formatMinsShort(lang, d.nextFilterMins)}</div>
+						</div>` : ''}
+						${(d.nextFrostMins != null && d.nextFrostMins > 0) ? `
+						<div class="next-row">
+							<div class="next-row-title">${_t(lang, "ui.next_frost_cycle")}</div>
+							<div class="next-row-value">${this._formatMinsShort(lang, d.nextFrostMins)}</div>
+						</div>` : ''}
 					</div>
-					${d.nextFilterMins != null ? `
-					<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-						<div style="font-weight:600;">${_t(lang, "ui.next_filter_cycle")}</div>
-						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${_t(lang, "ui.in_minutes", { mins: d.nextFilterMins })}</div>
-					</div>` : ''}
-					${(d.nextFrostMins != null && d.nextFrostMins > 0) ? `
-					<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-						<div style="font-weight:600;">${_t(lang, "ui.next_frost_cycle")}</div>
-						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${_t(lang, "ui.in_minutes", { mins: d.nextFrostMins })}</div>
-					</div>` : ''}
 					${d.nextEventStart ? `
 					<div class="event" style="margin-top:10px;">
 						<div style="flex: 1;">
@@ -1388,34 +1402,35 @@ class PoolControllerCard extends HTMLElement {
 			fr: "Raison",
 		}[lang] || "Reason";
 		const tip = label ? `${isHeatKey ? heatPrefix : runPrefix}: ${label}` : title;
-		const moreInfo = (d.heatReasonEntityId && isHeatKey)
-			? `data-more-info="${d.heatReasonEntityId}"`
+		const moreInfoEntityId = (d.heatReasonEntityId && isHeatKey)
+			? d.heatReasonEntityId
 			: (d.runReasonEntityId && !isHeatKey)
-				? `data-more-info="${d.runReasonEntityId}"`
-				: "";
+				? d.runReasonEntityId
+				: (d.runReasonEntityId || d.heatReasonEntityId || d.climateEntityId || null);
+		const moreInfo = moreInfoEntityId ? `data-more-info="${moreInfoEntityId}"` : "";
 
 		if (showKey) {
-			if (showKey === "pv") return `<ha-icon icon="mdi:solar-power" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "preheat") return `<ha-icon icon="mdi:calendar-clock" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "bathing") return `<ha-icon icon="mdi:pool" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "chlorine") return `<ha-icon icon="mdi:fan" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "filter") return `<ha-icon icon="mdi:rotate-right" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "pause") return `<ha-icon icon="mdi:pause-circle" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "frost") return `<ha-icon icon="mdi:snowflake" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "maintenance") return `<ha-icon icon="mdi:tools" title="${tip}" ${moreInfo}></ha-icon>`;
-			if (showKey === "disabled") return `<ha-icon icon="mdi:radiator-off" title="${tip}" ${moreInfo}></ha-icon>`;
+			if (showKey === "pv") return `<span ${moreInfo}><ha-icon icon="mdi:solar-power" title="${tip}"></ha-icon></span>`;
+			if (showKey === "preheat") return `<span ${moreInfo}><ha-icon icon="mdi:calendar-clock" title="${tip}"></ha-icon></span>`;
+			if (showKey === "bathing") return `<span ${moreInfo}><ha-icon icon="mdi:pool" title="${tip}"></ha-icon></span>`;
+			if (showKey === "chlorine") return `<span ${moreInfo}><ha-icon icon="mdi:fan" title="${tip}"></ha-icon></span>`;
+			if (showKey === "filter") return `<span ${moreInfo}><ha-icon icon="mdi:rotate-right" title="${tip}"></ha-icon></span>`;
+			if (showKey === "pause") return `<span ${moreInfo}><ha-icon icon="mdi:pause-circle" title="${tip}"></ha-icon></span>`;
+			if (showKey === "frost") return `<span ${moreInfo}><ha-icon icon="mdi:snowflake" title="${tip}"></ha-icon></span>`;
+			if (showKey === "maintenance") return `<span ${moreInfo}><ha-icon icon="mdi:tools" title="${tip}"></ha-icon></span>`;
+			if (showKey === "disabled") return `<span ${moreInfo}><ha-icon icon="mdi:radiator-off" title="${tip}"></ha-icon></span>`;
 			// Unknown value: show radiator with the raw label.
-			return `<ha-icon icon="mdi:radiator" title="${tip}" ${moreInfo}></ha-icon>`;
+			return `<span ${moreInfo}><ha-icon icon="mdi:radiator" title="${tip}"></ha-icon></span>`;
 		}
 
-		// Legacy fallback: infer from UI state
-		if (d.pauseState?.active) return `<ha-icon icon="mdi:pause-circle" title="${title}" style="color:#e67e22"></ha-icon>`;
-		if (d.bathingState?.active) return `<ha-icon icon="mdi:pool" title="${title}" style="color:#8a3b32"></ha-icon>`;
-		if (d.chlorState?.active) return `<ha-icon icon="mdi:fan" title="${title}" style="color:#27ae60"></ha-icon>`;
-		if (d.filterState?.active) return `<ha-icon icon="mdi:rotate-right" title="${title}" style="color:#2a7fdb"></ha-icon>`;
-		if (d.hvacAction === "heating" || d.hvacAction === "heat") return `<ha-icon icon="mdi:radiator" title="${title}" style="color:#c0392b"></ha-icon>`;
-		if (d.hvac === "off") return `<ha-icon icon="mdi:power" title="${title}" style="color:var(--secondary-text-color)"></ha-icon>`;
-		return `<ha-icon icon="mdi:thermometer" title="${title}" style="color:var(--secondary-text-color)"></ha-icon>`;
+		// Legacy fallback: infer from UI state (still clickable; fallback to climate entity)
+		if (d.pauseState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:pause-circle" title="${title}" style="color:#e67e22"></ha-icon></span>`;
+		if (d.bathingState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:pool" title="${title}" style="color:#8a3b32"></ha-icon></span>`;
+		if (d.chlorState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:fan" title="${title}" style="color:#27ae60"></ha-icon></span>`;
+		if (d.filterState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:rotate-right" title="${title}" style="color:#2a7fdb"></ha-icon></span>`;
+		if (d.hvacAction === "heating" || d.hvacAction === "heat") return `<span ${moreInfo}><ha-icon icon="mdi:radiator" title="${title}" style="color:#c0392b"></ha-icon></span>`;
+		if (d.hvac === "off") return `<span ${moreInfo}><ha-icon icon="mdi:power" title="${title}" style="color:var(--secondary-text-color)"></ha-icon></span>`;
+		return `<span ${moreInfo}><ha-icon icon="mdi:thermometer" title="${title}" style="color:var(--secondary-text-color)"></ha-icon></span>`;
 	}
 
 	_renderDialTimer(d) {
