@@ -1,3 +1,7 @@
+## v1.5.48
+
+- UX: Status icons repositioned to sit centered between power badge and current temperature.
+
 ## v1.5.47
 
 - UX: Power badge moved further inside the ring and made smaller.
