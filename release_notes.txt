@@ -1,3 +1,11 @@
+## v1.5.50
+
+- Bugfix: Frost-Icon öffnet More-Info für "Frostgefahr" (statt Laufgrund).
+
+## v1.5.49
+
+- Feature: Wartung zeigt "Salz hinzufügen" (auto-discovered via `*_salt_add_g`).
+
 ## v1.5.48
 
 - UX: Status icons repositioned to sit centered between power badge and current temperature.

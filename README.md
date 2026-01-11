@@ -24,7 +24,7 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Maintenance mode warning banner (disables automation incl. frost protection)
 - Sanitizer mode badge (chlorine / saltwater / mixed) when provided by the backend
 - Water quality: pH, ORP/Chlorine (mV), optional Salt (g/L + %) and TDS (ppm)
-- Maintenance hints (dosing + water change recommendation for high TDS)
+- Maintenance hints (dosing + salt + water change recommendation for high TDS)
 - Runtime auto-discovery from the entity registry (YAML-friendly)
 
 ## Installation (HACS)
@@ -83,7 +83,7 @@ Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `targ
 
 ### Status icons (inside the dial)
 
-- Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state). Click opens the Run Reason sensor (history) when available.
+- Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state). Click opens the frost sensor more-info when available (fallback: Run Reason).
 - Moon: quiet hours active
 - Solar: PV surplus allows heating/filtering
 
@@ -142,6 +142,7 @@ The “Maintenance” section appears when the backend recommends an action, e.g
 
 - Add pH+ / pH-
 - Add chlorine
+- Add salt (saltwater/mixed mode): based on `sensor.*_salt_add_g` (grams of salt to add)
 - Water change (when TDS is high; based on backend recommendation: percent and optionally liters)
 
 ## Configuration (key overview)

@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.48 - dial spacing tweak (icon centering)
+ * v1.5.50 - frost icon opens Frostgefahr sensor
  */
 
-const VERSION = "1.5.48";
+const VERSION = "1.5.50";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -65,6 +65,7 @@ const I18N = {
 			add_ph_plus: "pH+ hinzufügen",
 			add_ph_minus: "pH- hinzufügen",
 			add_chlorine: "Chlor hinzufügen",
+			add_salt: "Salz hinzufügen",
 			change_water: "Wasser wechseln",
 			minutes_short: "min",
 		},
@@ -118,6 +119,7 @@ const I18N = {
 			add_ph_plus: "Add pH+",
 			add_ph_minus: "Add pH-",
 			add_chlorine: "Add chlorine",
+			add_salt: "Add salt",
 			change_water: "Change water",
 			minutes_short: "min",
 		},
@@ -171,6 +173,7 @@ const I18N = {
 			add_ph_plus: "Añadir pH+",
 			add_ph_minus: "Añadir pH-",
 			add_chlorine: "Añadir cloro",
+			add_salt: "Añadir sal",
 			change_water: "Cambiar agua",
 			minutes_short: "min",
 		},
@@ -224,6 +227,7 @@ const I18N = {
 			add_ph_plus: "Ajouter pH+",
 			add_ph_minus: "Ajouter pH-",
 			add_chlorine: "Ajouter du chlore",
+			add_salt: "Ajouter du sel",
 			change_water: "Changer l'eau",
 			minutes_short: "min",
 		},
@@ -447,7 +451,8 @@ class PoolControllerCard extends HTMLElement {
 		const ph = c.ph_entity ? this._num(h.states[c.ph_entity]?.state) : null;
 		const chlor = c.chlorine_value_entity ? this._num(h.states[c.chlorine_value_entity]?.state) : null;
 		const saltEntityId = c.salt_entity || this._derivedEntities?.salt_entity;
-			const tdsEntityId = c.tds_entity || this._derivedEntities?.tds_entity;
+		const saltAddEntityId = c.salt_add_entity || this._derivedEntities?.salt_add_entity || null;
+		const tdsEntityId = c.tds_entity || this._derivedEntities?.tds_entity;
 		const sanitizerModeEntityId = c.sanitizer_mode_entity || this._derivedEntities?.sanitizer_mode_entity || null;
 		const sanitizerModeRaw = sanitizerModeEntityId ? (h.states[sanitizerModeEntityId]?.state || null) : null;
 		const sanitizerMode = (sanitizerModeRaw && ["chlorine", "saltwater", "mixed"].includes(String(sanitizerModeRaw)))
@@ -455,6 +460,9 @@ class PoolControllerCard extends HTMLElement {
 			: null;
 		const sanitizerModeLabel = sanitizerMode ? this._sanitizerModeLabel(sanitizerMode) : null;
 		const salt = saltEntityId ? this._num(h.states[saltEntityId]?.state) : null;
+		const saltAddStateObj = saltAddEntityId ? h.states[saltAddEntityId] : null;
+		const saltAddNum = saltAddStateObj ? this._num(saltAddStateObj.state) : null;
+		const saltAddUnit = saltAddStateObj?.attributes?.unit_of_measurement || 'g';
 		const tds = tdsEntityId ? this._num(h.states[tdsEntityId]?.state) : null;
 
 		// TDS assessment and recommended water change: prefer backend-provided values (entities or attributes),
@@ -569,6 +577,7 @@ class PoolControllerCard extends HTMLElement {
 			phEntityId: c.ph_entity || null,
 			chlorEntityId: c.chlorine_value_entity || null,
 			saltEntityId: saltEntityId || null,
+			saltAddEntityId: saltAddEntityId,
 			tdsEntityId: tdsEntityId || null,
 			frostEntityId: c.frost_entity || null,
 			quietEntityId: c.quiet_entity || null,
@@ -594,7 +603,7 @@ class PoolControllerCard extends HTMLElement {
 			nextFrostMins,
 			mainPower, auxPower, powerVal,
 			displayPower, powerTooltip,
-			ph, chlor, salt, tds,
+			ph, chlor, salt, saltAddNum, saltAddUnit, tds,
 			sanitizerMode,
 			sanitizerModeLabel,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
@@ -849,7 +858,7 @@ class PoolControllerCard extends HTMLElement {
 								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
-							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}" ${(d.runReasonEntityId || d.frostEntityId) ? `data-more-info="${d.runReasonEntityId || d.frostEntityId}"` : ''}>
+							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}" ${(d.frostEntityId || d.runReasonEntityId) ? `data-more-info="${d.frostEntityId || d.runReasonEntityId}"` : ''}>
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
 							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
@@ -943,6 +952,11 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_renderRightColumn(d, c) {
 		const lang = _langFromHass(this._hass);
+		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
+			? (d.saltAddNum >= 1000
+				? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)`
+				: `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
+			: null;
 		return `<div class="right-column">
 			<div class="quality">
 				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
@@ -1010,7 +1024,7 @@ class PoolControllerCard extends HTMLElement {
 				</div>` : ""}
 			</div>
 			
-			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
+			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || (d.chlorDoseNum && d.chlorDoseNum > 0) || (saltAddDisplay) || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
 			<div class="maintenance">
 				<div class="section-title">${_t(lang, "ui.maintenance")}</div>
 				<div class="maintenance-items">
@@ -1020,6 +1034,14 @@ class PoolControllerCard extends HTMLElement {
 						<div class="maintenance-text">
 							<div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div>
 							<div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div>
+						</div>
+					</div>` : ""}
+					${saltAddDisplay ? `
+					<div class="maintenance-item" ${d.saltAddEntityId ? `data-more-info="${d.saltAddEntityId}"` : ''}>
+						<ha-icon icon="mdi:shaker"></ha-icon>
+						<div class="maintenance-text">
+							<div class="maintenance-label">${_t(lang, "ui.add_salt")}</div>
+							<div class="maintenance-value">${saltAddDisplay}</div>
 						</div>
 					</div>` : ""}
 					${d.waterChangePercent && d.waterChangePercent > 0 ? `
@@ -1604,6 +1626,7 @@ class PoolControllerCard extends HTMLElement {
 			this._config.ph_entity,
 			this._config.chlorine_value_entity,
 			this._config.salt_entity,
+			this._config.salt_add_entity,
 			this._config.tds_entity,
 			this._config.tds_assessment_entity,
 			this._config.water_change_percent_entity,
@@ -1799,6 +1822,7 @@ class PoolControllerCard extends HTMLElement {
 			ph_entity: prefer('ph_entity'),
 			chlorine_value_entity: prefer('chlorine_value_entity'),
 			salt_entity: prefer('salt_entity'),
+			salt_add_entity: prefer('salt_add_entity'),
 			tds_entity: prefer('tds_entity'),
 			tds_assessment_entity: prefer('tds_assessment_entity'),
 			water_change_percent_entity: prefer('water_change_percent_entity'),
@@ -1908,6 +1932,7 @@ class PoolControllerCard extends HTMLElement {
 			ph_entity: this._pickEntity(entries, "sensor", ["ph_val"]) || null,
 			chlorine_value_entity: this._pickEntity(entries, "sensor", ["chlor_val"]) || null,
 			salt_entity: this._pickEntity(entries, "sensor", ["salt_val", "salt"]) || null,
+			salt_add_entity: this._pickEntity(entries, "sensor", ["salt_add_g"]) || null,
 			tds_entity: this._pickEntity(entries, "sensor", ["tds_effective", "tds_val", "tds", "tds_ppm"]) || null,
 			tds_assessment_entity: this._pickEntity(entries, "sensor", ["tds_status", "tds_assessment", "tds_state"]) || null,
 			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
@@ -2104,7 +2129,8 @@ class PoolControllerCardEditor extends HTMLElement {
 			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
 			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
 			salt_entity: pick("sensor", "salt_val") || this._config.salt_entity,
-				tds_entity: pick("sensor", "tds_effective") || pick("sensor", "tds_val") || this._config.tds_entity,
+			salt_add_entity: pick("sensor", "salt_add_g") || this._config.salt_add_entity,
+			tds_entity: pick("sensor", "tds_effective") || pick("sensor", "tds_val") || this._config.tds_entity,
 			tds_assessment_entity: pick("sensor", "tds_status") || this._config.tds_assessment_entity,
 			water_change_liters_entity: pick("sensor", "tds_water_change_liters") || this._config.water_change_liters_entity,
 			water_change_percent_entity: pick("sensor", "tds_water_change_percent") || this._config.water_change_percent_entity,
