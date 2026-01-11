@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.51 - smarter maintenance hints for saltwater/mixed
+ * v1.5.52 - upcoming rows: more-info + smart countdown
  */
 
-const VERSION = "1.5.51";
+const VERSION = "1.5.52";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -48,9 +48,13 @@ const I18N = {
 			pump_switch: "Pumpe",
 			aux_heater_switch: "Zusatzheizung",
 			additional_heater: "Zusatzheizung",
-			next_event: "Nächster Termin",
+			next_event: "Nächster Start",
 			next_filter_cycle: "Nächster Filter-Zyklus",
 			next_frost_cycle: "Nächster Frostschutz",
+			in_short: "in",
+			now_short: "jetzt",
+			days_short: "T",
+			hours_short: "Std",
 			in_minutes: "in {mins} Minuten",
 			scheduled_start: "Geplanter Start",
 			water_quality: "Wasserqualität",
@@ -105,9 +109,13 @@ const I18N = {
 			pump_switch: "Pump",
 			aux_heater_switch: "Aux heater",
 			additional_heater: "Additional heater",
-			next_event: "Next event",
+			next_event: "Next start",
 			next_filter_cycle: "Next filter cycle",
 			next_frost_cycle: "Next frost protection",
+			in_short: "in",
+			now_short: "now",
+			days_short: "d",
+			hours_short: "h",
 			in_minutes: "in {mins} minutes",
 			scheduled_start: "Scheduled start",
 			water_quality: "Water quality",
@@ -162,9 +170,13 @@ const I18N = {
 			pump_switch: "Bomba",
 			aux_heater_switch: "Calentador auxiliar",
 			additional_heater: "Calentador auxiliar",
-			next_event: "Próximo evento",
+			next_event: "Próximo inicio",
 			next_filter_cycle: "Próximo ciclo de filtración",
 			next_frost_cycle: "Próxima protección contra heladas",
+			in_short: "en",
+			now_short: "ahora",
+			days_short: "d",
+			hours_short: "h",
 			in_minutes: "en {mins} minutos",
 			scheduled_start: "Inicio programado",
 			water_quality: "Calidad del agua",
@@ -219,9 +231,13 @@ const I18N = {
 			pump_switch: "Pompe",
 			aux_heater_switch: "Chauffage auxiliaire",
 			additional_heater: "Chauffage auxiliaire",
-			next_event: "Prochain événement",
+			next_event: "Prochain démarrage",
 			next_filter_cycle: "Prochain cycle de filtration",
 			next_frost_cycle: "Prochaine protection antigel",
+			in_short: "dans",
+			now_short: "maintenant",
+			days_short: "j",
+			hours_short: "h",
 			in_minutes: "dans {mins} minutes",
 			scheduled_start: "Démarrage planifié",
 			water_quality: "Qualité de l'eau",
@@ -621,6 +637,9 @@ class PoolControllerCard extends HTMLElement {
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
+			nextStartMinsEntityId: c.next_start_entity || null,
+			nextFilterMinsEntityId: c.next_filter_in || null,
+			nextEventEntityId: c.next_event_entity || null,
 			effectiveMinTemp: tc.min_temp,
 			effectiveMaxTemp: tc.max_temp,
 			effectiveStep: tc.step,
@@ -826,10 +845,53 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	// MODULAR: Linke Spalte (Dial + Controls)
 	// ========================================
-	_formatMinsShort(lang, mins) {
-		const m = this._num(mins);
-		if (m == null) return "";
-		return `${Math.round(m)} ${_t(lang, "ui.minutes_short")}`;
+	_formatCountdown(lang, mins) {
+		const m0 = this._num(mins);
+		if (m0 == null) return { text: "", title: "" };
+		const m = Math.max(0, Math.round(m0));
+		if (m <= 0) return { text: _t(lang, "ui.now_short"), title: "" };
+
+		const inShort = _t(lang, "ui.in_short");
+		const dShort = _t(lang, "ui.days_short");
+		const hShort = _t(lang, "ui.hours_short");
+		const minShort = _t(lang, "ui.minutes_short");
+
+		const days = Math.floor(m / (24 * 60));
+		const hours = Math.floor((m % (24 * 60)) / 60);
+		const minutes = m % 60;
+
+		let parts = [];
+		if (days > 0) {
+			parts.push(`${days} ${dShort}`);
+			if (hours > 0) parts.push(`${hours} ${hShort}`);
+		} else if (hours > 0) {
+			parts.push(`${hours} ${hShort}`);
+			// Show minutes only for shorter horizons to keep it readable.
+			if (hours < 6 && minutes > 0) parts.push(`${minutes} ${minShort}`);
+		} else {
+			parts.push(`${minutes} ${minShort}`);
+		}
+
+		return { text: `${inShort} ${parts.join(" ")}`.trim(), title: this._absoluteTimeFromMinutes(m) };
+	}
+
+	_absoluteTimeFromMinutes(mins) {
+		try {
+			const m = this._num(mins);
+			if (m == null || m <= 0) return "";
+			const locale = this._hass?.locale?.language || this._hass?.language || undefined;
+			const dt = new Date(Date.now() + Math.round(m) * 60000);
+			if (Number.isNaN(dt.getTime())) return "";
+			return dt.toLocaleString(locale, {
+				weekday: "short",
+				day: "2-digit",
+				month: "2-digit",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+		} catch (_e) {
+			return "";
+		}
 	}
 
 	_renderLeftColumn(d, c) {
@@ -930,19 +992,19 @@ class PoolControllerCard extends HTMLElement {
 				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div class="next-rows">
-						<div class="next-row">
+						<div class="next-row" ${d.nextStartMinsEntityId ? `data-more-info="${d.nextStartMinsEntityId}"` : (d.nextEventEntityId ? `data-more-info="${d.nextEventEntityId}"` : '')} title="${(this._formatCountdown(lang, d.nextStartMins).title || "").replaceAll('"','&quot;')}">
 							<div class="next-row-title">${_t(lang, "ui.next_event")}</div>
-							<div class="next-row-value">${d.nextStartMins != null ? this._formatMinsShort(lang, d.nextStartMins) : ''}</div>
+							<div class="next-row-value">${d.nextStartMins != null ? this._formatCountdown(lang, d.nextStartMins).text : ''}</div>
 						</div>
 						${d.nextFilterMins != null ? `
-						<div class="next-row">
+						<div class="next-row" ${d.nextFilterMinsEntityId ? `data-more-info="${d.nextFilterMinsEntityId}"` : ''} title="${(this._formatCountdown(lang, d.nextFilterMins).title || "").replaceAll('"','&quot;')}">
 							<div class="next-row-title">${_t(lang, "ui.next_filter_cycle")}</div>
-							<div class="next-row-value">${this._formatMinsShort(lang, d.nextFilterMins)}</div>
+							<div class="next-row-value">${this._formatCountdown(lang, d.nextFilterMins).text}</div>
 						</div>` : ''}
 						${(d.nextFrostMins != null && d.nextFrostMins > 0) ? `
-						<div class="next-row">
+						<div class="next-row" ${d.nextFrostMinsEntityId ? `data-more-info="${d.nextFrostMinsEntityId}"` : ''} title="${(this._formatCountdown(lang, d.nextFrostMins).title || "").replaceAll('"','&quot;')}">
 							<div class="next-row-title">${_t(lang, "ui.next_frost_cycle")}</div>
-							<div class="next-row-value">${this._formatMinsShort(lang, d.nextFrostMins)}</div>
+							<div class="next-row-value">${this._formatCountdown(lang, d.nextFrostMins).text}</div>
 						</div>` : ''}
 					</div>
 					${d.nextEventStart ? `

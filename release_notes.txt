@@ -1,3 +1,9 @@
+## v1.5.52
+
+- UX: Upcoming-Zeilen sind klickbar (More-Info für Next-Start/Filter/Frost).
+- UX: "Nächster Termin" umbenannt zu "Nächster Start".
+- UX: Countdown zeigt jetzt Tage/Stunden statt Roh-Minuten (Tooltip mit absoluter Zeit).
+
 ## v1.5.51
 
 - UX: Im Modus "Salzwasser" kein "Chlor hinzufügen" mehr; stattdessen Hinweis zur Salzumwandlung.
