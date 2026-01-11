@@ -17,6 +17,8 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Quick actions: **Bathing**, **Filtering**, **Chlorine**, **Pause**
 - Optional AUX heater toggle
 - Status indicators: Frost protection, Quiet hours, PV surplus
+- Outdoor temperature display (when provided by the backend)
+- Next frost protection run countdown (when provided by the backend)
 - Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and power)
 - Physical switch state row: shows if main/pump/aux switches are actually ON
 - Maintenance mode warning banner (disables automation incl. frost protection)
@@ -81,13 +83,13 @@ Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `targ
 
 ### Status icons (inside the dial)
 
-- Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state)
+- Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state). Click opens the Run Reason sensor (history) when available.
 - Moon: quiet hours active
 - Solar: PV surplus allows heating/filtering
 
 ### Reason icon + physical switch icons (inside the dial)
 
-- Mid icon (between target temperature and power):
+- Mid icon (between target temperature and outdoor temperature):
 	- Shows *why heating is allowed* (Heat Reason) or *why the pool is running* (Run Reason)
 	- Tooltip explains the reason; click opens more-info for the underlying sensor
 - Row below: shows the **physical** switch states (mirrors from the backend)
@@ -120,6 +122,7 @@ An optional “Next event” block is shown when the backend provides the corres
 
 - Next calendar event (start/end/summary)
 - Next filter cycle (“Next filter cycle in …”)
+- Next frost protection run (“Next frost protection in …”)
 
 ## Water quality (right)
 

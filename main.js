@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.44 - show sanitizer mode badge + i18n
+ * v1.5.45 - frost run countdown + outdoor temp + dial layout tweaks
  */
 
-const VERSION = "1.5.44";
+const VERSION = "1.5.45";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -47,6 +47,7 @@ const I18N = {
 			additional_heater: "Zusatzheizung",
 			next_event: "Nächster Termin",
 			next_filter_cycle: "Nächster Filter-Zyklus",
+			next_frost_cycle: "Nächster Frostschutz",
 			in_minutes: "in {mins} Minuten",
 			scheduled_start: "Geplanter Start",
 			water_quality: "Wasserqualität",
@@ -99,6 +100,7 @@ const I18N = {
 			additional_heater: "Additional heater",
 			next_event: "Next event",
 			next_filter_cycle: "Next filter cycle",
+			next_frost_cycle: "Next frost protection",
 			in_minutes: "in {mins} minutes",
 			scheduled_start: "Scheduled start",
 			water_quality: "Water quality",
@@ -151,6 +153,7 @@ const I18N = {
 			additional_heater: "Calentador auxiliar",
 			next_event: "Próximo evento",
 			next_filter_cycle: "Próximo ciclo de filtración",
+			next_frost_cycle: "Próxima protección contra heladas",
 			in_minutes: "en {mins} minutos",
 			scheduled_start: "Inicio programado",
 			water_quality: "Calidad del agua",
@@ -203,6 +206,7 @@ const I18N = {
 			additional_heater: "Chauffage auxiliaire",
 			next_event: "Prochain événement",
 			next_filter_cycle: "Prochain cycle de filtration",
+			next_frost_cycle: "Prochaine protection antigel",
 			in_minutes: "dans {mins} minutes",
 			scheduled_start: "Démarrage planifié",
 			water_quality: "Qualité de l'eau",
@@ -409,6 +413,10 @@ class PoolControllerCard extends HTMLElement {
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
 		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
 		const pvPowerEntityId = c.pv_power_entity || null;
+		const outdoorTempEntityId = c.outdoor_temp_entity || this._derivedEntities?.outdoor_temp_entity || null;
+		const outdoorTemp = outdoorTempEntityId ? this._num(h.states[outdoorTempEntityId]?.state) : null;
+		const nextFrostMinsEntityId = c.next_frost_mins_entity || this._derivedEntities?.next_frost_mins_entity || null;
+		const nextFrostMins = nextFrostMinsEntityId ? this._num(h.states[nextFrostMinsEntityId]?.state) : null;
 		
 		const mainPowerEntityId = c.main_power_entity || null;
 		const auxPowerEntityId = c.aux_power_entity || null;
@@ -566,6 +574,8 @@ class PoolControllerCard extends HTMLElement {
 			quietEntityId: c.quiet_entity || null,
 			pvAllowsEntityId: c.pv_entity || null,
 			pvPowerEntityId: pvPowerEntityId,
+			outdoorTempEntityId,
+			nextFrostMinsEntityId,
 			mainPowerEntityId: mainPowerEntityId,
 			auxPowerEntityId: auxPowerEntityId,
 			powerEntityId: c.power_entity || null,
@@ -580,6 +590,8 @@ class PoolControllerCard extends HTMLElement {
 			current, target, hvac, hvacAction, climateOff, auxOn,
 			bathingState, filterState, chlorState, pauseState,
 			frost, quiet, pvAllows,
+			outdoorTemp,
+			nextFrostMins,
 			mainPower, auxPower, powerVal,
 			displayPower, powerTooltip,
 			ph, chlor, salt, tds,
@@ -665,6 +677,8 @@ class PoolControllerCard extends HTMLElement {
 			
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
 			
+			.power-top { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); z-index: 2; }
+			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: rgba(255,255,255,0.9); border: 1px solid #e0e6ed; color: #4a5568; }
 			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
@@ -749,6 +763,8 @@ class PoolControllerCard extends HTMLElement {
 				/* Schmal: Dial-UI leicht kompakter, Marker weiterhin im Balken. */
 				.temp-current { font-size: 42px; }
 				.status-icons { top: 18%; gap: 10px; }
+				.power-top { top: 10%; }
+				.power-pill { font-size: 12px; padding: 3px 9px; }
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 58%; }
@@ -799,6 +815,9 @@ class PoolControllerCard extends HTMLElement {
 			<div class="dial-container">
 				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
+						<div class="power-top" ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''} ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
+							${d.displayPower !== null ? `<span class="power-pill">${d.displayPower}W</span>` : ""}
+						</div>
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
 						<svg class="ring-svg" viewBox="0 0 100 100">
 							<!-- Track: 270° Arc (Gap unten) -->
@@ -817,7 +836,7 @@ class PoolControllerCard extends HTMLElement {
 								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
 						</svg>
 						<div class="status-icons">
-							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}" ${d.frostEntityId ? `data-more-info="${d.frostEntityId}"` : ''}>
+							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}" ${(d.runReasonEntityId || d.frostEntityId) ? `data-more-info="${d.runReasonEntityId || d.frostEntityId}"` : ''}>
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
 							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
@@ -834,7 +853,7 @@ class PoolControllerCard extends HTMLElement {
 						<div class="temp-target-row">
 							<span class="temp-target-left" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
 							<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
-							<span class="temp-target-right" ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''} ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>${d.displayPower !== null ? `${d.displayPower}W` : ''}</span>
+							<span class="temp-target-right" ${d.outdoorTempEntityId ? `data-more-info="${d.outdoorTempEntityId}"` : ''}>${d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : ''}</span>
 						</div>
 						<div class="switch-icons-row">
 							<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
@@ -874,7 +893,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 					<div class="toggle"></div>
 				</div>
-				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null) ? `
+				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div style="display:flex; justify-content:space-between; align-items:center;">
 						<div style="font-weight:700;">${_t(lang, "ui.next_event")}</div>
@@ -884,6 +903,11 @@ class PoolControllerCard extends HTMLElement {
 					<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
 						<div style="font-weight:600;">${_t(lang, "ui.next_filter_cycle")}</div>
 						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${_t(lang, "ui.in_minutes", { mins: d.nextFilterMins })}</div>
+					</div>` : ''}
+					${(d.nextFrostMins != null && d.nextFrostMins > 0) ? `
+					<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+						<div style="font-weight:600;">${_t(lang, "ui.next_frost_cycle")}</div>
+						<div class="next-start-time" style="color:var(--secondary-text-color); font-weight:600;">${_t(lang, "ui.in_minutes", { mins: d.nextFrostMins })}</div>
 					</div>` : ''}
 					${d.nextEventStart ? `
 					<div class="event" style="margin-top:10px;">
@@ -1531,6 +1555,8 @@ class PoolControllerCard extends HTMLElement {
 		
 		const relevantEntities = [
 			this._config.climate_entity,
+			this._config.outdoor_temp_entity,
+			this._config.next_frost_mins_entity,
 			this._config.maintenance_entity,
 			this._config.heat_reason_entity,
 			this._config.run_reason_entity,
@@ -1713,6 +1739,8 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			outdoor_temp_entity: prefer('outdoor_temp_entity'),
+			next_frost_mins_entity: prefer('next_frost_mins_entity'),
 			sanitizer_mode_entity: prefer('sanitizer_mode_entity'),
 			main_switch_on_entity: prefer('main_switch_on_entity'),
 			pump_switch_on_entity: prefer('pump_switch_on_entity'),
@@ -1806,6 +1834,8 @@ class PoolControllerCard extends HTMLElement {
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			outdoor_temp_entity: this._pickEntity(entries, "sensor", ["outdoor_temp"]) || null,
+			next_frost_mins_entity: this._pickEntity(entries, "sensor", ["next_frost_mins"]) || null,
 			sanitizer_mode_entity: this._pickEntity(entries, "sensor", ["sanitizer_mode"]) || null,
 			// Physical switch states (mirrors)
 			main_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["main_switch_on"]) || null,
@@ -2015,6 +2045,8 @@ class PoolControllerCardEditor extends HTMLElement {
 			const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
+			outdoor_temp_entity: pick("sensor", "outdoor_temp") || this._config.outdoor_temp_entity,
+			next_frost_mins_entity: pick("sensor", "next_frost_mins") || this._config.next_frost_mins_entity,
 			sanitizer_mode_entity: pick("sensor", "sanitizer_mode") || this._config.sanitizer_mode_entity,
 			main_switch_on_entity: pick("binary_sensor", "main_switch_on") || this._config.main_switch_on_entity,
 			pump_switch_on_entity: pick("binary_sensor", "pump_switch_on") || this._config.pump_switch_on_entity,

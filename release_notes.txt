@@ -1,3 +1,9 @@
+## v1.5.45
+
+- Feature: Show outdoor temperature in the dial (auto-discovered).
+- Feature: Show “next frost protection run in …” countdown (auto-discovered).
+- UX: Move power display into a badge above the dial icons.
+
 ## v1.5.43
 
 - Bugfix: Countdown bis zum nächsten Kalender-Termin bleibt korrekt (kein "0" mehr nur wegen überlappender/ganztägiger Events).
