@@ -19,7 +19,7 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Status indicators: Frost protection, Quiet hours, PV surplus
 - Outdoor temperature display (when provided by the backend)
 - Next frost protection run countdown (when provided by the backend)
-- Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and power)
+- Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and outdoor temp)
 - Physical switch state row: shows if main/pump/aux switches are actually ON
 - Maintenance mode warning banner (disables automation incl. frost protection)
 - Sanitizer mode badge (chlorine / saltwater / mixed) when provided by the backend
