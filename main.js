@@ -24,8 +24,6 @@ const DEFAULTS = {
 	filter_max_mins: 120,
 	chlor_max_mins: 60,
 	pause_max_mins: 120,
-			// Frost-Timer: analog zu manual/auto_filter/pause
-			frost_timer_entity: this._pickEntity(entries, "sensor", ["frost_timer_mins"]) || null,
 		};
 
 // ========================================
@@ -2018,6 +2016,8 @@ class PoolControllerCard extends HTMLElement {
 			manual_timer_entity: this._pickEntity(entries, "sensor", ["manual_timer_mins"]) || null,
 			auto_filter_timer_entity: this._pickEntity(entries, "sensor", ["auto_filter_timer_mins"]) || null,
 			pause_timer_entity: this._pickEntity(entries, "sensor", ["pause_timer_mins"]) || null,
+            // Frost-Timer (analog zu den anderen Timern)
+            frost_timer_entity: this._pickEntity(entries, "sensor", ["frost_timer_mins"]) || null,
 
 			// Core / controls
 			climate_entity: this._pickEntity(entries, "climate", ["climate"]) || null,
