@@ -1,3 +1,7 @@
+## v1.5.53
+
+- UX: Heat-Reasons zeigen "Thermostat" sauber an (statt rohem Wert).
+
 ## v1.5.52
 
 - UX: Upcoming-Zeilen sind klickbar (More-Info für Next-Start/Filter/Frost).

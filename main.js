@@ -1,9 +1,9 @@
 /**
  * Pool Controller dashboard custom card (no iframe).
- * v1.5.52 - upcoming rows: more-info + smart countdown
+ * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.52";
+const VERSION = "1.5.53";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -1400,6 +1400,7 @@ class PoolControllerCard extends HTMLElement {
 				filter: "Filtern",
 				preheat: "Vorheizen (Kalender)",
 				pv: "PV-Überschuss",
+				thermostat: "Thermostat",
 			},
 			en: {
 				off: "Off",
@@ -1409,6 +1410,7 @@ class PoolControllerCard extends HTMLElement {
 				filter: "Filter",
 				preheat: "Preheat (calendar)",
 				pv: "PV surplus",
+				thermostat: "Thermostat",
 			},
 			es: {
 				off: "Apagado",
@@ -1418,6 +1420,7 @@ class PoolControllerCard extends HTMLElement {
 				filter: "Filtrar",
 				preheat: "Precalentar (calendario)",
 				pv: "Excedente FV",
+				thermostat: "Termostato",
 			},
 			fr: {
 				off: "Arrêt",
@@ -1427,6 +1430,7 @@ class PoolControllerCard extends HTMLElement {
 				filter: "Filtrer",
 				preheat: "Préchauffage (calendrier)",
 				pv: "Surplus PV",
+				thermostat: "Thermostat",
 			},
 		};
 		return labels?.[lang]?.[r] || r || null;
