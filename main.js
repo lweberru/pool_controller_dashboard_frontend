@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.53";
+const VERSION = "1.5.54";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -24,7 +24,9 @@ const DEFAULTS = {
 	filter_max_mins: 120,
 	chlor_max_mins: 60,
 	pause_max_mins: 120,
-};
+			// Frost-Timer: analog zu manual/auto_filter/pause
+			frost_timer_entity: this._pickEntity(entries, "sensor", ["frost_timer_mins"]) || null,
+		};
 
 // ========================================
 // i18n (keep dependency-free / single-file)
@@ -427,6 +429,7 @@ class PoolControllerCard extends HTMLElement {
 		let filterState;
 		let chlorState;
 		let pauseState;
+		let frostState;
 		if (hasNewTimerSensors) {
 			bathingState = this._manualTimerState(h, manualTimerEntity, "bathing");
 			chlorState = this._manualTimerState(h, manualTimerEntity, "chlorine");
@@ -434,11 +437,15 @@ class PoolControllerCard extends HTMLElement {
 			const autoFilterState = this._simpleTimerState(h, autoFilterTimerEntity);
 			filterState = (manualFilterState.active ? manualFilterState : autoFilterState);
 			pauseState = this._simpleTimerState(h, pauseTimerEntity);
+			// Frost-Timer analog zu anderen Timern
+			const frostTimerEntity = this._derivedEntities?.frost_timer_entity || this._config?.frost_timer_entity;
+			frostState = this._simpleTimerState(h, frostTimerEntity);
 		} else {
 			bathingState = this._modeState(h, c.bathing_entity, c.bathing_until, c.bathing_active_binary);
 			filterState = this._modeState(h, c.filter_entity, c.filter_until, c.next_filter_in);
 			chlorState = this._modeState(h, c.chlorine_entity, c.chlorine_until, c.chlorine_active_entity);
 			pauseState = this._modeState(h, c.pause_entity, c.pause_until, c.pause_active_entity);
+			frostState = { active: false, eta: null, duration_minutes: null };
 		}
 		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
@@ -576,18 +583,19 @@ class PoolControllerCard extends HTMLElement {
 		const filterEta = filterState.eta;
 		const chlorEta = chlorState.eta;
 		const pauseEta = pauseState.eta;
-		
+		const frostEta = frostState?.eta;
 		// Dauer: bevorzugt vom Timer-Sensor (duration_minutes), sonst ggf. alte Duration-Entities, sonst DEFAULTS.
 		const bathingMaxMins = this._num(bathingState.duration_minutes) ?? (c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null);
 		const filterMaxMins = this._num(filterState.duration_minutes) ?? (c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null);
 		const chlorMaxMins = this._num(chlorState.duration_minutes) ?? (c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null);
 		const pauseMaxMins = this._num(pauseState.duration_minutes) ?? (c.pause_duration_entity ? this._num(h.states[c.pause_duration_entity]?.state) : null);
-		
+		const frostMaxMins = this._num(frostState?.duration_minutes) ?? null;
 		// Progress = verbleibender Anteil
 		const bathingProgress = bathingEta != null ? this._clamp(bathingEta / (bathingMaxMins || bathingEta || c.bathing_max_mins), 0, 1) : 0;
 		const filterProgress = filterEta != null ? this._clamp(filterEta / (filterMaxMins || filterEta || c.filter_max_mins), 0, 1) : 0;
 		const chlorProgress = chlorEta != null ? this._clamp(chlorEta / (chlorMaxMins || chlorEta || c.chlor_max_mins), 0, 1) : 0;
 		const pauseProgress = pauseEta != null ? this._clamp(pauseEta / (pauseMaxMins || pauseEta || c.pause_max_mins), 0, 1) : 0;
+		const frostProgress = frostEta != null ? this._clamp(frostEta / (frostMaxMins || frostEta || 1), 0, 1) : 0;
 
 		const pillClass = maintenanceActive ? "active" : (bathingState.active || filterState.active || chlorState.active) ? "active" : pauseState.active ? "warn" : frost ? "on" : "";
 		const statusText = this._getStatusText(hvac, hvacAction, maintenanceActive, bathingState.active, filterState.active, chlorState.active, pauseState.active);
@@ -644,9 +652,10 @@ class PoolControllerCard extends HTMLElement {
 			effectiveMaxTemp: tc.max_temp,
 			effectiveStep: tc.step,
 			dialAngle, targetAngle,
-			bathingEta, filterEta, chlorEta, pauseEta,
-			bathingMaxMins, filterMaxMins, chlorMaxMins, pauseMaxMins,
-			bathingProgress, filterProgress, chlorProgress, pauseProgress,
+			bathingEta, filterEta, chlorEta, pauseEta, frostEta,
+			bathingMaxMins, filterMaxMins, chlorMaxMins, pauseMaxMins, frostMaxMins,
+			bathingProgress, filterProgress, chlorProgress, pauseProgress, frostProgress,
+			frostState,
 			pillClass, statusText
 		};
 	}
@@ -1563,6 +1572,13 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderDialTimer(d) {
 		const lang = _langFromHass(this._hass);
+		// Frostlauf hat höchste Priorität, wenn aktiv
+		if (d.frostState?.active && d.frostEta != null) {
+			return `<div class="dial-timer">
+				<div class="timer-bar"><div class="timer-fill" style="width: ${d.frostProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #5c4ac7);"></div></div>
+				<div class="timer-text">${_t(lang, "ui.frost")}: ${d.frostEta} min</div>
+			</div>`;
+		}
 		if (d.bathingState?.active && d.bathingEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div></div>
@@ -1708,6 +1724,10 @@ class PoolControllerCard extends HTMLElement {
 			this._config.manual_timer_entity,
 			this._config.auto_filter_timer_entity,
 			this._config.pause_timer_entity,
+			// Physische Schalter-Status-Entities explizit aufnehmen:
+			this._config.main_switch_on_entity,
+			this._config.pump_switch_on_entity,
+			this._config.aux_heating_switch_on_entity,
 			// Legacy timer model (backward compatible)
 			this._config.bathing_entity,
 			this._config.bathing_until,
