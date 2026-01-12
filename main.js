@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.56";
+const VERSION = "1.5.57";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
