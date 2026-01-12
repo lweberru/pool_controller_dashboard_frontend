@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.58";
+const VERSION = "1.5.59";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -1040,13 +1040,13 @@ class PoolControllerCard extends HTMLElement {
 					</button>
 				</div>
 				${showAuxSwitch ? `
-						<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}" title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}">
-						` : ''}
-					<div class="aux-switch-label">
-						<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
+					<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}" title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}">
+						<div class="aux-switch-label">
+							<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
+						</div>
+						<div class="toggle"></div>
 					</div>
-					<div class="toggle"></div>
-				${(c.aux_entity || c.aux_binary) ? `</div>` : ''}
+				` : ''}
 				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div class="next-rows">
