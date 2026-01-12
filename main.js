@@ -936,10 +936,16 @@ class PoolControllerCard extends HTMLElement {
 		// configured aux entity or aux-configured binary actually exists in hass.states.
 		const showAuxSwitch = (c.aux_entity && this._hass.states[c.aux_entity]) || (c.aux_binary && this._hass.states[c.aux_binary]);
 		// Use dynamic durations for tooltips / data-duration attributes (prefer backend-provided values)
-		const bathingDur = Number.isFinite(Number(d.bathingMaxMins)) ? Number(d.bathingMaxMins) : (Number.isFinite(Number(c.bathing_max_mins)) ? Number(c.bathing_max_mins) : 60);
-		const filterDur = Number.isFinite(Number(d.filterMaxMins)) ? Number(d.filterMaxMins) : (Number.isFinite(Number(c.filter_max_mins)) ? Number(c.filter_max_mins) : 30);
-		const chlorDur = Number.isFinite(Number(d.chlorMaxMins)) ? Number(d.chlorMaxMins) : (Number.isFinite(Number(c.chlor_max_mins)) ? Number(c.chlor_max_mins) : 5);
-		const pauseDur = Number.isFinite(Number(d.pauseMaxMins)) ? Number(d.pauseMaxMins) : (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60);
+		const _numPos = (v, fallback) => {
+			if (v == null) return fallback;
+			const n = Number(v);
+			if (!Number.isFinite(n) || n <= 0) return fallback;
+			return n;
+		};
+		const bathingDur = _numPos(d.bathingMaxMins, (Number.isFinite(Number(c.bathing_max_mins)) ? Number(c.bathing_max_mins) : 60));
+		const filterDur = _numPos(d.filterMaxMins, (Number.isFinite(Number(c.filter_max_mins)) ? Number(c.filter_max_mins) : 30));
+		const chlorDur = _numPos(d.chlorMaxMins, (Number.isFinite(Number(c.chlor_max_mins)) ? Number(c.chlor_max_mins) : 5));
+		const pauseDur = _numPos(d.pauseMaxMins, (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60));
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 44;
