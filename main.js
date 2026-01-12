@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.57";
+const VERSION = "1.5.58";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -932,9 +932,16 @@ class PoolControllerCard extends HTMLElement {
 	_renderLeftColumn(d, c) {
 		const lang = _langFromHass(this._hass);
 		const disabled = !!d.maintenanceActive;
-		// Compute runtime-visible aux availability: only show aux switch when the
-		// configured aux entity or aux-configured binary actually exists in hass.states.
-		const showAuxSwitch = (c.aux_entity && this._hass.states[c.aux_entity]) || (c.aux_binary && this._hass.states[c.aux_binary]);
+		// Compute runtime-visible aux availability:
+		// - If the backend provides a dedicated `aux_binary` sensor (preferred), only
+		//   show the UI when that sensor reports ON (this follows the integration option).
+		// - Fallback: if no aux_binary exists, show the aux controls when an aux_entity is configured.
+		const showAuxSwitch = (() => {
+			if (c.aux_binary && this._hass.states[c.aux_binary]) {
+				return this._isOn(this._hass.states[c.aux_binary]);
+			}
+			return (c.aux_entity && this._hass.states[c.aux_entity]);
+		})();
 		// Use dynamic durations for tooltips / data-duration attributes (prefer backend-provided values)
 		const _numPos = (v, fallback) => {
 			if (v == null) return fallback;
@@ -1007,9 +1014,9 @@ class PoolControllerCard extends HTMLElement {
 							<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:pump"></ha-icon>
 							</div>
-							<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
+							${showAuxSwitch ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:fire"></ha-icon>
-							</div>
+							</div>` : ''}
 						</div>
 					</div>
 					${this._renderDialTimer(d)}
