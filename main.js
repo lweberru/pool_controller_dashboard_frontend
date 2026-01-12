@@ -932,6 +932,14 @@ class PoolControllerCard extends HTMLElement {
 	_renderLeftColumn(d, c) {
 		const lang = _langFromHass(this._hass);
 		const disabled = !!d.maintenanceActive;
+		// Compute runtime-visible aux availability: only show aux switch when the
+		// configured aux entity or aux-configured binary actually exists in hass.states.
+		const showAuxSwitch = (c.aux_entity && this._hass.states[c.aux_entity]) || (c.aux_binary && this._hass.states[c.aux_binary]);
+		// Use dynamic durations for tooltips / data-duration attributes (prefer backend-provided values)
+		const bathingDur = Number.isFinite(Number(d.bathingMaxMins)) ? Number(d.bathingMaxMins) : (Number.isFinite(Number(c.bathing_max_mins)) ? Number(c.bathing_max_mins) : 60);
+		const filterDur = Number.isFinite(Number(d.filterMaxMins)) ? Number(d.filterMaxMins) : (Number.isFinite(Number(c.filter_max_mins)) ? Number(c.filter_max_mins) : 30);
+		const chlorDur = Number.isFinite(Number(d.chlorMaxMins)) ? Number(d.chlorMaxMins) : (Number.isFinite(Number(c.chlor_max_mins)) ? Number(c.chlor_max_mins) : 5);
+		const pauseDur = Number.isFinite(Number(d.pauseMaxMins)) ? Number(d.pauseMaxMins) : (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60);
 		const RING_CX = 50;
 		const RING_CY = 50;
 			const RING_R = 44;
@@ -1005,22 +1013,22 @@ class PoolControllerCard extends HTMLElement {
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="60" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active') : _t(lang, 'tooltips.bathing.inactive', { mins: 60 })}">
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${bathingDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active') : _t(lang, 'tooltips.bathing.inactive', { mins: bathingDur })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
-					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="30" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active') : _t(lang, 'tooltips.filter.inactive', { mins: 30 })}">
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="${filterDur}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active') : _t(lang, 'tooltips.filter.inactive', { mins: filterDur })}">
 						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
-					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="5" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active') : _t(lang, 'tooltips.chlorine.inactive', { mins: 5 })}">
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="${chlorDur}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active') : _t(lang, 'tooltips.chlorine.inactive', { mins: chlorDur })}">
 						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
-					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="60" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active') : _t(lang, 'tooltips.pause.inactive', { mins: 60 })}">
+					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="${pauseDur}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active') : _t(lang, 'tooltips.pause.inactive', { mins: pauseDur })}">
 						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
 				</div>
-				${(c.aux_entity || c.aux_binary) ? `
-				<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}" title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}">
-				` : ''}
+				${showAuxSwitch ? `
+						<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}" title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}">
+						` : ''}
 					<div class="aux-switch-label">
 						<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
 					</div>
