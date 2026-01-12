@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.54";
+const VERSION = "1.5.55";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -77,6 +77,13 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Baden", filter: "Filtern", chlorine: "Chloren", pause: "Pause", maintenance: "Wartung" },
+		tooltips: {
+			bathing: { inactive: "Manueller Badeevent für {mins} Minuten starten.", active: "Badeevent beenden." },
+			filter: { inactive: "Manuelle Filterung für {mins} Minuten starten.", active: "Filtervorgang vorzeitig beenden." },
+			chlorine: { inactive: "Manuelle Stoßchlorung für {mins} Minuten starten.", active: "Chlorvorgang vorzeitig beenden." },
+			pause: { inactive: "Poolaktivität für {mins} Minuten pausieren.", active: "Pause vorzeitig beenden." },
+			aux: { inactive: "Zusatzheizung bei Heiz-Bedarf ermöglichen.", active: "Zusatzheizung bei Heiz-Bedarf deaktivieren." },
+		},
 		status: { maintenance: "Wartung", pause: "Pause", bathing: "Baden", chlorine: "Chloren", filter: "Filtern", heating: "Heizt", off: "Aus" },
 		dial: {
 			bathing_left: "Baden: noch {mins} min",
@@ -138,6 +145,13 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Bathing", filter: "Filter", chlorine: "Chlorine", pause: "Pause", maintenance: "Maintenance" },
+		tooltips: {
+			bathing: { inactive: "Start manual bathing for {mins} minutes.", active: "Stop bathing." },
+			filter: { inactive: "Start manual filtering for {mins} minutes.", active: "Stop filtering early." },
+			chlorine: { inactive: "Start manual shock chlorination for {mins} minutes.", active: "Stop chlorine early." },
+			pause: { inactive: "Pause pool activity for {mins} minutes.", active: "End pause early." },
+			aux: { inactive: "Enable aux heater when heating is required.", active: "Disable aux heater when heating is required." },
+		},
 		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bathing", chlorine: "Chlorine", filter: "Filtering", heating: "Heating", off: "Off" },
 		dial: {
 			bathing_left: "Bathing: {mins} min left",
@@ -199,6 +213,13 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Baño", filter: "Filtrar", chlorine: "Cloro", pause: "Pausa", maintenance: "Mantenimiento" },
+		tooltips: {
+			bathing: { inactive: "Iniciar baño manual por {mins} minutos.", active: "Terminar baño." },
+			filter: { inactive: "Iniciar filtrado manual por {mins} minutos.", active: "Terminar filtrado anticipado." },
+			chlorine: { inactive: "Iniciar cloración de choque por {mins} minutos.", active: "Terminar cloración anticipada." },
+			pause: { inactive: "Pausar actividad de la piscina por {mins} minutos.", active: "Terminar pausa anticipada." },
+			aux: { inactive: "Permitir calentador auxiliar cuando se requiera calefacción.", active: "Desactivar calentador auxiliar cuando se requiera calefacción." },
+		},
 		status: { maintenance: "Mantenimiento", pause: "Pausa", bathing: "Baño", chlorine: "Cloro", filter: "Filtrar", heating: "Calentando", off: "Apagado" },
 		dial: {
 			bathing_left: "Baño: quedan {mins} min",
@@ -260,6 +281,13 @@ const I18N = {
 			minutes_short: "min",
 		},
 		actions: { bathing: "Bain", filter: "Filtrer", chlorine: "Chlore", pause: "Pause", maintenance: "Maintenance" },
+		tooltips: {
+			bathing: { inactive: "Démarrer bain manuel pendant {mins} minutes.", active: "Arrêter le bain." },
+			filter: { inactive: "Démarrer filtration manuelle pendant {mins} minutes.", active: "Arrêter la filtration prématurément." },
+			chlorine: { inactive: "Démarrer chloration choc pendant {mins} minutes.", active: "Arrêter la chloration prématurément." },
+			pause: { inactive: "Mettre en pause l'activité de la piscine pendant {mins} minutes.", active: "Terminer la pause prématurément." },
+			aux: { inactive: "Activer chauffage auxiliaire si besoin.", active: "Désactiver chauffage auxiliaire si besoin." },
+		},
 		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bain", chlorine: "Chlore", filter: "Filtrer", heating: "Chauffe", off: "Arrêt" },
 		dial: {
 			bathing_left: "Bain : {mins} min restantes",
@@ -774,7 +802,7 @@ class PoolControllerCard extends HTMLElement {
 			
 			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
 			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
+			.aux-switch.active { background: #27ae60; color: #fff; border-color: #27ae60; }
 			.aux-switch.disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 			.aux-switch.disabled:hover { box-shadow: none; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -782,7 +810,7 @@ class PoolControllerCard extends HTMLElement {
 			.toggle { width: 44px; height: 24px; background: #d0d7de; border-radius: 999px; position: relative; transition: background 200ms ease; }
 			.toggle::after { content: ""; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 200ms ease; }
 			.aux-switch.active .toggle { background: #fff; }
-			.aux-switch.active .toggle::after { left: 23px; background: #c0392b; }
+			.aux-switch.active .toggle::after { left: 23px; background: #27ae60; }
 			
 			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; }
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
@@ -977,25 +1005,27 @@ class PoolControllerCard extends HTMLElement {
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="60" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""}>
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="60" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active') : _t(lang, 'tooltips.bathing.inactive', { mins: 60 })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
-					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="30" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""}>
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="30" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active') : _t(lang, 'tooltips.filter.inactive', { mins: 30 })}">
 						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
-					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="5" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""}>
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="5" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active') : _t(lang, 'tooltips.chlorine.inactive', { mins: 5 })}">
 						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
-					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="60" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""}>
+					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="60" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active') : _t(lang, 'tooltips.pause.inactive', { mins: 60 })}">
 						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
 				</div>
-				<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}">
+				${(c.aux_entity || c.aux_binary) ? `
+				<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}" title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}">
+				` : ''}
 					<div class="aux-switch-label">
 						<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
 					</div>
 					<div class="toggle"></div>
-				</div>
+				${(c.aux_entity || c.aux_binary) ? `</div>` : ''}
 				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div class="next-rows">
@@ -2022,6 +2052,8 @@ class PoolControllerCard extends HTMLElement {
 			// Core / controls
 			climate_entity: this._pickEntity(entries, "climate", ["climate"]) || null,
 			aux_entity: this._pickEntity(entries, "switch", ["aux"]) || null,
+			// Binary sensor indicating an aux heater is configured (picked by unique_id suffix)
+			aux_binary: this._pickEntity(entries, "binary_sensor", ["aux_present", "aux_configured", "aux"]) || null,
 			bathing_entity: this._pickEntity(entries, "switch", ["bathing"]) || null,
 			bathing_start: this._pickEntity(entries, "button", ["bath_60", "bath_30"]) || null,
 			bathing_stop: this._pickEntity(entries, "button", ["bath_stop"]) || null,
@@ -2225,6 +2257,8 @@ class PoolControllerCardEditor extends HTMLElement {
 			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
 			pause_timer_entity: pick("sensor", "pause_timer_mins") || this._config.pause_timer_entity,
 			aux_entity: pick("switch", "aux") || this._config.aux_entity,
+			// Binary sensor indicating aux presence (aux_present / aux_configured)
+			aux_binary: pick("binary_sensor", "aux_present") || pick("binary_sensor", "aux_configured") || pick("binary_sensor", "aux") || this._config.aux_binary,
 			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
 			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
 			bathing_stop: pick("button", "bath_stop") || this._config.bathing_stop,
