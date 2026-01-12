@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.55";
+const VERSION = "1.5.56";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -942,8 +942,8 @@ class PoolControllerCard extends HTMLElement {
 		const pauseDur = Number.isFinite(Number(d.pauseMaxMins)) ? Number(d.pauseMaxMins) : (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60);
 		const RING_CX = 50;
 		const RING_CY = 50;
-			const RING_R = 44;
-			const DOT_R = RING_R;
+		const RING_R = 44;
+		const DOT_R = RING_R;
 		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
 		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
 		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
