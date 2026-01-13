@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.4";
+const VERSION = "2.0.5";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -287,11 +287,7 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${headerTitle}</div>
-				<div class="header-actions">
-					<button class="action-btn maintenance ${data.maintenanceActive ? "active" : ""}" data-action="maintenance-toggle" title="${_t(lang, "actions.maintenance")}">
-						<ha-icon icon="mdi:tools"></ha-icon><span>${_t(lang, "actions.maintenance")}</span>
-					</button>
-				</div>
+				<div class="header-actions"></div>
 			</div>
 			${data.maintenanceActive ? `
 			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
@@ -1065,7 +1061,12 @@ class PoolControllerCard extends HTMLElement {
 		if (items.length === 0) items.push(`<div class="maintenance-item"><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.maintenance")}</div><div class="maintenance-value">${_t(lang, "ui.no_actions_needed") || '—'}</div></div></div>`);
 
 		return `<div class="maintenance-block">
-			<div class="section-title">${_t(lang, "ui.maintenance")}</div>
+			<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+				<div class="section-title">${_t(lang, "ui.maintenance")}</div>
+				<button class="action-btn maintenance ${d.maintenanceActive ? "active" : ""}" data-action="maintenance-toggle" title="${_t(lang, "actions.maintenance")}">
+					<ha-icon icon="mdi:tools"></ha-icon><span>${_t(lang, "actions.maintenance")}</span>
+				</button>
+			</div>
 			<div class="maintenance-items">${items.join('')}</div>
 		</div>`;
 	}
