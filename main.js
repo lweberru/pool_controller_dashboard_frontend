@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.2";
+const VERSION = "2.0.3";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1039,6 +1039,7 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_renderCalendarBlock(d, c) {
+        const lang = _langFromHass(this._hass);
 		const nextStart = d.nextStartMins;
 		const nextFilter = d.nextFilterMins;
 		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
@@ -1051,6 +1052,7 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_renderMaintenanceBlock(d, c) {
+        const lang = _langFromHass(this._hass);
 		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
 			? (d.saltAddNum >= 1000 ? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)` : `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
