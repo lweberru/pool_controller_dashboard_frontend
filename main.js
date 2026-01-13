@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.1";
+const VERSION = "2.0.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -625,7 +625,7 @@ class PoolControllerCard extends HTMLElement {
 			@container (min-width: 850px) {
 				.content-grid { grid-template-columns: 1.35fr 0.65fr; gap: 24px; }
 				.dial { max-width: 380px; }
-				.right-column { max-width: 520px; justify-self: end; }
+				/* right-column removed: layout now single-column or controlled by content-grid */
 			}
 			
 			.dial-container { display: grid; place-items: center; }
@@ -673,7 +673,7 @@ class PoolControllerCard extends HTMLElement {
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
 
-			.right-column { width: 100%; }
+			/* right-column styles removed (no dedicated right column in markup) */
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
 			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -821,7 +821,11 @@ class PoolControllerCard extends HTMLElement {
 		}
 	}
 
-	_renderLeftColumn(d, c) {
+	// ========================================
+	// Block Renderers (single-block mode)
+	// ========================================
+
+	_renderControllerBlock(d, c, lang) {
 		const lang = _langFromHass(this._hass);
 		const disabled = !!d.maintenanceActive;
 		// Compute runtime-visible aux availability:
@@ -863,8 +867,7 @@ class PoolControllerCard extends HTMLElement {
 		// SVG-Winkel (Screen-Koordinaten): 0°=3 Uhr, 90°=6 Uhr.
 		// Gap unten (zentriert bei 90°): Gap 45°..135° => Arc Start 135°, Sweep 270° bis 45°.
 		const RING_START_DEG = 135;
-		return `<div class="left-column">
-			<div class="dial-container">
+		return `<div class="dial-container">
 				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
 						<div class="power-top" ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''} ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
@@ -947,42 +950,10 @@ class PoolControllerCard extends HTMLElement {
 						<div class="toggle"></div>
 					</div>
 				` : ''}
-				${(c.content !== 'controller' && (d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null)) ? `
-				<div class="calendar" style="margin-top:12px;">
-					<div class="next-rows">
-						<div class="next-row" ${d.nextStartMinsEntityId ? `data-more-info="${d.nextStartMinsEntityId}"` : (d.nextEventEntityId ? `data-more-info="${d.nextEventEntityId}"` : '')} title="${(this._formatCountdown(lang, d.nextStartMins).title || "").replaceAll('"','&quot;')}">
-							<div class="next-row-title">${_t(lang, "ui.next_event")}</div>
-							<div class="next-row-value">${d.nextStartMins != null ? this._formatCountdown(lang, d.nextStartMins).text : ''}</div>
-						</div>
-						${d.nextFilterMins != null ? `
-						<div class="next-row" ${d.nextFilterMinsEntityId ? `data-more-info="${d.nextFilterMinsEntityId}"` : ''} title="${(this._formatCountdown(lang, d.nextFilterMins).title || "").replaceAll('"','&quot;')}">
-							<div class="next-row-title">${_t(lang, "ui.next_filter_cycle")}</div>
-							<div class="next-row-value">${this._formatCountdown(lang, d.nextFilterMins).text}</div>
-						</div>` : ''}
-						${(d.nextFrostMins != null && d.nextFrostMins > 0) ? `
-						<div class="next-row" ${d.nextFrostMinsEntityId ? `data-more-info="${d.nextFrostMinsEntityId}"` : ''} title="${(this._formatCountdown(lang, d.nextFrostMins).title || "").replaceAll('"','&quot;')}">
-							<div class="next-row-title">${_t(lang, "ui.next_frost_cycle")}</div>
-							<div class="next-row-value">${this._formatCountdown(lang, d.nextFrostMins).text}</div>
-						</div>` : ''}
-					</div>
-					${d.nextEventStart ? `
-					<div class="event" style="margin-top:10px;">
-						<div style="flex: 1;">
-							<div class="event-title">${d.nextEventSummary || _t(lang, "ui.scheduled_start")}</div>
-							<div class="event-time" style="margin-top: 4px;">
-								${this._formatEventTime(d.nextEventStart, d.nextEventEnd)}
-							</div>
-						</div>
-					</div>` : ''}
-				</div>` : ''}
-				</div>
-		</div>`;
+			</div>`;
 	}
 
-	// ========================================
-	// MODULAR: Rechte Spalte (Qualität + Wartung)
-	// ========================================
-	_renderRightColumn(d, c) {
+	_renderWaterqualityBlock(d, c, lang) {
 		const lang = _langFromHass(this._hass);
 		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
 			? (d.saltAddNum >= 1000
@@ -1000,8 +971,7 @@ class PoolControllerCard extends HTMLElement {
 		const showMixedHint = isMixed && chlorLow && !saltAddNeeded;
 		// Safety: never show manual chlorine dosing recommendation in pure saltwater mode.
 		const showChlorDose = (d.chlorDoseNum != null && d.chlorDoseNum > 0) && !isSaltwater;
-		return `<div class="right-column">
-			<div class="quality">
+		return `<div class="quality">
 				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
 				${d.sanitizerModeLabel ? `<div class="info-badge" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
@@ -1065,87 +1035,7 @@ class PoolControllerCard extends HTMLElement {
 						<span>0</span><span>500</span><span>1000</span><span>1500</span><span>2000</span>
 					</div>
 				</div>` : ""}
-			</div>
-			
-			${(d.phPlusNum && d.phPlusNum > 0) || (d.phMinusNum && d.phMinusNum > 0) || showChlorDose || (saltAddDisplay) || showSaltwaterHint || showMixedHint || (d.waterChangePercent && d.waterChangePercent > 0) || (d.waterChangeLiters && d.waterChangeLiters > 0) ? `
-			<div class="maintenance">
-				<div class="section-title">${_t(lang, "ui.maintenance")}</div>
-				<div class="maintenance-items">
-					${d.phPlusNum && d.phPlusNum > 0 ? `
-					<div class="maintenance-item">
-						<ha-icon icon="mdi:ph"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div>
-							<div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div>
-						</div>
-					</div>` : ""}
-					${showSaltwaterHint ? `
-					<div class="maintenance-item" ${(d.chlorEntityId || d.sanitizerModeEntityId) ? `data-more-info="${d.chlorEntityId || d.sanitizerModeEntityId}"` : ''}>
-						<ha-icon icon="mdi:sync"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.low_chlorine")}</div>
-							<div class="maintenance-value">${_t(lang, "ui.saltwater_chlor_hint")}</div>
-						</div>
-					</div>` : ""}
-					${showMixedHint ? `
-					<div class="maintenance-item" ${(d.chlorEntityId || d.sanitizerModeEntityId) ? `data-more-info="${d.chlorEntityId || d.sanitizerModeEntityId}"` : ''}>
-						<ha-icon icon="mdi:sync-alert"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.low_chlorine")}</div>
-							<div class="maintenance-value">${_t(lang, "ui.mixed_chlor_hint")}</div>
-						</div>
-					</div>` : ""}
-					${saltAddDisplay ? `
-					<div class="maintenance-item" ${d.saltAddEntityId ? `data-more-info="${d.saltAddEntityId}"` : ''}>
-						<ha-icon icon="mdi:shaker"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.add_salt")}</div>
-							<div class="maintenance-value">${saltAddDisplay}</div>
-						</div>
-					</div>` : ""}
-					${d.waterChangePercent && d.waterChangePercent > 0 ? `
-					<div class="maintenance-item">
-						<ha-icon icon="mdi:water"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.change_water")}</div>
-							<div class="maintenance-value">${d.waterChangePercent}%${d.waterChangeLiters ? ` — ${d.waterChangeLiters} L` : ''}</div>
-						</div>
-					</div>` : ""}
-					${d.phMinusNum && d.phMinusNum > 0 ? `
-					<div class="maintenance-item">
-						<ha-icon icon="mdi:ph"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.add_ph_minus")}</div>
-							<div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div>
-						</div>
-					</div>` : ""}
-					${showChlorDose ? `
-					<div class="maintenance-item">
-						<ha-icon icon="mdi:beaker"></ha-icon>
-						<div class="maintenance-text">
-							<div class="maintenance-label">${_t(lang, "ui.add_chlorine")}</div>
-							<div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div>
-						</div>
-					</div>` : ""}
-				</div>
-			</div>` : ""}
-			
-
 		</div>`;
-	}
-
-	// ========================================
-	// Block Renderers (single-block mode)
-	// ========================================
-
-	_renderControllerBlock(d, c, lang) {
-		// Reuse left-column (dial + controls) as controller block
-		return `<div class="controller-block">${this._renderLeftColumn(d, c)}</div>`;
-	}
-
-	_renderWaterqualityBlock(d, c, lang) {
-		// Reuse right-column (quality + maintenance items) as waterquality block
-		return `<div class="waterquality-block">${this._renderRightColumn(d, c)}</div>`;
 	}
 
 	_renderCalendarBlock(d, c, lang) {
