@@ -947,7 +947,7 @@ class PoolControllerCard extends HTMLElement {
 						<div class="toggle"></div>
 					</div>
 				` : ''}
-				${(d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null) ? `
+				${(c.content !== 'controller' && (d.nextEventStart || d.nextStartMins != null || d.nextFilterMins != null || d.nextFrostMins != null)) ? `
 				<div class="calendar" style="margin-top:12px;">
 					<div class="next-rows">
 						<div class="next-row" ${d.nextStartMinsEntityId ? `data-more-info="${d.nextStartMinsEntityId}"` : (d.nextEventEntityId ? `data-more-info="${d.nextEventEntityId}"` : '')} title="${(this._formatCountdown(lang, d.nextStartMins).title || "").replaceAll('"','&quot;')}">
