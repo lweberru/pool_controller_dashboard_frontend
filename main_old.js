@@ -1,19 +1,335 @@
 /**
- * Pool Controller - simplified modular Lovelace card
- * - Single-file HACS frontend plugin
- * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
+ * Pool Controller dashboard custom card (no iframe).
+ * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "2.0.0";
-try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
+const VERSION = "1.5.60";
+try {
+	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
+	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
+} catch (_e) {
+	// ignore
+}
 
 const CARD_TYPE = "pc-pool-controller";
-const DEFAULTS = { content: "controller" };
+const DEFAULTS = {
+	min_temp: 10,
+	max_temp: 40,
+	step: 0.5,
+	chlor_ok_min: 650,
+	chlor_ok_max: 850,
+	pv_on: 1000,
+	pv_off: 500,
+	bathing_max_mins: 60, // Default aus Backend
+	filter_max_mins: 30,  // Default aus Backend
+	chlor_max_mins: 5,    // Default aus Backend
+	pause_max_mins: 120,
+	};
 
-const I18N = { de: { ui: { controller_title: "Steuerung", calendar_title: "Kalender", waterquality_title: "Wasserqualität", maintenance_title: "Wartungsarbeiten", select_content: "Angezeigter Inhalt" } } };
+// ========================================
+// i18n (keep dependency-free / single-file)
+// ========================================
+const SUPPORTED_LANGS = ["de", "en", "es", "fr"];
 
-function _langFromHass(hass) { return (hass?.language || hass?.locale?.language || 'de').split('-')[0]; }
-function _t(lang, key) { const dict = I18N[lang] || I18N.de; const parts = key.split('.'); let cur = dict; for (const p of parts) cur = cur?.[p]; return (typeof cur === 'string') ? cur : key; }
+const I18N = {
+	de: {
+		errors: {
+			required_climate: "climate_entity ist erforderlich",
+			low_chlorine: "Chlor zu niedrig",
+			saltwater_chlor_hint: "Salzumwandlung prüfen (Zelle/Schalter/Laufzeit).",
+			mixed_chlor_hint: "Salzumwandlung prüfen oder Chlor dosieren.",
+			entity_not_found: "Entity {entity} nicht gefunden",
+		},
+		ui: {
+			frost: "Frostschutz",
+			quiet: "Ruhezeit",
+			pv: "PV-Überschuss",
+			main_switch: "Hauptschalter",
+			pump_switch: "Pumpe",
+			aux_heater_switch: "Zusatzheizung",
+			additional_heater: "Zusatzheizung",
+			next_event: "Nächster Start",
+			next_filter_cycle: "Nächster Filter-Zyklus",
+			next_frost_cycle: "Nächster Frostschutz",
+			in_short: "in",
+			now_short: "jetzt",
+			days_short: "T",
+			hours_short: "Std",
+			in_minutes: "in {mins} Minuten",
+			scheduled_start: "Geplanter Start",
+			water_quality: "Wasserqualität",
+			sanitizer: "Desinfektion",
+			sanitizer_chlorine: "Chlor",
+			sanitizer_saltwater: "Salzwasser",
+			sanitizer_mixed: "Mischbetrieb",
+			maintenance: "⚠️ Wartungsarbeiten",
+			maintenance_mode_title: "Wartung aktiv",
+			maintenance_mode_text: "Automatik, Filter, PV und Frostschutz sind deaktiviert.",
+			ph: "pH-Wert",
+			chlorine: "Chlor",
+			salt: "Salzgehalt",
+			tds: "TDS",
+			add_ph_plus: "pH+ hinzufügen",
+			add_ph_minus: "pH- hinzufügen",
+			add_chlorine: "Chlor hinzufügen",
+			add_salt: "Salz hinzufügen",
+			change_water: "Wasser wechseln",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Baden", filter: "Filtern", chlorine: "Chloren", pause: "Pause", maintenance: "Wartung" },
+		tooltips: {
+			bathing: { inactive: "Manueller Badeevent für {mins} Minuten starten.", active: "Badeevent beenden." },
+			filter: { inactive: "Manuelle Filterung für {mins} Minuten starten.", active: "Filtervorgang vorzeitig beenden." },
+			chlorine: { inactive: "Manuelle Stoßchlorung für {mins} Minuten starten.", active: "Chlorvorgang vorzeitig beenden." },
+			pause: { inactive: "Poolaktivität für {mins} Minuten pausieren.", active: "Pause vorzeitig beenden." },
+			aux: { inactive: "Zusatzheizung bei Heiz-Bedarf ermöglichen.", active: "Zusatzheizung bei Heiz-Bedarf deaktivieren." },
+		},
+		status: { maintenance: "Wartung", pause: "Pause", bathing: "Baden", chlorine: "Chloren", filter: "Filtern", heating: "Heizt", off: "Aus" },
+		dial: {
+			bathing_left: "Baden: noch {mins} min",
+			filter_left: "Filtern: noch {mins} min",
+			chlorine_left: "Chloren: noch {mins} min",
+			chlorine_active: "Chloren aktiv",
+			pause_left: "Pause: noch {mins} min",
+		},
+		editor: {
+			select_controller: "Pool Controller auswählen",
+			please_choose: "Bitte wählen...",
+			temp_min: "Temperatur-Minimum",
+			temp_max: "Temperatur-Maximum",
+			step: "Schrittweite",
+		},
+	},
+	en: {
+		errors: {
+			required_climate: "climate_entity is required",
+			low_chlorine: "Chlorine too low",
+			saltwater_chlor_hint: "Check chlorinator/salt conversion (cell/switch/runtime).",
+			mixed_chlor_hint: "Check salt conversion or dose chlorine.",
+			entity_not_found: "Entity {entity} not found",
+		},
+		ui: {
+			frost: "Frost protection",
+			quiet: "Quiet hours",
+			pv: "PV surplus",
+			main_switch: "Main power",
+			pump_switch: "Pump",
+			aux_heater_switch: "Aux heater",
+			additional_heater: "Additional heater",
+			next_event: "Next start",
+			next_filter_cycle: "Next filter cycle",
+			next_frost_cycle: "Next frost protection",
+			in_short: "in",
+			now_short: "now",
+			days_short: "d",
+			hours_short: "h",
+			in_minutes: "in {mins} minutes",
+			scheduled_start: "Scheduled start",
+			water_quality: "Water quality",
+			sanitizer: "Sanitizer",
+			sanitizer_chlorine: "Chlorine",
+			sanitizer_saltwater: "Saltwater",
+			sanitizer_mixed: "Mixed",
+			maintenance: "⚠️ Maintenance",
+			maintenance_mode_title: "Maintenance active",
+			maintenance_mode_text: "Automation, filter, PV and frost protection are disabled.",
+			ph: "pH",
+			chlorine: "Chlorine",
+			salt: "Salt",
+			tds: "TDS",
+			add_ph_plus: "Add pH+",
+			add_ph_minus: "Add pH-",
+			add_chlorine: "Add chlorine",
+			add_salt: "Add salt",
+			change_water: "Change water",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Bathing", filter: "Filter", chlorine: "Chlorine", pause: "Pause", maintenance: "Maintenance" },
+		tooltips: {
+			bathing: { inactive: "Start manual bathing for {mins} minutes.", active: "Stop bathing." },
+			filter: { inactive: "Start manual filtering for {mins} minutes.", active: "Stop filtering early." },
+			chlorine: { inactive: "Start manual shock chlorination for {mins} minutes.", active: "Stop chlorine early." },
+			pause: { inactive: "Pause pool activity for {mins} minutes.", active: "End pause early." },
+			aux: { inactive: "Enable aux heater when heating is required.", active: "Disable aux heater when heating is required." },
+		},
+		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bathing", chlorine: "Chlorine", filter: "Filtering", heating: "Heating", off: "Off" },
+		dial: {
+			bathing_left: "Bathing: {mins} min left",
+			filter_left: "Filtering: {mins} min left",
+			chlorine_left: "Chlorine: {mins} min left",
+			chlorine_active: "Chlorine active",
+			pause_left: "Pause: {mins} min left",
+		},
+		editor: {
+			select_controller: "Select Pool Controller",
+			please_choose: "Please choose...",
+			temp_min: "Temperature minimum",
+			temp_max: "Temperature maximum",
+			step: "Step",
+		},
+	},
+	es: {
+		errors: {
+			required_climate: "climate_entity es obligatorio",
+			low_chlorine: "Cloro demasiado bajo",
+			saltwater_chlor_hint: "Revisa el clorador/la conversión de sal (celda/interruptor/tiempo).",
+			mixed_chlor_hint: "Revisa la conversión de sal o añade cloro.",
+			entity_not_found: "Entidad {entity} no encontrada",
+		},
+		ui: {
+			frost: "Protección contra heladas",
+			quiet: "Horas silenciosas",
+			pv: "Excedente FV",
+			main_switch: "Alimentación",
+			pump_switch: "Bomba",
+			aux_heater_switch: "Calentador auxiliar",
+			additional_heater: "Calentador auxiliar",
+			next_event: "Próximo inicio",
+			next_filter_cycle: "Próximo ciclo de filtración",
+			next_frost_cycle: "Próxima protección contra heladas",
+			in_short: "en",
+			now_short: "ahora",
+			days_short: "d",
+			hours_short: "h",
+			in_minutes: "en {mins} minutos",
+			scheduled_start: "Inicio programado",
+			water_quality: "Calidad del agua",
+			sanitizer: "Desinfección",
+			sanitizer_chlorine: "Cloro",
+			sanitizer_saltwater: "Agua salada",
+			sanitizer_mixed: "Mixto",
+			maintenance: "⚠️ Mantenimiento",
+			maintenance_mode_title: "Mantenimiento activo",
+			maintenance_mode_text: "La automatización, filtrado, FV y protección contra heladas están desactivados.",
+			ph: "pH",
+			chlorine: "Cloro",
+			salt: "Sal",
+			tds: "TDS",
+			add_ph_plus: "Añadir pH+",
+			add_ph_minus: "Añadir pH-",
+			add_chlorine: "Añadir cloro",
+			add_salt: "Añadir sal",
+			change_water: "Cambiar agua",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Baño", filter: "Filtrar", chlorine: "Cloro", pause: "Pausa", maintenance: "Mantenimiento" },
+		tooltips: {
+			bathing: { inactive: "Iniciar baño manual por {mins} minutos.", active: "Terminar baño." },
+			filter: { inactive: "Iniciar filtrado manual por {mins} minutos.", active: "Terminar filtrado anticipado." },
+			chlorine: { inactive: "Iniciar cloración de choque por {mins} minutos.", active: "Terminar cloración anticipada." },
+			pause: { inactive: "Pausar actividad de la piscina por {mins} minutos.", active: "Terminar pausa anticipada." },
+			aux: { inactive: "Permitir calentador auxiliar cuando se requiera calefacción.", active: "Desactivar calentador auxiliar cuando se requiera calefacción." },
+		},
+		status: { maintenance: "Mantenimiento", pause: "Pausa", bathing: "Baño", chlorine: "Cloro", filter: "Filtrar", heating: "Calentando", off: "Apagado" },
+		dial: {
+			bathing_left: "Baño: quedan {mins} min",
+			filter_left: "Filtrar: quedan {mins} min",
+			chlorine_left: "Cloro: quedan {mins} min",
+			chlorine_active: "Cloro activo",
+			pause_left: "Pausa: quedan {mins} min",
+		},
+		editor: {
+			select_controller: "Seleccionar Pool Controller",
+			please_choose: "Por favor elige...",
+			temp_min: "Temperatura mínima",
+			temp_max: "Temperatura máxima",
+			step: "Paso",
+		},
+	},
+	fr: {
+		errors: {
+			required_climate: "climate_entity est requis",
+			low_chlorine: "Chlore trop bas",
+			saltwater_chlor_hint: "Vérifiez le chlorinateur/la conversion sel (cellule/interrupteur/durée).",
+			mixed_chlor_hint: "Vérifiez la conversion sel ou dosez du chlore.",
+			entity_not_found: "Entité {entity} introuvable",
+		},
+		ui: {
+			frost: "Protection antigel",
+			quiet: "Heures calmes",
+			pv: "Surplus PV",
+			main_switch: "Alimentation",
+			pump_switch: "Pompe",
+			aux_heater_switch: "Chauffage auxiliaire",
+			additional_heater: "Chauffage auxiliaire",
+			next_event: "Prochain démarrage",
+			next_filter_cycle: "Prochain cycle de filtration",
+			next_frost_cycle: "Prochaine protection antigel",
+			in_short: "dans",
+			now_short: "maintenant",
+			days_short: "j",
+			hours_short: "h",
+			in_minutes: "dans {mins} minutes",
+			scheduled_start: "Démarrage planifié",
+			water_quality: "Qualité de l'eau",
+			sanitizer: "Désinfection",
+			sanitizer_chlorine: "Chlore",
+			sanitizer_saltwater: "Eau salée",
+			sanitizer_mixed: "Mixte",
+			maintenance: "⚠️ Entretien",
+			maintenance_mode_title: "Maintenance active",
+			maintenance_mode_text: "L'automatisation, la filtration, le PV et la protection antigel sont désactivés.",
+			ph: "pH",
+			chlorine: "Chlore",
+			salt: "Sel",
+			tds: "TDS",
+			add_ph_plus: "Ajouter pH+",
+			add_ph_minus: "Ajouter pH-",
+			add_chlorine: "Ajouter du chlore",
+			add_salt: "Ajouter du sel",
+			change_water: "Changer l'eau",
+			minutes_short: "min",
+		},
+		actions: { bathing: "Bain", filter: "Filtrer", chlorine: "Chlore", pause: "Pause", maintenance: "Maintenance" },
+		tooltips: {
+			bathing: { inactive: "Démarrer bain manuel pendant {mins} minutes.", active: "Arrêter le bain." },
+			filter: { inactive: "Démarrer filtration manuelle pendant {mins} minutes.", active: "Arrêter la filtration prématurément." },
+			chlorine: { inactive: "Démarrer chloration choc pendant {mins} minutes.", active: "Arrêter la chloration prématurément." },
+			pause: { inactive: "Mettre en pause l'activité de la piscine pendant {mins} minutes.", active: "Terminer la pause prématurément." },
+			aux: { inactive: "Activer chauffage auxiliaire si besoin.", active: "Désactiver chauffage auxiliaire si besoin." },
+		},
+		status: { maintenance: "Maintenance", pause: "Pause", bathing: "Bain", chlorine: "Chlore", filter: "Filtrer", heating: "Chauffe", off: "Arrêt" },
+		dial: {
+			bathing_left: "Bain : {mins} min restantes",
+			filter_left: "Filtrer : {mins} min restantes",
+			chlorine_left: "Chlore : {mins} min restantes",
+			chlorine_active: "Chlore actif",
+			pause_left: "Pause : {mins} min restantes",
+		},
+		editor: {
+			select_controller: "Sélectionner Pool Controller",
+			please_choose: "Veuillez choisir...",
+			temp_min: "Température minimum",
+			temp_max: "Température maximum",
+			step: "Pas",
+		},
+	},
+};
+
+function _normalizeLang(lang) {
+	const raw = String(lang || "").trim();
+	if (!raw) return "de";
+	const base = raw.toLowerCase().split("-")[0];
+	return SUPPORTED_LANGS.includes(base) ? base : "de";
+}
+
+function _langFromHass(hass) {
+	return _normalizeLang(hass?.language || hass?.locale?.language);
+}
+
+function _t(lang, key, vars = {}) {
+	const dict = I18N[lang] || I18N.de;
+	const parts = String(key).split(".");
+	let cur = dict;
+	for (const p of parts) {
+		cur = cur?.[p];
+	}
+	let str = (typeof cur === "string") ? cur : key;
+	for (const [k, v] of Object.entries(vars || {})) {
+		str = str.replaceAll(`{${k}}`, String(v));
+	}
+	return str;
+}
 
 class PoolControllerCard extends HTMLElement {
 	setConfig(config) {
@@ -71,38 +387,11 @@ class PoolControllerCard extends HTMLElement {
 		this._renderData = data;
 
 		// Komplettes Rendering
-		// Determine selected content block and title (append pool friendly name)
-		const content = (c.content || DEFAULTS.content).toString().trim();
-		const poolName = climate.attributes?.friendly_name || "";
-		const titles = {
-			controller: _t(lang, "ui.controller_title"),
-			calendar: _t(lang, "ui.calendar_title"),
-			waterquality: _t(lang, "ui.waterquality_title"),
-			maintenance: _t(lang, "ui.maintenance_title"),
-		};
-		const headerTitle = c.title || ((titles[content] || "Pool Controller") + (poolName ? ` — ${poolName}` : ""));
-
-		let blockHtml = "";
-		switch (content) {
-			case "calendar":
-				blockHtml = this._renderCalendarBlock(data, effectiveConfig, lang);
-				break;
-			case "waterquality":
-				blockHtml = this._renderWaterqualityBlock(data, effectiveConfig, lang);
-				break;
-			case "maintenance":
-				blockHtml = this._renderMaintenanceBlock(data, effectiveConfig, lang);
-				break;
-			case "controller":
-			default:
-				blockHtml = this._renderControllerBlock(data, effectiveConfig, lang);
-		}
-
 		this.shadowRoot.innerHTML = `
 		${this._getStyles()}
 		<ha-card>
 			<div class="header">
-				<div class="title">${headerTitle}</div>
+				<div class="title">${c.title || climate.attributes.friendly_name || "Pool Controller"}</div>
 				<div class="header-actions">
 					<button class="action-btn maintenance ${data.maintenanceActive ? "active" : ""}" data-action="maintenance-toggle" title="${_t(lang, "actions.maintenance")}">
 						<ha-icon icon="mdi:tools"></ha-icon><span>${_t(lang, "actions.maintenance")}</span>
@@ -114,8 +403,11 @@ class PoolControllerCard extends HTMLElement {
 				<div class="maintenance-mode-title">${_t(lang, "ui.maintenance_mode_title")}</div>
 				<div class="maintenance-mode-text">${_t(lang, "ui.maintenance_mode_text")}</div>
 			</div>` : ""}
-
-			<div class="block">${blockHtml}</div>
+			
+			<div class="content-grid">
+				${this._renderLeftColumn(data, effectiveConfig)}
+				${this._renderRightColumn(data, effectiveConfig)}
+			</div>
 		</ha-card>`;
 
 		this._attachHandlers();
@@ -947,50 +1239,6 @@ class PoolControllerCard extends HTMLElement {
 			</div>` : ""}
 			
 
-		</div>`;
-	}
-
-	// ========================================
-	// Block Renderers (single-block mode)
-	// ========================================
-
-	_renderControllerBlock(d, c, lang) {
-		// Reuse left-column (dial + controls) as controller block
-		return `<div class="controller-block">${this._renderLeftColumn(d, c)}</div>`;
-	}
-
-	_renderWaterqualityBlock(d, c, lang) {
-		// Reuse right-column (quality + maintenance items) as waterquality block
-		return `<div class="waterquality-block">${this._renderRightColumn(d, c)}</div>`;
-	}
-
-	_renderCalendarBlock(d, c, lang) {
-		const nextStart = d.nextStartMins;
-		const nextFilter = d.nextFilterMins;
-		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
-		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
-		return `<div class="calendar-block">
-			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
-			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time">${nextEvent}</div></div>` : `<div>${_t(lang, "ui.next_event")}: ${nextStart != null ? this._formatCountdown(lang, nextStart).text : '–'}</div>`}</div>
-			${nextFilter != null ? `<div style="margin-top:8px">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
-		</div>`;
-	}
-
-	_renderMaintenanceBlock(d, c, lang) {
-		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
-			? (d.saltAddNum >= 1000 ? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)` : `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
-			: null;
-		const items = [];
-		if (d.phPlusNum && d.phPlusNum > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div><div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div></div></div>`);
-		if (saltAddDisplay) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:shaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_salt")}</div><div class="maintenance-value">${saltAddDisplay}</div></div></div>`);
-		if (d.waterChangePercent && d.waterChangePercent > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:water"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.change_water")}</div><div class="maintenance-value">${d.waterChangePercent}%${d.waterChangeLiters ? ` — ${d.waterChangeLiters} L` : ''}</div></div></div>`);
-		if (d.phMinusNum && d.phMinusNum > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_minus")}</div><div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div></div></div>`);
-		if (d.chlorDoseNum && d.chlorDoseNum > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:beaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_chlorine")}</div><div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div></div></div>`);
-		if (items.length === 0) items.push(`<div class="maintenance-item"><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.maintenance")}</div><div class="maintenance-value">${_t(lang, "ui.no_actions_needed") || '—'}</div></div></div>`);
-
-		return `<div class="maintenance-block">
-			<div class="section-title">${_t(lang, "ui.maintenance")}</div>
-			<div class="maintenance-items">${items.join('')}</div>
 		</div>`;
 	}
 
