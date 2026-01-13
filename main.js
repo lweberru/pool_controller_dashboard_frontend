@@ -269,17 +269,17 @@ class PoolControllerCard extends HTMLElement {
 		let blockHtml = "";
 		switch (content) {
 			case "calendar":
-				blockHtml = this._renderCalendarBlock(data, effectiveConfig, lang);
+				blockHtml = this._renderCalendarBlock(data, effectiveConfig);
 				break;
 			case "waterquality":
-				blockHtml = this._renderWaterqualityBlock(data, effectiveConfig, lang);
+				blockHtml = this._renderWaterqualityBlock(data, effectiveConfig);
 				break;
 			case "maintenance":
-				blockHtml = this._renderMaintenanceBlock(data, effectiveConfig, lang);
+				blockHtml = this._renderMaintenanceBlock(data, effectiveConfig);
 				break;
 			case "controller":
 			default:
-				blockHtml = this._renderControllerBlock(data, effectiveConfig, lang);
+				blockHtml = this._renderControllerBlock(data, effectiveConfig);
 		}
 
 		this.shadowRoot.innerHTML = `
@@ -825,7 +825,7 @@ class PoolControllerCard extends HTMLElement {
 	// Block Renderers (single-block mode)
 	// ========================================
 
-	_renderControllerBlock(d, c, lang) {
+	_renderControllerBlock(d, c) {
 		const lang = _langFromHass(this._hass);
 		const disabled = !!d.maintenanceActive;
 		// Compute runtime-visible aux availability:
@@ -953,7 +953,7 @@ class PoolControllerCard extends HTMLElement {
 			</div>`;
 	}
 
-	_renderWaterqualityBlock(d, c, lang) {
+	_renderWaterqualityBlock(d, c) {
 		const lang = _langFromHass(this._hass);
 		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
 			? (d.saltAddNum >= 1000
@@ -1038,7 +1038,7 @@ class PoolControllerCard extends HTMLElement {
 		</div>`;
 	}
 
-	_renderCalendarBlock(d, c, lang) {
+	_renderCalendarBlock(d, c) {
 		const nextStart = d.nextStartMins;
 		const nextFilter = d.nextFilterMins;
 		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
@@ -1050,7 +1050,7 @@ class PoolControllerCard extends HTMLElement {
 		</div>`;
 	}
 
-	_renderMaintenanceBlock(d, c, lang) {
+	_renderMaintenanceBlock(d, c) {
 		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
 			? (d.saltAddNum >= 1000 ? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)` : `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
