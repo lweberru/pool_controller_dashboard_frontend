@@ -3,7 +3,7 @@
  * v1.5.53 - label for heat_reason=thermostat
  */
 
-const VERSION = "1.5.59";
+const VERSION = "1.5.60";
 try {
 	// Helps confirm in HA DevTools that the latest bundle is actually loaded.
 	console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`);
@@ -20,11 +20,11 @@ const DEFAULTS = {
 	chlor_ok_max: 850,
 	pv_on: 1000,
 	pv_off: 500,
-	bathing_max_mins: 120,
-	filter_max_mins: 120,
-	chlor_max_mins: 60,
+	bathing_max_mins: 60, // Default aus Backend
+	filter_max_mins: 30,  // Default aus Backend
+	chlor_max_mins: 5,    // Default aus Backend
 	pause_max_mins: 120,
-		};
+	};
 
 // ========================================
 // i18n (keep dependency-free / single-file)
@@ -953,6 +953,14 @@ class PoolControllerCard extends HTMLElement {
 		const filterDur = _numPos(d.filterMaxMins, (Number.isFinite(Number(c.filter_max_mins)) ? Number(c.filter_max_mins) : 30));
 		const chlorDur = _numPos(d.chlorMaxMins, (Number.isFinite(Number(c.chlor_max_mins)) ? Number(c.chlor_max_mins) : 5));
 		const pauseDur = _numPos(d.pauseMaxMins, (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60));
+
+		// If backend exposes configured defaults via config sensors, prefer them
+		const cfgFilter = c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null;
+		const cfgChlor = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
+		const cfgBath = c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null;
+		const finalFilterDur = Number.isFinite(Number(cfgFilter)) ? cfgFilter : filterDur;
+		const finalChlorDur = Number.isFinite(Number(cfgChlor)) ? cfgChlor : chlorDur;
+		const finalBathDur = Number.isFinite(Number(cfgBath)) ? cfgBath : bathingDur;
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 44;
@@ -1026,13 +1034,13 @@ class PoolControllerCard extends HTMLElement {
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${bathingDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active') : _t(lang, 'tooltips.bathing.inactive', { mins: bathingDur })}">
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active') : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
-					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="${filterDur}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active') : _t(lang, 'tooltips.filter.inactive', { mins: filterDur })}">
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="${finalFilterDur}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active') : _t(lang, 'tooltips.filter.inactive', { mins: finalFilterDur })}">
 						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
-					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="${chlorDur}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active') : _t(lang, 'tooltips.chlorine.inactive', { mins: chlorDur })}">
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="${finalChlorDur}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active') : _t(lang, 'tooltips.chlorine.inactive', { mins: finalChlorDur })}">
 						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
 					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="${pauseDur}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active') : _t(lang, 'tooltips.pause.inactive', { mins: pauseDur })}">
@@ -1995,6 +2003,10 @@ class PoolControllerCard extends HTMLElement {
 			power_entity: prefer('power_entity'),
 			ph_entity: prefer('ph_entity'),
 			chlorine_value_entity: prefer('chlorine_value_entity'),
+			// Config duration sensors
+			filter_duration_entity: prefer('filter_duration_entity'),
+			chlorine_duration_entity: prefer('chlorine_duration_entity'),
+			bathing_duration_entity: prefer('bathing_duration_entity'),
 			salt_entity: prefer('salt_entity'),
 			salt_add_entity: prefer('salt_add_entity'),
 			tds_entity: prefer('tds_entity'),
@@ -2124,6 +2136,11 @@ class PoolControllerCard extends HTMLElement {
 			next_event_entity: this._pickEntity(entries, "sensor", ["next_event"]) || null,
 			next_event_end_entity: this._pickEntity(entries, "sensor", ["next_event_end"]) || null,
 			next_event_summary_entity: this._pickEntity(entries, "sensor", ["next_event_summary"]) || null,
+
+			// Config value sensors (configured durations)
+			filter_duration_entity: this._pickEntity(entries, "sensor", ["config_filter_minutes", "filter_minutes_config", "filter_minutes"]) || null,
+			chlorine_duration_entity: this._pickEntity(entries, "sensor", ["config_chlorine_minutes", "chlorine_duration", "chlorine_minutes"]) || null,
+			bathing_duration_entity: this._pickEntity(entries, "sensor", ["config_bathing_minutes", "bathing_minutes"]) || null,
 		};
 		this._derivedForClimate = this._config.climate_entity;
 	}
@@ -2174,6 +2191,11 @@ class PoolControllerCardEditor extends HTMLElement {
 			button { border:1px solid #d0d7de; border-radius:8px; padding:8px 10px; cursor:pointer; background:#fff; font-weight:600; }
 		</style>
 		<div class="wrapper">
+			<div class="row" id="derived-box" style="display:none;">
+				<label>Abgeleitete Entities</label>
+				<div id="derived-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+			</div>
+
 			<div class="row">
 				<label>${_t(lang, "editor.select_controller")}</label>
 				<select id="controller-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
@@ -2205,6 +2227,32 @@ class PoolControllerCardEditor extends HTMLElement {
 				this._updateConfig({ [id]: Number.isFinite(num) ? num : inp.value });
 			});
 		});
+
+		// Populate derived list if we have derived keys
+		setTimeout(() => {
+			const derivedBox = this.shadowRoot?.querySelector('#derived-box');
+			const list = this.shadowRoot?.querySelector('#derived-list');
+			if (!derivedBox || !list) return;
+			list.innerHTML = '';
+			const keys = ['filter_duration_entity','chlorine_duration_entity','bathing_duration_entity'];
+			let any = false;
+			for (const k of keys) {
+				const v = this._config?.[k];
+				if (v) {
+					any = true;
+					const span = document.createElement('span');
+					span.className = 'badge';
+					span.textContent = `${k}: ${v}`;
+					span.title = 'Klicken für more-info';
+					span.style.cursor = 'pointer';
+					span.addEventListener('click', () => {
+						this._openMoreInfo(v);
+					});
+					list.appendChild(span);
+				}
+			}
+			derivedBox.style.display = any ? 'block' : 'none';
+		}, 150);
 	}
 
 	async _populateControllerSelect() {
@@ -2246,6 +2294,11 @@ class PoolControllerCardEditor extends HTMLElement {
 				// Automatisch alle Entities vom ausgewählten Controller ableiten
 				setTimeout(() => this._deriveFromController(), 100);
 			}
+		});
+
+		// Re-render when config changes externally so derived fields show up
+		this.addEventListener("config-changed", () => {
+			this._render();
 		});
 	}
 
@@ -2323,6 +2376,8 @@ class PoolControllerCardEditor extends HTMLElement {
 			next_event_summary_entity: pick("sensor", "next_event_summary") || this._config.next_event_summary_entity,
 		};
 		this._updateConfig(cfg);
+		// Refresh editor UI to show derived picks
+		try { this._render(); } catch (_e) {}
 	}
 
 	async _getEntityRegistry() {
