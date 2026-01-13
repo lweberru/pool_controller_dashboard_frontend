@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.3";
+const VERSION = "2.0.4";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -851,9 +851,9 @@ class PoolControllerCard extends HTMLElement {
 		const pauseDur = _numPos(d.pauseMaxMins, (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60));
 
 		// If backend exposes configured defaults via config sensors, prefer them
-		const cfgFilter = c.filter_duration_entity ? this._num(h.states[c.filter_duration_entity]?.state) : null;
-		const cfgChlor = c.chlorine_duration_entity ? this._num(h.states[c.chlorine_duration_entity]?.state) : null;
-		const cfgBath = c.bathing_duration_entity ? this._num(h.states[c.bathing_duration_entity]?.state) : null;
+		const cfgFilter = c.filter_duration_entity ? this._num(this._hass.states[c.filter_duration_entity]?.state) : null;
+		const cfgChlor = c.chlorine_duration_entity ? this._num(this._hass.states[c.chlorine_duration_entity]?.state) : null;
+		const cfgBath = c.bathing_duration_entity ? this._num(this._hass.states[c.bathing_duration_entity]?.state) : null;
 		const finalFilterDur = Number.isFinite(Number(cfgFilter)) ? cfgFilter : filterDur;
 		const finalChlorDur = Number.isFinite(Number(cfgChlor)) ? cfgChlor : chlorDur;
 		const finalBathDur = Number.isFinite(Number(cfgBath)) ? cfgBath : bathingDur;
