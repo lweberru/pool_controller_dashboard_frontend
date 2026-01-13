@@ -4,13 +4,197 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.0";
+const VERSION = "2.0.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
 const DEFAULTS = { content: "controller" };
 
-const I18N = { de: { ui: { controller_title: "Steuerung", calendar_title: "Kalender", waterquality_title: "Wasserqualität", maintenance_title: "Wartungsarbeiten", select_content: "Angezeigter Inhalt" } } };
+const I18N = {
+	de: {
+		ui: {
+			controller_title: "Steuerung",
+			calendar_title: "Kalender",
+			waterquality_title: "Wasserqualität",
+			maintenance_title: "Wartungsarbeiten",
+			select_content: "Angezeigter Inhalt",
+			maintenance_mode_title: "Wartungsmodus aktiv",
+			maintenance_mode_text: "Automatik ist deaktiviert. Schalte Wartung aus, um Automatik wieder zu erlauben.",
+			maintenance: "Wartung",
+			water_quality: "Wasserqualität",
+			sanitizer: "Desinfektion",
+			sanitizer_chlorine: "Chlor",
+			sanitizer_saltwater: "Salzwasser",
+			sanitizer_mixed: "Mischbetrieb",
+			ph: "pH",
+			chlorine: "Chlor (mV)",
+			salt: "Salz",
+			tds: "TDS",
+			add_ph_plus: "pH+ hinzufügen",
+			add_ph_minus: "pH- hinzufügen",
+			add_salt: "Salz hinzufügen",
+			add_chlorine: "Chlor hinzufügen",
+			low_chlorine: "Niedriger Chlorgehalt",
+			mixed_chlor_hint: "Im Mischbetrieb: Chlor-Generator prüfen",
+			saltwater_chlor_hint: "Salzwasser: Elektrolyse prüfen statt man. Zugabe",
+			change_water: "Wasser wechseln",
+			no_actions_needed: "Keine Aktionen notwendig",
+			sanitizer_label: "Desinfektion",
+			next_event: "Nächstes Ereignis",
+			next_filter_cycle: "Nächster Filterlauf",
+			next_frost_cycle: "Nächster Frostlauf",
+			main_switch: "Netz/Versorgung",
+			pump_switch: "Umwälzpumpe",
+			aux_heater_switch: "Zusatzheizung",
+			pv: "PV",
+			frost: "Frostschutz",
+			quiet: "Ruhezeit",
+			additional_heater: "Zusatzheizung",
+			sanitizer: "Desinfektion",
+			in_short: "in",
+			days_short: "T",
+			hours_short: "h",
+			minutes_short: "min",
+		},
+		editor: {
+			select_controller: "Controller wählen",
+			please_choose: "Bitte wählen",
+			temp_min: "Min. Temperatur",
+			temp_max: "Max. Temperatur",
+			step: "Schrittweite",
+			controller_placeholder: "Wähle eine Integration/Instanz",
+			content: "Angezeigter Inhalt",
+			content_options: {
+				controller: "Steuerung",
+				calendar: "Kalender",
+				waterquality: "Wasserqualität",
+				maintenance: "Wartung"
+			}
+		},
+		actions: {
+			maintenance: "Wartung",
+			bathing: "Baden",
+			filter: "Filtern",
+			chlorine: "Chloren",
+			pause: "Pause"
+		},
+		tooltips: {
+			bathing: { active: "Bade-Modus aktiv", inactive: "Baden starten" },
+			filter: { active: "Filter läuft", inactive: "Filter starten" },
+			chlorine: { active: "Stoßchlorung aktiv", inactive: "Stoßchlorung starten" },
+			pause: { active: "Pause aktiv", inactive: "Pause starten" },
+			aux: { active: "Zusatzheizung an", inactive: "Zusatzheizung aus" }
+		},
+		dial: {
+			bathing_left: "Baden — verbleibend: {mins} min",
+			filter_left: "Filtern — verbleibend: {mins} min",
+			chlorine_left: "Chloren — verbleibend: {mins} min",
+			pause_left: "Pause — verbleibend: {mins} min",
+			chlorine_active: "Stoßchlorung aktiv",
+			frost: "Frostschutz"
+		},
+		status: {
+			maintenance: "Wartung",
+			pause: "Pause",
+			bathing: "Baden",
+			chlorine: "Chloren",
+			filter: "Filtern",
+			heating: "Heizbetrieb",
+			off: "Aus"
+		}
+	},
+	en: {
+		ui: {
+			controller_title: "Controller",
+			calendar_title: "Calendar",
+			waterquality_title: "Water quality",
+			maintenance_title: "Maintenance",
+			select_content: "Displayed content",
+			maintenance_mode_title: "Maintenance mode active",
+			maintenance_mode_text: "Automation is disabled. Turn off maintenance to resume automation.",
+			maintenance: "Maintenance",
+			water_quality: "Water quality",
+			sanitizer: "Sanitizer",
+			sanitizer_chlorine: "Chlorine",
+			sanitizer_saltwater: "Saltwater",
+			sanitizer_mixed: "Mixed",
+			ph: "pH",
+			chlorine: "Chlorine (mV)",
+			salt: "Salt",
+			tds: "TDS",
+			add_ph_plus: "Add pH+",
+			add_ph_minus: "Add pH-",
+			add_salt: "Add salt",
+			add_chlorine: "Add chlorine",
+			low_chlorine: "Low chlorine",
+			mixed_chlor_hint: "Mixed mode: check chlorinator",
+			saltwater_chlor_hint: "Saltwater: use chlorinator instead of manual dosing",
+			change_water: "Change water",
+			no_actions_needed: "No actions needed",
+			sanitizer_label: "Sanitizer",
+			next_event: "Next event",
+			next_filter_cycle: "Next filter cycle",
+			next_frost_cycle: "Next frost run",
+			main_switch: "Main supply",
+			pump_switch: "Pump",
+			aux_heater_switch: "Aux heater",
+			pv: "PV",
+			frost: "Frost protection",
+			quiet: "Quiet hours",
+			additional_heater: "Auxiliary heater",
+			in_short: "in",
+			days_short: "d",
+			hours_short: "h",
+			minutes_short: "min",
+		},
+		editor: {
+			select_controller: "Select controller",
+			please_choose: "Please choose",
+			temp_min: "Min temperature",
+			temp_max: "Max temperature",
+			step: "Step",
+			controller_placeholder: "Select an integration/instance",
+			content: "Displayed content",
+			content_options: {
+				controller: "Controller",
+				calendar: "Calendar",
+				waterquality: "Water quality",
+				maintenance: "Maintenance"
+			}
+		},
+		actions: {
+			maintenance: "Maintenance",
+			bathing: "Bathing",
+			filter: "Filter",
+			chlorine: "Chlorine",
+			pause: "Pause"
+		},
+		tooltips: {
+			bathing: { active: "Bathing active", inactive: "Start bathing" },
+			filter: { active: "Filter running", inactive: "Start filter" },
+			chlorine: { active: "Quick chlorine active", inactive: "Start quick chlorine" },
+			pause: { active: "Pause active", inactive: "Start pause" },
+			aux: { active: "Aux heater on", inactive: "Aux heater off" }
+		},
+		dial: {
+			bathing_left: "Bathing — left: {mins} min",
+			filter_left: "Filter — left: {mins} min",
+			chlorine_left: "Chlorine — left: {mins} min",
+			pause_left: "Pause — left: {mins} min",
+			chlorine_active: "Quick chlorine active",
+			frost: "Frost protection"
+		},
+		status: {
+			maintenance: "Maintenance",
+			pause: "Pause",
+			bathing: "Bathing",
+			chlorine: "Chlorine",
+			filter: "Filter",
+			heating: "Heating",
+			off: "Off"
+		}
+	}
+};
 
 function _langFromHass(hass) { return (hass?.language || hass?.locale?.language || 'de').split('-')[0]; }
 function _t(lang, key) { const dict = I18N[lang] || I18N.de; const parts = key.split('.'); let cur = dict; for (const p of parts) cur = cur?.[p]; return (typeof cur === 'string') ? cur : key; }
@@ -1954,6 +2138,15 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="">${_t(lang, "editor.please_choose")}</option>
 				</select>
 			</div>
+			<div class="row">
+				<label>${_t(lang, "editor.content")}</label>
+				<select id="content-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
+					<option value="controller">${_t(lang, "editor.content_options.controller")}</option>
+					<option value="calendar">${_t(lang, "editor.content_options.calendar")}</option>
+					<option value="waterquality">${_t(lang, "editor.content_options.waterquality")}</option>
+					<option value="maintenance">${_t(lang, "editor.content_options.maintenance")}</option>
+				</select>
+			</div>
 			<div class="grid2">
 				<div class="row">
 					<label>${_t(lang, "editor.temp_min")}</label>
@@ -2047,6 +2240,26 @@ class PoolControllerCardEditor extends HTMLElement {
 				setTimeout(() => this._deriveFromController(), 100);
 			}
 		});
+
+		// Populate content select (controller/calendar/waterquality/maintenance)
+		try {
+			const contentSelect = this.shadowRoot.querySelector('#content-select');
+			if (contentSelect) {
+				const opts = (I18N[lang] && I18N[lang].editor && I18N[lang].editor.content_options) || (I18N.de && I18N.de.editor && I18N.de.editor.content_options) || {};
+				// ensure current value
+				if (this._config && this._config.content) contentSelect.value = this._config.content;
+				contentSelect.addEventListener('change', (e) => {
+					this._updateConfig({ content: e.target.value });
+				});
+				// update option labels if localized map available
+				for (const key of ['controller','calendar','waterquality','maintenance']) {
+					const opt = contentSelect.querySelector(`option[value="${key}"]`);
+					if (opt && opts && opts[key]) opt.textContent = opts[key];
+				}
+			}
+		} catch (_e) {
+			// ignore
+		}
 
 		// Re-render when config changes externally so derived fields show up
 		this.addEventListener("config-changed", () => {
