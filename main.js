@@ -2023,6 +2023,16 @@ class PoolControllerCardEditor extends HTMLElement {
 		this._config = { ...DEFAULTS, ...config };
 		this._initialized = false;
 		this._render();
+		// If a controller_entity is already present in the config (editing an existing card),
+		// immediately derive its related entities so the editor shows the mapped fields
+		// without requiring the user to delete & recreate the card.
+		try {
+			if (this._config && this._config.controller_entity) {
+				setTimeout(() => this._deriveFromController(), 100);
+			}
+		} catch (_e) {
+			// best-effort: ignore errors during editor boot
+		}
 	}
 
 	get value() {
@@ -2158,6 +2168,13 @@ class PoolControllerCardEditor extends HTMLElement {
 				setTimeout(() => this._deriveFromController(), 100);
 			}
 		});
+
+		// If editing an existing card where controller_entity is already set, derive now
+		if (this._config && this._config.controller_entity) {
+			// ensure select reflects current value and then derive
+			select.value = this._config.controller_entity;
+			setTimeout(() => this._deriveFromController(), 100);
+		}
 
 		// Populate content select (controller/calendar/waterquality/maintenance)
 		try {
