@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.12";
+const VERSION = "2.0.13";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -79,11 +79,11 @@ const I18N = {
 			pause: "Pause"
 		},
 		tooltips: {
-			bathing: { active: "Bade-Modus — verbleibend: {mins} min", inactive: "Baden für {mins} Minuten starten" },
-			filter: { active: "Filter — verbleibend: {mins} min", inactive: "Filtern für {mins} Minuten starten" },
-			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min", inactive: "Stoßchlorung für {mins} Minuten starten" },
-			pause: { active: "Pause — verbleibend: {mins} min", inactive: "Pause für {mins} Minuten starten" },
-			aux: { active: "Zusatzheizung an", inactive: "Zusatzheizung aus" }
+			bathing: { active: "Bade-Modus — verbleibend: {mins} min — Klick beendet", inactive: "Baden für {mins} Minuten starten" },
+			filter: { active: "Filter — verbleibend: {mins} min — Klick beendet", inactive: "Filtern für {mins} Minuten starten" },
+			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
+			pause: { active: "Pause — verbleibend: {mins} min — Klick beendet", inactive: "Pause für {mins} Minuten starten" },
+			aux: { active: "Zusatzheizung erlauben an", inactive: "Zusatzheizung erlauben aus" }
 		},
 		dial: {
 			bathing_left: "Baden — verbleibend: {mins} min",
@@ -170,11 +170,11 @@ const I18N = {
 			pause: "Pause"
 		},
 		tooltips: {
-			bathing: { active: "Bathing — left: {mins} min", inactive: "Start bathing for {mins} minutes" },
-			filter: { active: "Filter — left: {mins} min", inactive: "Start filter for {mins} minutes" },
-			chlorine: { active: "Quick chlorine — left: {mins} min", inactive: "Start quick chlorine for {mins} minutes" },
-			pause: { active: "Pause — left: {mins} min", inactive: "Start pause for {mins} minutes" },
-			aux: { active: "Aux heater on", inactive: "Aux heater off" }
+			bathing: { active: "Bathing — left: {mins} min — click to stop", inactive: "Start bathing for {mins} minutes" },
+			filter: { active: "Filter — left: {mins} min — click to stop", inactive: "Start filter for {mins} minutes" },
+			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
+			pause: { active: "Pause — left: {mins} min — click to stop", inactive: "Start pause for {mins} minutes" },
+			aux: { active: "Allow auxiliary heater on", inactive: "Allow auxiliary heater off" }
 		},
 		dial: {
 			bathing_left: "Bathing — left: {mins} min",
@@ -694,7 +694,7 @@ class PoolControllerCard extends HTMLElement {
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
-			.dial-timer { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 44%; max-width: 140px; z-index: 1; }
+			.dial-timer { position: relative; margin: 12px auto 0; left: auto; bottom: auto; transform: none; width: 60%; max-width: 320px; z-index: 1; }
 			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
@@ -762,7 +762,7 @@ class PoolControllerCard extends HTMLElement {
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 59%; }
-				.dial-timer { bottom: 6%; }
+				.dial-timer { margin-top: 8px; width: 70%; max-width: 260px; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
@@ -1201,6 +1201,7 @@ class PoolControllerCard extends HTMLElement {
 		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
 		actionButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
+				const eff = this._withDerivedConfig(this._config || {});
 				if (btn.dataset.action === "maintenance-toggle") return;
 				if (maintenanceActive) return;
 				const mode = btn.dataset.mode;
@@ -1210,21 +1211,28 @@ class PoolControllerCard extends HTMLElement {
 				const stop = btn.dataset.stop;
 
 				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
-				if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
+					if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
 					const svc = active ? `stop_${mode}` : `start_${mode}`;
 					const data = active
 						? { climate_entity: this._config?.climate_entity }
 						: { climate_entity: this._config?.climate_entity, duration_minutes: Number.isFinite(duration) ? duration : undefined };
 					this._hass.callService("pool_controller", svc, data);
-					return;
+						// backend services will trigger coordinator refresh; still request entity update as fallback
+						try {
+							this._requestBackendEntityRefresh(eff);
+						} catch (e) {}
+						return;
 				}
 
 				if (active && stop) {
 					this._triggerEntity(stop, false);
+					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				} else if (!active && start) {
 					this._triggerEntity(start, true);
+					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
 					this._hass.callService("pool_controller", `stop_${mode}`, { climate_entity: this._config?.climate_entity });
+					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				}
 			});
 		});
@@ -1300,6 +1308,29 @@ class PoolControllerCard extends HTMLElement {
 	_hasService(domain, service) {
 		const services = this._hass?.services;
 		return !!(services && services[domain] && services[domain][service]);
+	}
+
+	_requestBackendEntityRefresh(eff) {
+		if (!this._hass || !eff) return;
+		const ids = [
+			eff.climate_entity,
+			eff.main_switch_on_entity,
+			eff.pump_switch_on_entity,
+			eff.aux_heating_switch_on_entity,
+			eff.manual_timer_entity,
+			eff.auto_filter_timer_entity,
+			eff.pause_timer_entity,
+			eff.should_main_on_entity,
+			eff.should_pump_on_entity,
+			eff.should_aux_on_entity,
+		].filter(Boolean);
+		ids.forEach((eid) => {
+			try {
+				this._hass.callService("homeassistant", "update_entity", { entity_id: eid });
+			} catch (e) {
+				// best-effort: ignore errors
+			}
+		});
 	}
 
 	_getStatusText(hvac, hvacAction, maintenance, bathing, filtering, chlorinating, paused) {
@@ -1499,19 +1530,19 @@ class PoolControllerCard extends HTMLElement {
 		if (d.bathingState?.active && d.bathingEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div></div>
-				<div class="timer-text">${_t(lang, "dial.bathing_left", { mins: d.bathingEta })}</div>
+				<div class="timer-text">${_t(lang, "actions.bathing")}: ${d.bathingEta} min</div>
 			</div>`;
 		}
 		if (d.filterState?.active && d.filterEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.filterProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div></div>
-				<div class="timer-text">${_t(lang, "dial.filter_left", { mins: d.filterEta })}</div>
+				<div class="timer-text">${_t(lang, "actions.filter")}: ${d.filterEta} min</div>
 			</div>`;
 		}
 		if (d.chlorState?.active && d.chlorEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div></div>
-				<div class="timer-text">${_t(lang, "dial.chlorine_left", { mins: d.chlorEta })}</div>
+				<div class="timer-text">${_t(lang, "actions.chlorine")}: ${d.chlorEta} min</div>
 			</div>`;
 		}
 		if (d.chlorState?.active) {
@@ -1522,7 +1553,7 @@ class PoolControllerCard extends HTMLElement {
 		if (d.pauseState?.active && d.pauseEta != null) {
 			return `<div class="dial-timer">
 				<div class="timer-bar"><div class="timer-fill" style="width: ${d.pauseProgress * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div></div>
-				<div class="timer-text">${_t(lang, "dial.pause_left", { mins: d.pauseEta })}</div>
+				<div class="timer-text">${_t(lang, "actions.pause")}: ${d.pauseEta} min</div>
 			</div>`;
 		}
 		return "";
