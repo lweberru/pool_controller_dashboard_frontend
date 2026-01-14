@@ -2173,12 +2173,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			}
 		});
 
-		// If editing an existing card where controller_entity is already set, derive now
-		if (this._config && this._config.controller_entity) {
-			// ensure select reflects current value and then derive
-			select.value = this._config.controller_entity;
-			setTimeout(() => this._deriveFromController(), 100);
-		}
+
 
 		// Populate content select (controller/calendar/waterquality/maintenance)
 		try {
