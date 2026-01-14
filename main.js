@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.11";
+const VERSION = "2.0.12";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -79,10 +79,10 @@ const I18N = {
 			pause: "Pause"
 		},
 		tooltips: {
-			bathing: { active: "Bade-Modus aktiv", inactive: "Baden starten" },
-			filter: { active: "Filter läuft", inactive: "Filter starten" },
-			chlorine: { active: "Stoßchlorung aktiv", inactive: "Stoßchlorung starten" },
-			pause: { active: "Pause aktiv", inactive: "Pause starten" },
+			bathing: { active: "Bade-Modus — verbleibend: {mins} min", inactive: "Baden für {mins} Minuten starten" },
+			filter: { active: "Filter — verbleibend: {mins} min", inactive: "Filtern für {mins} Minuten starten" },
+			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min", inactive: "Stoßchlorung für {mins} Minuten starten" },
+			pause: { active: "Pause — verbleibend: {mins} min", inactive: "Pause für {mins} Minuten starten" },
 			aux: { active: "Zusatzheizung an", inactive: "Zusatzheizung aus" }
 		},
 		dial: {
@@ -90,7 +90,7 @@ const I18N = {
 			filter_left: "Filtern — verbleibend: {mins} min",
 			chlorine_left: "Chloren — verbleibend: {mins} min",
 			pause_left: "Pause — verbleibend: {mins} min",
-			chlorine_active: "Stoßchlorung aktiv",
+			chlorine_active: "Stoßchlorung — verbleibend: {mins} min",
 			frost: "Frostschutz"
 		},
 		status: {
@@ -170,10 +170,10 @@ const I18N = {
 			pause: "Pause"
 		},
 		tooltips: {
-			bathing: { active: "Bathing active", inactive: "Start bathing" },
-			filter: { active: "Filter running", inactive: "Start filter" },
-			chlorine: { active: "Quick chlorine active", inactive: "Start quick chlorine" },
-			pause: { active: "Pause active", inactive: "Start pause" },
+			bathing: { active: "Bathing — left: {mins} min", inactive: "Start bathing for {mins} minutes" },
+			filter: { active: "Filter — left: {mins} min", inactive: "Start filter for {mins} minutes" },
+			chlorine: { active: "Quick chlorine — left: {mins} min", inactive: "Start quick chlorine for {mins} minutes" },
+			pause: { active: "Pause — left: {mins} min", inactive: "Start pause for {mins} minutes" },
 			aux: { active: "Aux heater on", inactive: "Aux heater off" }
 		},
 		dial: {
@@ -181,7 +181,7 @@ const I18N = {
 			filter_left: "Filter — left: {mins} min",
 			chlorine_left: "Chlorine — left: {mins} min",
 			pause_left: "Pause — left: {mins} min",
-			chlorine_active: "Quick chlorine active",
+			chlorine_active: "Quick — left: {mins} min",
 			frost: "Frost protection"
 		},
 		status: {
@@ -197,7 +197,23 @@ const I18N = {
 };
 
 function _langFromHass(hass) { return (hass?.language || hass?.locale?.language || 'de').split('-')[0]; }
-function _t(lang, key) { const dict = I18N[lang] || I18N.de; const parts = key.split('.'); let cur = dict; for (const p of parts) cur = cur?.[p]; return (typeof cur === 'string') ? cur : key; }
+function _t(lang, key, vars) {
+	const dict = I18N[lang] || I18N.de;
+	const parts = key.split('.');
+	let cur = dict;
+	for (const p of parts) cur = cur?.[p];
+	let res = (typeof cur === 'string') ? cur : key;
+	if (vars && typeof vars === 'object') {
+		for (const k of Object.keys(vars)) {
+			try {
+				res = String(res).replace(new RegExp(`\\{${k}\\}`, 'g'), String(vars[k]));
+			} catch (_e) {
+				// ignore replacement errors
+			}
+		}
+	}
+	return res;
+}
 
 class PoolControllerCard extends HTMLElement {
 	setConfig(config) {
@@ -939,16 +955,16 @@ class PoolControllerCard extends HTMLElement {
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
-					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active') : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
+					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active', { mins: (d.bathingEta != null ? d.bathingEta : finalBathDur) }) : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
-					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="${finalFilterDur}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active') : _t(lang, 'tooltips.filter.inactive', { mins: finalFilterDur })}">
+					<button class="action-btn filter ${d.filterState.active ? "active" : ""}" data-mode="filter" data-duration="${finalFilterDur}" data-start="${c.filter_start || ""}" data-stop="${c.filter_stop || ""}" data-active="${d.filterState.active}" ${disabled ? "disabled" : ""} title="${d.filterState.active ? _t(lang, 'tooltips.filter.active', { mins: (d.filterEta != null ? d.filterEta : finalFilterDur) }) : _t(lang, 'tooltips.filter.inactive', { mins: finalFilterDur })}">
 						<ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span>
 					</button>
-					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="${finalChlorDur}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active') : _t(lang, 'tooltips.chlorine.inactive', { mins: finalChlorDur })}">
+					<button class="action-btn chlorine ${d.chlorState.active ? "active" : ""}" data-mode="chlorine" data-duration="${finalChlorDur}" data-start="${c.chlorine_start || ""}" data-stop="${c.chlorine_stop || ""}" data-active="${d.chlorState.active}" ${disabled ? "disabled" : ""} title="${d.chlorState.active ? _t(lang, 'tooltips.chlorine.active', { mins: (d.chlorEta != null ? d.chlorEta : finalChlorDur) }) : _t(lang, 'tooltips.chlorine.inactive', { mins: finalChlorDur })}">
 						<ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span>
 					</button>
-					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="${pauseDur}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active') : _t(lang, 'tooltips.pause.inactive', { mins: pauseDur })}">
+					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="${pauseDur}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active', { mins: (d.pauseEta != null ? d.pauseEta : pauseDur) }) : _t(lang, 'tooltips.pause.inactive', { mins: pauseDur })}">
 						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
 				</div>
@@ -1054,9 +1070,10 @@ class PoolControllerCard extends HTMLElement {
 		const nextFilter = d.nextFilterMins;
 		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
 		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
+		const nextStartText = nextStart != null ? this._formatCountdown(lang, nextStart).text : '–';
 		return `<div class="calendar-block">
 			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
-			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time">${nextEvent}</div></div>` : `<div>${_t(lang, "ui.next_event")}: ${nextStart != null ? this._formatCountdown(lang, nextStart).text : '–'}</div>`}</div>
+			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time">${nextEvent}</div><div style="margin-top:6px">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div>${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
 			${nextFilter != null ? `<div style="margin-top:8px">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
 		</div>`;
 	}
