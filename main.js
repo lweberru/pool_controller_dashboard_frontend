@@ -928,25 +928,18 @@ class PoolControllerCard extends HTMLElement {
 							</div>
 						</div>
 					</div>
-				</div>
-				<div class="dial-core">
-					<div class="temp-current" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
-					<div class="divider"></div>
-					<div class="temp-target-row">
-						<span class="temp-target-left" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
-						<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
-						<span class="temp-target-right" ${d.outdoorTempEntityId ? `data-more-info="${d.outdoorTempEntityId}"` : ''}>${d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : ''}</span>
-					</div>
-					<div class="switch-icons-row">
-						<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
-							<ha-icon icon="mdi:power-plug"></ha-icon>
+					<div class="dial-core">
+						<div class="switch-icons-row">
+							<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
+								<ha-icon icon="mdi:power-plug"></ha-icon>
+							</div>
+							<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
+								<ha-icon icon="mdi:pump"></ha-icon>
+							</div>
+							${showAuxSwitch ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
+								<ha-icon icon="mdi:fire"></ha-icon>
+							</div>` : ''}
 						</div>
-						<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
-							<ha-icon icon="mdi:pump"></ha-icon>
-						</div>
-						${showAuxSwitch ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
-							<ha-icon icon="mdi:fire"></ha-icon>
-						</div>` : ''}
 					</div>
 				</div>
 				${this._renderDialTimer(d)}
