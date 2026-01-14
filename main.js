@@ -2043,6 +2043,23 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!this.shadowRoot) this.attachShadow({ mode: "open" });
 		const c = this._config || DEFAULTS;
 		const lang = this._lang || _langFromHass(this._hass);
+		// Only show temperature bounds/step when the editor's content is 'controller'
+		const showTempControls = (String(c.content || '').trim() === 'controller');
+		const tempControlsHtml = showTempControls ? `
+			<div class="grid2">
+				<div class="row">
+					<label>${_t(lang, "editor.temp_min")}</label>
+					<input id="min_temp" type="number" step="0.5" value="${c.min_temp}">
+				</div>
+				<div class="row">
+					<label>${_t(lang, "editor.temp_max")}</label>
+					<input id="max_temp" type="number" step="0.5" value="${c.max_temp}">
+				</div>
+				<div class="row">
+					<label>${_t(lang, "editor.step")}</label>
+					<input id="step" type="number" step="0.1" value="${c.step || 0.5}">
+				</div>
+			</div>` : '';
 		this.shadowRoot.innerHTML = `
 		<style>
 			:host { display:block; }
@@ -2075,20 +2092,7 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="maintenance">${_t(lang, "editor.content_options.maintenance")}</option>
 				</select>
 			</div>
-			<div class="grid2">
-				<div class="row">
-					<label>${_t(lang, "editor.temp_min")}</label>
-					<input id="min_temp" type="number" step="0.5" value="${c.min_temp}">
-				</div>
-				<div class="row">
-					<label>${_t(lang, "editor.temp_max")}</label>
-					<input id="max_temp" type="number" step="0.5" value="${c.max_temp}">
-				</div>
-				<div class="row">
-					<label>${_t(lang, "editor.step")}</label>
-					<input id="step" type="number" step="0.1" value="${c.step || 0.5}">
-				</div>
-			</div>
+			${tempControlsHtml}
 		</div>`;
 
 		this._populateControllerSelect();
