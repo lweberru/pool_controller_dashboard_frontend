@@ -325,9 +325,17 @@ class PoolControllerCard extends HTMLElement {
 		const mainSwitchOnEntityId = c.main_switch_on_entity || this._derivedEntities?.main_switch_on_entity || null;
 		const pumpSwitchOnEntityId = c.pump_switch_on_entity || this._derivedEntities?.pump_switch_on_entity || null;
 		const auxHeatingSwitchOnEntityId = c.aux_heating_switch_on_entity || this._derivedEntities?.aux_heating_switch_on_entity || null;
+
+		const shouldMainOnEntityId = c.should_main_on_entity || this._derivedEntities?.should_main_on_entity || null;
+		const shouldPumpOnEntityId = c.should_pump_on_entity || this._derivedEntities?.should_pump_on_entity || null;
+		const shouldAuxOnEntityId = c.should_aux_on_entity || this._derivedEntities?.should_aux_on_entity || null;
 		const mainSwitchOn = mainSwitchOnEntityId ? this._isOn(h.states[mainSwitchOnEntityId]) : false;
 		const pumpSwitchOn = pumpSwitchOnEntityId ? this._isOn(h.states[pumpSwitchOnEntityId]) : false;
 		const auxHeatingSwitchOn = auxHeatingSwitchOnEntityId ? this._isOn(h.states[auxHeatingSwitchOnEntityId]) : false;
+
+		const shouldMainOn = shouldMainOnEntityId ? this._isOn(h.states[shouldMainOnEntityId]) : null;
+		const shouldPumpOn = shouldPumpOnEntityId ? this._isOn(h.states[shouldPumpOnEntityId]) : null;
+		const shouldAuxOn = shouldAuxOnEntityId ? this._isOn(h.states[shouldAuxOnEntityId]) : null;
 
 		// Timer-States: bevorzugt neue Minuten-Sensoren (v2 Timer-Refactor), mit Fallback auf alte *_until Sensoren.
 		const manualTimerEntity = c.manual_timer_entity;
@@ -537,6 +545,9 @@ class PoolControllerCard extends HTMLElement {
 			nextFrostMinsEntityId,
 			mainPowerEntityId: mainPowerEntityId,
 			auxPowerEntityId: auxPowerEntityId,
+			shouldMainOnEntityId,
+			shouldPumpOnEntityId,
+			shouldAuxOnEntityId,
 			powerEntityId: c.power_entity || null,
 			powerMoreInfoEntityId,
 
@@ -546,6 +557,9 @@ class PoolControllerCard extends HTMLElement {
 			mainSwitchOn,
 			pumpSwitchOn,
 			auxHeatingSwitchOn,
+			shouldMainOn,
+			shouldPumpOn,
+			shouldAuxOn,
 			current, target, hvac, hvacAction, climateOff, auxOn,
 			bathingState, filterState, chlorState, pauseState,
 			frost, quiet, pvAllows,
@@ -1631,6 +1645,9 @@ class PoolControllerCard extends HTMLElement {
 			this._config.quiet_entity,
 			this._config.pv_entity,
 			this._config.pv_power_entity,
+			this._config.should_main_on_entity,
+			this._config.should_pump_on_entity,
+			this._config.should_aux_on_entity,
 			this._config.main_power_entity,
 			this._config.aux_power_entity,
 			this._config.power_entity,
@@ -1795,6 +1812,9 @@ class PoolControllerCard extends HTMLElement {
 			main_switch_on_entity: prefer('main_switch_on_entity'),
 			pump_switch_on_entity: prefer('pump_switch_on_entity'),
 			aux_heating_switch_on_entity: prefer('aux_heating_switch_on_entity'),
+			should_main_on_entity: prefer('should_main_on_entity'),
+			should_pump_on_entity: prefer('should_pump_on_entity'),
+			should_aux_on_entity: prefer('should_aux_on_entity'),
 			maintenance_entity: prefer('maintenance_entity'),
 			heat_reason_entity: prefer('heat_reason_entity'),
 			run_reason_entity: prefer('run_reason_entity'),
@@ -1896,6 +1916,11 @@ class PoolControllerCard extends HTMLElement {
 			main_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["main_switch_on"]) || null,
 			pump_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["pump_switch_on"]) || null,
 			aux_heating_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["aux_heating_switch_on"]) || null,
+
+			// Desired/should states exposed by the backend
+			should_main_on_entity: this._pickEntity(entries, "binary_sensor", ["should_main_on"]) || null,
+			should_pump_on_entity: this._pickEntity(entries, "binary_sensor", ["should_pump_on"]) || null,
+			should_aux_on_entity: this._pickEntity(entries, "binary_sensor", ["should_aux_on", "should_aux_heating_on", "should_aux"]) || null,
 
 			// Maintenance (hard lockout)
 			maintenance_entity: this._pickEntity(entries, "binary_sensor", ["maintenance_active"]) || null,
