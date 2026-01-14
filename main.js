@@ -948,8 +948,8 @@ class PoolControllerCard extends HTMLElement {
 							</div>` : ''}
 						</div>
 					</div>
-					${this._renderDialTimer(d)}
 				</div>
+				${this._renderDialTimer(d)}
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
