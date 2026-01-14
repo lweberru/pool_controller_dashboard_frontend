@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.16";
+const VERSION = "2.0.17";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1519,44 +1519,31 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_renderDialTimer(d) {
+		// Always reserve vertical space so the layout doesn't jump when timers appear/disappear.
 		const lang = _langFromHass(this._hass);
-		// Frostlauf hat höchste Priorität, wenn aktiv
+		const buildBar = (pct, gradient, label, mins) => `
+			<div class="timer-bar"><div class="timer-fill" style="width: ${pct}%; background: ${gradient};"></div></div>
+			<div class="timer-text">${label}: ${mins} min</div>`;
+		let inner = "";
 		if (d.frostState?.active && d.frostEta != null) {
-			return `<div class="dial-timer">
-				<div class="timer-bar"><div class="timer-fill" style="width: ${d.frostProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #5c4ac7);"></div></div>
-				<div class="timer-text">${_t(lang, "ui.frost")}: ${d.frostEta} min</div>
-			</div>`;
+			inner = buildBar(d.frostProgress * 100, 'linear-gradient(90deg, #2a7fdb, #5c4ac7)', _t(lang, "ui.frost"), d.frostEta);
+		} else if (d.bathingState?.active && d.bathingEta != null) {
+			inner = buildBar(d.bathingProgress * 100, 'linear-gradient(90deg, #8a3b32, #c0392b)', _t(lang, "actions.bathing"), d.bathingEta);
+		} else if (d.filterState?.active && d.filterEta != null) {
+			inner = buildBar(d.filterProgress * 100, 'linear-gradient(90deg, #2a7fdb, #3498db)', _t(lang, "actions.filter"), d.filterEta);
+		} else if (d.chlorState?.active && d.chlorEta != null) {
+			inner = buildBar(d.chlorProgress * 100, 'linear-gradient(90deg, #27ae60, #2ecc71)', _t(lang, "actions.chlorine"), d.chlorEta);
+		} else if (d.chlorState?.active) {
+			inner = `<div class="timer-text" style="font-weight: 600; color: #27ae60;">${_t(lang, "dial.chlorine_active")}</div>`;
+		} else if (d.pauseState?.active && d.pauseEta != null) {
+			inner = buildBar(d.pauseProgress * 100, 'linear-gradient(90deg, #e67e22, #f39c12)', _t(lang, "actions.pause"), d.pauseEta);
+		} else {
+			// placeholder content (invisible) so the container keeps a consistent height
+			inner = `<div class="timer-bar" aria-hidden="true"><div class="timer-fill" style="width:0%; background:transparent"></div></div><div class="timer-text" aria-hidden="true" style="opacity:0;height:0;margin:0;padding:0">&nbsp;</div>`;
 		}
-		if (d.bathingState?.active && d.bathingEta != null) {
-			return `<div class="dial-timer">
-				<div class="timer-bar"><div class="timer-fill" style="width: ${d.bathingProgress * 100}%; background: linear-gradient(90deg, #8a3b32, #c0392b);"></div></div>
-				<div class="timer-text">${_t(lang, "actions.bathing")}: ${d.bathingEta} min</div>
-			</div>`;
-		}
-		if (d.filterState?.active && d.filterEta != null) {
-			return `<div class="dial-timer">
-				<div class="timer-bar"><div class="timer-fill" style="width: ${d.filterProgress * 100}%; background: linear-gradient(90deg, #2a7fdb, #3498db);"></div></div>
-				<div class="timer-text">${_t(lang, "actions.filter")}: ${d.filterEta} min</div>
-			</div>`;
-		}
-		if (d.chlorState?.active && d.chlorEta != null) {
-			return `<div class="dial-timer">
-				<div class="timer-bar"><div class="timer-fill" style="width: ${d.chlorProgress * 100}%; background: linear-gradient(90deg, #27ae60, #2ecc71);"></div></div>
-				<div class="timer-text">${_t(lang, "actions.chlorine")}: ${d.chlorEta} min</div>
-			</div>`;
-		}
-		if (d.chlorState?.active) {
-			return `<div class="dial-timer">
-				<div class="timer-text" style="font-weight: 600; color: #27ae60;">${_t(lang, "dial.chlorine_active")}</div>
-			</div>`;
-		}
-		if (d.pauseState?.active && d.pauseEta != null) {
-			return `<div class="dial-timer">
-				<div class="timer-bar"><div class="timer-fill" style="width: ${d.pauseProgress * 100}%; background: linear-gradient(90deg, #e67e22, #f39c12);"></div></div>
-				<div class="timer-text">${_t(lang, "actions.pause")}: ${d.pauseEta} min</div>
-			</div>`;
-		}
-		return "";
+
+		// Inline min-height ensures the block always occupies the same vertical space
+		return `<div class="dial-timer" style="min-height:48px">${inner}</div>`;
 	}
 
 	_formatEventTime(startTs, endTs) {
