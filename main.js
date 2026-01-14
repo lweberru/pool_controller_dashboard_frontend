@@ -1069,12 +1069,16 @@ class PoolControllerCard extends HTMLElement {
 		const nextStart = d.nextStartMins;
 		const nextFilter = d.nextFilterMins;
 		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
-		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
-		const nextStartText = nextStart != null ? this._formatCountdown(lang, nextStart).text : '–';
+ 		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
+ 		// Tooltip titles: use the absolute datetime strings when available
+ 		const nextEventTitle = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : '';
+ 		const nextStartInfo = nextStart != null ? this._formatCountdown(lang, nextStart) : null;
+ 		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
+ 		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
 		return `<div class="calendar-block">
 			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
-			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time">${nextEvent}</div><div style="margin-top:6px">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div>${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
-			${nextFilter != null ? `<div style="margin-top:8px">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
+			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time" title="${nextEventTitle}">${nextEvent}</div><div style="margin-top:6px" title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
+			${nextFilter != null ? `<div style="margin-top:8px" title="${this._formatCountdown(lang, nextFilter).title}">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
 		</div>`;
 	}
 
