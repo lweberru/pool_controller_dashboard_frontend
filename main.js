@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.10";
+const VERSION = "2.0.11";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2164,27 +2164,27 @@ class PoolControllerCardEditor extends HTMLElement {
 			setTimeout(() => this._deriveFromController(), 100);
 		}
 
-		select.addEventListener("change", async (ev) => {
+		// Use `onchange` to avoid stacking multiple anonymous listeners across re-renders.
+		select.onchange = (ev) => {
 			const val = ev.target.value;
 			if (val) {
 				this._updateConfig({ controller_entity: val, climate_entity: val });
 				// Automatisch alle Entities vom ausgewählten Controller ableiten
 				setTimeout(() => this._deriveFromController(), 100);
 			}
-		});
+		};
 
 
 
 		// Populate content select (controller/calendar/waterquality/maintenance)
 		try {
 			const contentSelect = this.shadowRoot.querySelector('#content-select');
-			if (contentSelect) {
+				if (contentSelect) {
 				const opts = (I18N[lang] && I18N[lang].editor && I18N[lang].editor.content_options) || (I18N.de && I18N.de.editor && I18N.de.editor.content_options) || {};
 				// ensure current value
 				if (this._config && this._config.content) contentSelect.value = this._config.content;
-				contentSelect.addEventListener('change', (e) => {
-					this._updateConfig({ content: e.target.value });
-				});
+				// Assign onchange to avoid duplicate listeners when re-rendering the editor
+				contentSelect.onchange = (e) => { this._updateConfig({ content: e.target.value }); };
 				// update option labels if localized map available
 				for (const key of ['controller','calendar','waterquality','maintenance']) {
 					const opt = contentSelect.querySelector(`option[value="${key}"]`);
@@ -2195,10 +2195,8 @@ class PoolControllerCardEditor extends HTMLElement {
 			// ignore
 		}
 
-		// Re-render when config changes externally so derived fields show up
-		this.addEventListener("config-changed", () => {
-			this._render();
-		});
+		// Note: do not add an internal 'config-changed' listener here — the host
+		// will call `setConfig()` when config changes. Avoid redundant re-renders.
 	}
 
 	async _deriveFromController() {
