@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.15";
+const VERSION = "2.0.13";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -929,6 +929,13 @@ class PoolControllerCard extends HTMLElement {
 						</div>
 					</div>
 					<div class="dial-core">
+						<div class="temp-current" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
+						<div class="divider"></div>
+						<div class="temp-target-row">
+							<span class="temp-target-left" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
+							<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
+							<span class="temp-target-right" ${d.outdoorTempEntityId ? `data-more-info="${d.outdoorTempEntityId}"` : ''}>${d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : ''}</span>
+						</div>
 						<div class="switch-icons-row">
 							<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:power-plug"></ha-icon>
@@ -941,8 +948,8 @@ class PoolControllerCard extends HTMLElement {
 							</div>` : ''}
 						</div>
 					</div>
+					${this._renderDialTimer(d)}
 				</div>
-				${this._renderDialTimer(d)}
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
