@@ -1146,22 +1146,54 @@ class PoolControllerCard extends HTMLElement {
 				if (powerEl.__pc_power_listener_attached) {
 					console.warn('[pool_controller_dashboard_frontend] _attachHandlers: power-top already has click listener attached');
 				} else {
-					powerEl.addEventListener('click', (ev) => {
-						ev.stopPropagation();
-						if (!this._hass) return;
-						const d = this._renderData || {};
-						const main = d.mainPowerEntityId;
-						const aux = d.auxPowerEntityId;
-						// If we have at least one sensor, open the reusable history-graph dialog
-						if (main || aux) {
-							const entities = [main, aux].filter(Boolean);
-							this._openHistoryGraph(entities, 'Power history', 24);
-							return;
-						}
-						// No combined sensors available: fallback to single-entity more-info
-						if (d.powerMoreInfoEntityId) this._openMoreInfo(d.powerMoreInfoEntityId);
-					});
-					try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
+							powerEl.addEventListener('click', (ev) => {
+								ev.stopPropagation();
+								try {
+									if (!this._hass) return;
+									const d = this._renderData || {};
+									const main = d.mainPowerEntityId;
+									const aux = d.auxPowerEntityId;
+									// Debug info to help trace why clicks may be silent
+									try { console.debug('[pool_controller_dashboard_frontend] power-top clicked', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: powerEl.getAttribute && powerEl.getAttribute('data-more-info') }); } catch (_e) {}
+
+									// If we have at least one sensor, open the reusable history-graph dialog
+									if (main || aux) {
+										const entities = [main, aux].filter(Boolean);
+										this._openHistoryGraph(entities, 'Power history', 24);
+										return;
+									}
+
+									// Prefer backend-provided more-info entity id
+									if (d.powerMoreInfoEntityId) {
+										this._openMoreInfo(d.powerMoreInfoEntityId);
+										return;
+									}
+
+									// Fallback: check the DOM attribute directly (some render paths set data-more-info on the element)
+									try {
+										const domAttr = powerEl.getAttribute && powerEl.getAttribute('data-more-info');
+										if (domAttr) {
+											this._openMoreInfo(domAttr);
+											return;
+										}
+									} catch (_e) {}
+
+									// Last resort: try to find a child with data-more-info
+									try {
+										const child = powerEl.querySelector && powerEl.querySelector('[data-more-info]');
+										const childEnt = child && child.getAttribute && child.getAttribute('data-more-info');
+										if (childEnt) {
+											this._openMoreInfo(childEnt);
+											return;
+										}
+									} catch (_e) {}
+
+									console.warn('[pool_controller_dashboard_frontend] power-top click: no target entity available to open (main/aux/powerMoreInfo/data-more-info missing)');
+								} catch (e) {
+									console.error('[pool_controller_dashboard_frontend] power-top click handler error', e);
+								}
+							});
+							try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
 				}
 			}
 		} catch (e) {
