@@ -2600,3 +2600,72 @@ class PoolControllerCardWrapper extends HTMLElement {
 }
 
 window.customElements.define(CARD_TYPE, PoolControllerCardWrapper);
+
+// Robust attachment fallback: ensure `_attachHandlers()` is invoked on
+// rendered `pc-pool-controller` / `pc-pool-controller-card` instances even
+// when Lovelace wrappers / shadowRoot timing prevents the instance method
+// from running during initial render. Best-effort: call `_attachHandlers()`
+// on the element or its internal `_card` wrapper, set a DOM marker and
+// `window.__pc_attach_called` for runtime verification.
+(function(){
+	function ensureAttached(card){
+		try{
+			if(!card) return;
+			// Already handled?
+			try{ if(card.getAttribute && card.getAttribute('data-pc-attach')) return; } catch(_e){}
+
+			// Prefer direct method on the card
+			try{
+				if(typeof card._attachHandlers === 'function'){
+					card._attachHandlers();
+				} else if(card._card && typeof card._card._attachHandlers === 'function'){
+					card._card._attachHandlers();
+				}
+			} catch(_e){}
+
+			try{ card.setAttribute && card.setAttribute('data-pc-attach','true'); } catch(_e){}
+			try{ window.__pc_attach_called = true; } catch(_e){}
+		} catch(_err){}
+	}
+
+	function scanRoot(rootNode){
+		const found = [];
+		try{
+			// simple selectors where possible
+			try{ Array.from((rootNode || document).querySelectorAll('pc-pool-controller, pc-pool-controller-card')).forEach(e => found.push(e)); } catch(_e){}
+
+			// deeper traversal: walk tree and shadowRoots to find custom elements
+			const walk = (node) => {
+				if(!node) return;
+				try{
+					if(node.shadowRoot){
+						try{ Array.from(node.shadowRoot.querySelectorAll('pc-pool-controller, pc-pool-controller-card')).forEach(e => found.push(e)); } catch(_e){}
+						Array.from(node.shadowRoot.children || []).forEach(ch => walk(ch));
+					}
+				} catch(_e){}
+				try{ Array.from(node.children || []).forEach(ch => walk(ch)); } catch(_e){}
+			};
+			walk(document);
+		} catch(_e){}
+		return Array.from(new Set(found));
+	}
+
+	function scanAndAttach(){
+		try{
+			const nodes = scanRoot(document);
+			nodes.forEach(ensureAttached);
+		} catch(_e){}
+	}
+
+	// initial attempt
+	try{ scanAndAttach(); } catch(_e){}
+
+	// Observe DOM mutations and re-run the scan when nodes are added
+	try{
+		if(!window.__pc_global_attach_observer){
+			const mo = new MutationObserver(() => { scanAndAttach(); });
+			mo.observe(document, { childList: true, subtree: true });
+			window.__pc_global_attach_observer = mo;
+		}
+	} catch(_e){}
+})();
