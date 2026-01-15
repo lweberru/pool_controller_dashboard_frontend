@@ -1116,6 +1116,20 @@ class PoolControllerCard extends HTMLElement {
 		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
 			const entityId = el.getAttribute("data-more-info");
 			if (!entityId) return;
+			// If this element is the power-top pill, skip the generic more-info
+			// click handler; the power pill has a special click behavior that
+			// opens a combined history graph. Adding both handlers causes two
+			// listeners to be registered and the normal more-info modal to
+			// preempt the history graph. See issue where listeners show up at
+			// main.js:1121 and main.js:1135 in DevTools.
+			try {
+				if (el.classList && el.classList.contains('power-top')) {
+					console.debug('[pool_controller_dashboard_frontend] _attachHandlers: skipping generic more-info listener for power-top');
+					return;
+				}
+			} catch (_e) {
+				// ignore
+			}
 			// Prevent dial drag when clicking on inner elements (icons, numbers)
 			el.addEventListener("pointerdown", (ev) => ev.stopPropagation());
 			el.addEventListener("click", (ev) => {
