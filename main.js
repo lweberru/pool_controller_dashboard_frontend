@@ -1587,56 +1587,68 @@ class PoolControllerCard extends HTMLElement {
 							try { console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: whenDefined resolved for hui-history-graph-card'); } catch (_e) {}
 						}
 
-						const card = document.createElement('hui-history-graph-card');
-						// Some Lovelace cards expect `hass` to be present before setConfig.
-						// Set `hass` first to avoid initialization errors, then set the config
-						// including the explicit `type` so the card initializes correctly.
+						// Prefer Home Assistant's card helpers to create a proper Lovelace card
+						// instance (ensures `setConfig` exists regardless of custom element
+						// registration timing). If helpers are unavailable, fall back to the
+						// previous element-creation strategy.
 						try {
-							card.hass = this._hass;
-						} catch (err_hass) {
-							try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {}
-						}
-						try { card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title }); } catch (cfgErr) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: setConfig failed', cfgErr); } catch (_e) {} }
+							if (window.loadCardHelpers && typeof window.loadCardHelpers === 'function') {
+								try {
+									window.loadCardHelpers().then((helpers) => {
+										try {
+											const cfg = { type: 'history-graph', entities: ents, hours_to_show: hours, title };
+											const card = helpers.createCardElement(cfg);
+											// Ensure hass is set
+											try { card.hass = this._hass; } catch (e) {}
 
-						// Attempt to open a dialog wrapper
-						if (customElements.get('ha-dialog')) {
-							try {
-								const dialog = document.createElement('ha-dialog');
-								dialog.appendChild(card);
-								document.body.appendChild(dialog);
-								dialog.opened = true;
-								console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog appended and opened', { dialog });
-								dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
-								// Quick verification after a short tick whether the dialog is present/open
-								setTimeout(() => {
-									try {
-										const found = Array.from(document.querySelectorAll('ha-dialog')).find(d => d.contains(card));
-										if (!found) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog not found after append');
-										else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog present in DOM');
-									} catch (_e) {}
-								}, 250);
-							} catch (errDlg) {
-								try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: creating/using ha-dialog failed', errDlg); } catch (_e) {}
-								// Fallback: append the card directly
-								try { document.body.appendChild(card); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (_e) {}
+											// Use ha-dialog if available for consistent UI
+											if (customElements.get('ha-dialog')) {
+												try {
+													const dialog = document.createElement('ha-dialog');
+													dialog.appendChild(card);
+													document.body.appendChild(dialog);
+													dialog.opened = true;
+													console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog appended and opened (helpers)', { dialog });
+													dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
+												} catch (errDlg) {
+													console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog failed (helpers)', errDlg);
+													try { document.body.appendChild(card); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (_e) {}
+												}
+											} else {
+												try {
+													document.body.appendChild(card);
+													console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: appended history card to document.body (helpers)');
+													setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
+												} catch (errAppend) {
+													console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: append failed (helpers)', errAppend);
+												}
+											}
+										} catch (errCreate) {
+											console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: helpers.createCardElement failed', errCreate);
+											try { this._openMoreInfo(ents[0]); } catch (_e) {}
+										}
+									}).catch((errHelpers) => {
+										console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: loadCardHelpers rejected', errHelpers);
+									});
+									return;
+								} catch (e) {
+									console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: loadCardHelpers usage failed', e);
+								}
 							}
-						} else {
-							// Fallback: append the card directly and log presence
-							try {
-								document.body.appendChild(card);
-								console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: appended history card directly to document.body');
-								setTimeout(() => {
-									try {
-										const present = document.body.contains(card);
-										if (!present) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: history card not present after append');
-										else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: history card present in DOM');
-									} catch (_e) {}
-								}, 250);
-								setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
-							} catch (errAppend) {
-								try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: append fallback failed', errAppend); } catch (_e) {}
-							}
+						} catch (_e) {}
+
+						// Fallback: attempt to create the element directly (previous logic)
+						const card = document.createElement('hui-history-graph-card');
+						try { card.hass = this._hass; } catch (err_hass) { try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {} }
+						if (typeof card.setConfig !== 'function') {
+							try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: created history-card has no setConfig -> falling back to more-info', card); } catch (_e) {}
+							try { this._openMoreInfo(ents[0]); } catch (_e) {}
+							return;
 						}
+						try { card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title }); } catch (cfgErr) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: setConfig failed', cfgErr); } catch (_e) {} try { this._openMoreInfo(ents[0]); } catch (_e) {} return; }
+						if (customElements.get('ha-dialog')) {
+							try { const dialog = document.createElement('ha-dialog'); dialog.appendChild(card); document.body.appendChild(dialog); dialog.opened = true; console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog appended and opened', { dialog }); dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} }); setTimeout(() => { try { const found = Array.from(document.querySelectorAll('ha-dialog')).find(d => d.contains(card)); if (!found) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog not found after append'); else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog present in DOM'); } catch (_e) {} }, 250); } catch (errDlg) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: creating/using ha-dialog failed', errDlg); } catch (_e) {} try { document.body.appendChild(card); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (_e) {} }
+						else { try { document.body.appendChild(card); console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: appended history card directly to document.body'); setTimeout(() => { try { const present = document.body.contains(card); if (!present) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: history card not present after append'); else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: history card present in DOM'); } catch (_e) {} }, 250); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (errAppend) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: append fallback failed', errAppend); } catch (_e) {} } }
 					} catch (err) {
 						// Log error to browser console for diagnostics and fallback
 						try {
