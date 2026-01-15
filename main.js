@@ -4,128 +4,8 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.28";
+const VERSION = "2.0.30";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
-
-// One-time global capture listener to ensure we can observe click events
-// even if other listeners are removed/replaced. Helpful for debugging.
-(function(){
-	try {
-		if (!window.__pc_global_once_attached) {
-			const dbg = (ev) => {
-				try {
-					const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
-					const short = path.slice(0,8).map((e) => {
-						if (!e) return String(e);
-						try { return (e.className && typeof e.className === 'string') ? `${e.tagName || ''}.${e.className}` : (e.tagName || e.nodeName || String(e)); } catch (_e) { return String(e); }
-					});
-					console.info('[pc-global] capture', ev.type, { target: ev.target && (ev.target.tagName || ev.target.nodeName), path: short });
-				} catch (_e) { /* ignore */ }
-			};
-			try { document.addEventListener('click', dbg, { capture: true }); } catch (_) { try { document.addEventListener('click', dbg); } catch (_) {} }
-			try { document.addEventListener('pointerdown', dbg, { capture: true }); } catch (_) { try { document.addEventListener('pointerdown', dbg); } catch (_) {} }
-			window.__pc_global_once_attached = true;
-		}
-	} catch (_e) {}
-})();
-
-// Global delegated handler: reliably handle clicks on `.power-top` anywhere
-// in the document (including inside shadow roots) by inspecting
-// `event.composedPath()` and dispatching a `hass-more-info` event for the
-// entity found in `data-more-info` (fallback). This avoids needing the
-// card instance to successfully attach its own handlers in some Lovelace wrappers.
-(function(){
-	if (window.__pc_global_power_handler_attached) return;
-	const _powerDelegatedHandler = (ev) => {
-		try {
-			const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
-			const hit = path.find((e) => e && e.classList && typeof e.classList.contains === 'function' && e.classList.contains('power-top'));
-			if (!hit) return;
-			// prevent duplicate/bubbled handlers
-			try { ev.stopPropagation(); } catch (_) {}
-
-			// Prefer explicit data-more-info attribute on the hit, then children
-			let ent = null;
-			try { ent = hit.getAttribute && hit.getAttribute('data-more-info'); } catch (_) { ent = null; }
-			if (!ent) {
-				try { const c = hit.querySelector && hit.querySelector('[data-more-info]'); ent = c && c.getAttribute && c.getAttribute('data-more-info'); } catch (_) { ent = null; }
-			}
-
-			// Try to open history graph if the card instance exposes main/aux power entities
-			try {
-				const cardEl = path.find((e) => e && e.tagName && String(e.tagName).toLowerCase().includes('pc-pool-controller')) ||
-											 path.find((e) => e && e.tagName && String(e.tagName).toLowerCase().includes('pc-pool-controller-card')) || null;
-				const renderData = cardEl ? (cardEl._renderData || (cardEl._card && cardEl._card._renderData) || null) : null;
-				if (renderData && (renderData.mainPowerEntityId || renderData.auxPowerEntityId)) {
-					const entities = [renderData.mainPowerEntityId, renderData.auxPowerEntityId].filter(Boolean);
-					try {
-						// Prefer card method on the element, fallback to wrapped _card
-						if (typeof cardEl._openHistoryGraph === 'function') {
-							cardEl._openHistoryGraph(entities, 'Power history', 24);
-							console.info('[pc-global] delegated power-top click -> openHistoryGraph', entities);
-							// Fallback: if no history dialog/card appeared shortly, open more-info for first entity
-							try {
-								const first = entities && entities[0];
-								setTimeout(() => {
-									try {
-										const hasHistory = !!(document.querySelector('hui-history-graph-card') || document.querySelector('ha-dialog hui-history-graph-card') || document.querySelector('ha-dialog'));
-										if (!hasHistory && first) {
-											try { const more = new CustomEvent('hass-more-info', { detail: { entityId: first }, bubbles: true, composed: true }); (document.querySelector('home-assistant') || document).dispatchEvent(more); console.info('[pc-global] fallback -> hass-more-info', first); } catch (_e) {}
-										}
-									} catch (_e) {}
-								}, 450);
-							} catch (_e) {}
-							return;
-						}
-						if (cardEl._card && typeof cardEl._card._openHistoryGraph === 'function') {
-							cardEl._card._openHistoryGraph(entities, 'Power history', 24);
-							console.info('[pc-global] delegated power-top click -> openHistoryGraph (wrapped)', entities);
-							// Fallback: same as above
-							try {
-								const first = entities && entities[0];
-								setTimeout(() => {
-									try {
-										const hasHistory = !!(document.querySelector('hui-history-graph-card') || document.querySelector('ha-dialog hui-history-graph-card') || document.querySelector('ha-dialog'));
-										if (!hasHistory && first) {
-											try { const more = new CustomEvent('hass-more-info', { detail: { entityId: first }, bubbles: true, composed: true }); (document.querySelector('home-assistant') || document).dispatchEvent(more); console.info('[pc-global] fallback -> hass-more-info', first); } catch (_e) {}
-										}
-									} catch (_e) {}
-								}, 450);
-							} catch (_e) {}
-							return;
-						}
-					} catch (e) {
-						console.warn('[pc-global] openHistoryGraph failed, falling back to more-info', e);
-					}
-				}
-			} catch (e) {
-				console.debug('[pc-global] card-history lookup failed', e);
-			}
-
-			// Fallback: dispatch hass-more-info for the found entity (if any)
-			if (ent) {
-				try {
-					const more = new CustomEvent('hass-more-info', { detail: { entityId: ent }, bubbles: true, composed: true });
-					const haRoot = document.querySelector('home-assistant') || document;
-					haRoot.dispatchEvent && haRoot.dispatchEvent(more);
-					console.info('[pc-global] delegated power-top click -> hass-more-info', ent);
-				} catch (e) {
-					console.error('[pc-global] failed to dispatch hass-more-info', e);
-				}
-			} else {
-				console.warn('[pc-global] power-top clicked but no data-more-info found');
-			}
-		} catch (e) {
-			console.error('[pc-global] power delegated handler error', e);
-		}
-	};
-
-	try { document.addEventListener('click', _powerDelegatedHandler, { capture: true }); } catch (_) { document.addEventListener('click', _powerDelegatedHandler); }
-	try { document.addEventListener('pointerdown', _powerDelegatedHandler, { capture: true }); } catch (_) { document.addEventListener('pointerdown', _powerDelegatedHandler); }
-	window.__pc_global_power_handler_attached = true;
-	console.info('[pc-global] power delegated handler attached');
-})();
-
 
 const CARD_TYPE = "pc-pool-controller";
 const DEFAULTS = { content: "controller" };
@@ -315,6 +195,41 @@ const I18N = {
 		}
 	}
 };
+
+/**
+ * Erzeugt eine generische Home Assistant History-Graph Karte.
+ * * @param {Object} hass - Das Home Assistant State Objekt.
+ * @param {Array<string|Object>} entities - Liste der Entitäten (z.B. ['sensor.temp1', 'sensor.temp2']).
+ * @param {number} hoursToShow - Zeitraum in Stunden (Standard: 24).
+ * @param {number} refreshInterval - Aktualisierungsrate in Sekunden (Standard: 0 = aus).
+ * @returns {Promise<HTMLElement>} - Das fertige HTML-Element der Karte.
+ */
+async function createHistoryGraph(hass, entities, hoursToShow = 24, refreshInterval = 0) {
+  // Prüfen, ob die Card-Helper verfügbar sind
+  if (!window.loadCardHelpers) {
+    console.error("Home Assistant Card Helpers konnten nicht gefunden werden.");
+    return null;
+  }
+
+  const helpers = await window.loadCardHelpers();
+
+  // Konfiguration dynamisch aufbauen
+  const cardConfig = {
+    type: "history-graph",
+    entities: entities,
+    hours_to_show: hoursToShow,
+    refresh_interval: refreshInterval
+  };
+
+  // Kartenelement erstellen
+  const element = await helpers.createCardElement(cardConfig);
+
+  // Das hass-Objekt injizieren, damit die Karte Daten abrufen kann
+  element.hass = hass;
+
+  return element;
+}
+
 
 function _langFromHass(hass) { return (hass?.language || hass?.locale?.language || 'de').split('-')[0]; }
 function _t(lang, key, vars) {
@@ -1233,173 +1148,73 @@ class PoolControllerCard extends HTMLElement {
 		const maintenanceActive = !!this._renderData?.maintenanceActive;
 
 		// More-info popups (Home Assistant entity details)
-			console.info('[pool_controller_dashboard_frontend] _attachHandlers: start');
-			// DOM-visible marker + global flag for out-of-band verification
-			try { this.setAttribute && this.setAttribute('data-pc-attach', 'true'); } catch (_e) {}
-			try { window.__pc_attach_called = true; } catch (_e) {}
-			this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
+		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
 			const entityId = el.getAttribute("data-more-info");
 			if (!entityId) return;
-			// If this element is the power-top pill, skip the generic more-info
-			// click handler; the power pill has a special click behavior that
-			// opens a combined history graph. Adding both handlers causes two
-			// listeners to be registered and the normal more-info modal to
-			// preempt the history graph. See issue where listeners show up at
-			// main.js:1121 and main.js:1135 in DevTools.
-			try {
-				if (el.classList && el.classList.contains('power-top')) {
-					console.debug('[pool_controller_dashboard_frontend] _attachHandlers: skipping generic more-info listener for power-top');
-					return;
-				}
-			} catch (_e) {
-				// ignore
-			}
 			// Prevent dial drag when clicking on inner elements (icons, numbers)
 			el.addEventListener("pointerdown", (ev) => ev.stopPropagation());
 			el.addEventListener("click", (ev) => {
 				ev.stopPropagation();
+				// Use the existing in-file helper `createHistoryGraph` for power/history popups.
+				// For other entities, fall back to the regular more-info dialog.
+				try {
+					const eff = this._withDerivedConfig(this._config || {});
+					const powerCandidates = [eff.main_power_entity, eff.aux_power_entity, eff.pv_power_entity, eff.power_entity].filter(Boolean);
+					const isPowerWidget = el.classList?.contains?.('power-top') || (entityId && powerCandidates.includes(entityId));
+					if (isPowerWidget && powerCandidates.length > 0) {
+						(async () => {
+							try {
+								const card = await createHistoryGraph(this._hass, powerCandidates, 24, 0);
+								if (!card) {
+									this._openMoreInfo(entityId);
+									return;
+								}
+								// Inline lightweight overlay (avoid adding a new named helper).
+								const overlay = document.createElement('div');
+								Object.assign(overlay.style, {
+									position: 'fixed',
+									left: '8px',
+									right: '8px',
+									top: '8px',
+									bottom: '8px',
+									background: 'rgba(255,255,255,0.98)',
+									zIndex: 999999,
+									boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+									padding: '12px',
+									borderRadius: '12px',
+									overflow: 'auto',
+								});
+								const closeBtn = document.createElement('button');
+								closeBtn.textContent = '✕';
+								Object.assign(closeBtn.style, {
+									position: 'absolute',
+									right: '12px',
+									top: '12px',
+									zIndex: 1000000,
+									background: 'transparent',
+									border: 'none',
+									fontSize: '18px',
+									cursor: 'pointer',
+								});
+								closeBtn.addEventListener('click', () => { try { overlay.remove(); } catch (_e) {} });
+								overlay.addEventListener('pointerdown', (e) => e.stopPropagation());
+								overlay.appendChild(closeBtn);
+								overlay.appendChild(card);
+								document.body.appendChild(overlay);
+								return;
+							} catch (e) {
+								// fallback to more-info
+								try { this._openMoreInfo(entityId); } catch (_e) {}
+							}
+						})();
+						return;
+					}
+				} catch (_e) {
+					// ignore and fallback
+				}
 				this._openMoreInfo(entityId);
 			});
 		});
-
-		// Special handler: clicking the power pill should open a history-graph modal
-		// showing both main and aux heater power if available. Falls back to more-info.
-		try {
-			const powerEl = this.shadowRoot.querySelector('.power-top');
-
-				// TEMP DEBUG: global capture-phase listeners to trace click/pointer events
-				// Will log composedPath (first entries) to help identify why `.power-top`
-				// clicks are not observed by the local handler. Removed once diagnosed.
-				try {
-					if (!window.__pc_global_click_debug) {
-						window.__pc_global_click_debug = true;
-						const _dbg = (ev) => {
-							try {
-								const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
-								const short = path.slice(0, 8).map((e) => {
-									if (!e) return String(e);
-									try { return (e.className && typeof e.className === 'string') ? `${e.tagName || ''}.${e.className}` : (e.tagName || e.nodeName || String(e)); } catch (_e) { return String(e); }
-								});
-								console.debug('[pc-debug] global-capture', ev.type, { target: ev.target && (ev.target.tagName || ev.target.nodeName), path: short });
-							} catch (e) { console.error('[pc-debug] global-capture error', e); }
-						};
-						try { window.addEventListener('click', _dbg, { capture: true }); } catch (_) { try { window.addEventListener('click', _dbg); } catch (_) {} }
-						try { window.addEventListener('pointerdown', _dbg, { capture: true }); } catch (_) { try { window.addEventListener('pointerdown', _dbg); } catch (_) {} }
-					}
-				} catch (_e) {
-					console.warn('[pc-debug] could not attach global debug listeners', _e);
-				}
-
-			if (powerEl) {
-				if (powerEl.__pc_power_listener_attached) {
-					console.warn('[pool_controller_dashboard_frontend] _attachHandlers: power-top already has click listener attached');
-				} else {
-							// Register click listener in capture phase so it runs before
-							// any child/bubble handlers that may stop propagation.
-							const _powerClickHandler = (ev) => {
-								ev.stopPropagation();
-								try {
-									if (!this._hass) return;
-									const d = this._renderData || {};
-									const main = d.mainPowerEntityId;
-									const aux = d.auxPowerEntityId;
-									// Debug info to help trace why clicks may be silent
-									try { console.info('[pc-power] power-top clicked', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: powerEl.getAttribute && powerEl.getAttribute('data-more-info') }); } catch (_e) {}
-
-									// If we have at least one sensor, open the reusable history-graph dialog
-									if (main || aux) {
-										const entities = [main, aux].filter(Boolean);
-										this._openHistoryGraph(entities, 'Power history', 24);
-										return;
-									}
-
-									// Prefer backend-provided more-info entity id
-									if (d.powerMoreInfoEntityId) {
-										this._openMoreInfo(d.powerMoreInfoEntityId);
-										return;
-									}
-
-									// Fallback: check the DOM attribute directly (some render paths set data-more-info on the element)
-									try {
-										const domAttr = powerEl.getAttribute && powerEl.getAttribute('data-more-info');
-										if (domAttr) {
-											this._openMoreInfo(domAttr);
-											return;
-										}
-									} catch (_e) {}
-
-									// Last resort: try to find a child with data-more-info
-									try {
-										const child = powerEl.querySelector && powerEl.querySelector('[data-more-info]');
-										const childEnt = child && child.getAttribute && child.getAttribute('data-more-info');
-										if (childEnt) {
-											this._openMoreInfo(childEnt);
-											return;
-										}
-									} catch (_e) {}
-
-									console.warn('[pool_controller_dashboard_frontend] power-top click: no target entity available to open (main/aux/powerMoreInfo/data-more-info missing)');
-								} catch (e) {
-									console.error('[pool_controller_dashboard_frontend] power-top click handler error', e);
-								}
-							};
-							try {
-								powerEl.addEventListener('click', _powerClickHandler, { capture: true });
-							} catch (_e) {
-								// Fallback for older browsers/environments
-								try { powerEl.addEventListener('click', _powerClickHandler); } catch (_e2) {}
-							}
-							try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
-						}
-						// Robust fallback: attach a shadow-root level capture listener so clicks
-						// are handled even if the inner `.power-top` element is replaced by a later render.
-						if (!this.__pc_power_root_listener_attached) {
-							try {
-								const _powerRootHandler = (ev) => {
-									try {
-										const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
-										const hit = path.find((e) => e && e.classList && typeof e.classList.contains === 'function' && e.classList.contains('power-top'));
-										if (!hit) return;
-										ev.stopPropagation();
-										if (!this._hass) return;
-										const d = this._renderData || {};
-										const main = d.mainPowerEntityId;
-										const aux = d.auxPowerEntityId;
-										try { console.info('[pc-power] power-top clicked (root)', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: hit.getAttribute && hit.getAttribute('data-more-info') }); } catch (_e) {}
-										if (main || aux) {
-											const entities = [main, aux].filter(Boolean);
-											this._openHistoryGraph(entities, 'Power history', 24);
-											return;
-										}
-										if (d.powerMoreInfoEntityId) {
-											this._openMoreInfo(d.powerMoreInfoEntityId);
-											return;
-										}
-										try {
-											const domAttr = hit.getAttribute && hit.getAttribute('data-more-info');
-											if (domAttr) { this._openMoreInfo(domAttr); return; }
-										} catch (_e) {}
-										try {
-											const child = hit.querySelector && hit.querySelector('[data-more-info]');
-											const childEnt = child && child.getAttribute && child.getAttribute('data-more-info');
-											if (childEnt) { this._openMoreInfo(childEnt); return; }
-										} catch (_e) {}
-										console.warn('[pool_controller_dashboard_frontend] power-top click (root): no target entity available to open (main/aux/powerMoreInfo/data-more-info missing)');
-									} catch (e) {
-										console.error('[pool_controller_dashboard_frontend] power-top root handler error', e);
-									}
-								};
-								try { this.shadowRoot.addEventListener('click', _powerRootHandler, { capture: true }); } catch (_e) { try { this.shadowRoot.addEventListener('click', _powerRootHandler); } catch (_e2) {} }
-								try { this.shadowRoot.addEventListener('pointerdown', _powerRootHandler, { capture: true }); } catch (_e) { try { this.shadowRoot.addEventListener('pointerdown', _powerRootHandler); } catch (_e2) {} }
-								this.__pc_power_root_listener_attached = true;
-							} catch (err) {
-								console.warn('[pool_controller_dashboard_frontend] could not attach shadow-root power listener', err);
-							}
-						}
-			}
-		} catch (e) {
-			console.error('[pool_controller_dashboard_frontend] _attachHandlers: power pill handler registration failed', e);
-		}
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
 		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
@@ -1566,114 +1381,6 @@ class PoolControllerCard extends HTMLElement {
 		} catch (_e) {
 			// ignore
 		}
-	}
-
-	_openHistoryGraph(entities, title = 'History', hours = 24) {
-		if (!entities || !entities.length) return;
-		// Normalize
-		const ents = Array.isArray(entities) ? entities.filter(Boolean) : [entities];
-		if (!ents.length) return;
-			try {
-				// Debug: quick visibility into whether the element is already defined
-				try { console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: customElements.get(hui-history-graph-card)=', customElements.get('hui-history-graph-card')); } catch (_e) {}
-				// Protect against a whenDefined that never resolves by racing with a short timeout.
-				const waitDef = customElements.whenDefined('hui-history-graph-card');
-				const race = Promise.race([waitDef, new Promise((res) => setTimeout(() => res('timeout'), 300))]);
-				race.then((res) => {
-					try {
-						if (res === 'timeout') {
-							try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: whenDefined timed out, attempting to create history card anyway'); } catch (_e) {}
-						} else {
-							try { console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: whenDefined resolved for hui-history-graph-card'); } catch (_e) {}
-						}
-
-						// Prefer Home Assistant's card helpers to create a proper Lovelace card
-						// instance (ensures `setConfig` exists regardless of custom element
-						// registration timing). If helpers are unavailable, fall back to the
-						// previous element-creation strategy.
-						try {
-							if (window.loadCardHelpers && typeof window.loadCardHelpers === 'function') {
-								try {
-									window.loadCardHelpers().then((helpers) => {
-										try {
-											const cfg = { type: 'history-graph', entities: ents, hours_to_show: hours, title };
-											const card = helpers.createCardElement(cfg);
-											// Ensure hass is set
-											try { card.hass = this._hass; } catch (e) {}
-
-											// Use ha-dialog if available for consistent UI
-											if (customElements.get('ha-dialog')) {
-												try {
-													const dialog = document.createElement('ha-dialog');
-													dialog.appendChild(card);
-													document.body.appendChild(dialog);
-													dialog.opened = true;
-													console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog appended and opened (helpers)', { dialog });
-													dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
-												} catch (errDlg) {
-													console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog failed (helpers)', errDlg);
-													try { document.body.appendChild(card); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (_e) {}
-												}
-											} else {
-												try {
-													document.body.appendChild(card);
-													console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: appended history card to document.body (helpers)');
-													setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
-												} catch (errAppend) {
-													console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: append failed (helpers)', errAppend);
-												}
-											}
-										} catch (errCreate) {
-											console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: helpers.createCardElement failed', errCreate);
-											try { this._openMoreInfo(ents[0]); } catch (_e) {}
-										}
-									}).catch((errHelpers) => {
-										console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: loadCardHelpers rejected', errHelpers);
-									});
-									return;
-								} catch (e) {
-									console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: loadCardHelpers usage failed', e);
-								}
-							}
-						} catch (_e) {}
-
-						// Fallback: attempt to create the element directly (previous logic)
-						const card = document.createElement('hui-history-graph-card');
-						try { card.hass = this._hass; } catch (err_hass) { try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {} }
-						if (typeof card.setConfig !== 'function') {
-							try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: created history-card has no setConfig -> falling back to more-info', card); } catch (_e) {}
-							try { this._openMoreInfo(ents[0]); } catch (_e) {}
-							return;
-						}
-						try { card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title }); } catch (cfgErr) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: setConfig failed', cfgErr); } catch (_e) {} try { this._openMoreInfo(ents[0]); } catch (_e) {} return; }
-						if (customElements.get('ha-dialog')) {
-							try { const dialog = document.createElement('ha-dialog'); dialog.appendChild(card); document.body.appendChild(dialog); dialog.opened = true; console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog appended and opened', { dialog }); dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} }); setTimeout(() => { try { const found = Array.from(document.querySelectorAll('ha-dialog')).find(d => d.contains(card)); if (!found) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog not found after append'); else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog present in DOM'); } catch (_e) {} }, 250); } catch (errDlg) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: creating/using ha-dialog failed', errDlg); } catch (_e) {} try { document.body.appendChild(card); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (_e) {} }
-						else { try { document.body.appendChild(card); console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: appended history card directly to document.body'); setTimeout(() => { try { const present = document.body.contains(card); if (!present) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: history card not present after append'); else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: history card present in DOM'); } catch (_e) {} }, 250); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (errAppend) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: append fallback failed', errAppend); } catch (_e) {} } }
-					} catch (err) {
-						// Log error to browser console for diagnostics and fallback
-						try {
-							console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: failed to create history card/dialog', err, { entities: ents, title, hours });
-						} catch (_logErr) {}
-						// Fallback to more-info for first entity
-						try {
-							console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
-							this._openMoreInfo(ents[0]);
-						} catch (e) {
-							try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', e); } catch (_e) {}
-						}
-					}
-				});
-			} catch (e) {
-				try {
-					console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: unexpected error', e, { entities: ents, title, hours });
-				} catch (_logErr) {}
-				try { 
-					console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
-					this._openMoreInfo(ents[0]); 
-				} catch (err) {
-					try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', err); } catch (_e) {}
-				}
-			}
 	}
 
 	_triggerEntity(entityId, turnOn = true) {
@@ -2750,72 +2457,3 @@ class PoolControllerCardWrapper extends HTMLElement {
 }
 
 window.customElements.define(CARD_TYPE, PoolControllerCardWrapper);
-
-// Robust attachment fallback: ensure `_attachHandlers()` is invoked on
-// rendered `pc-pool-controller` / `pc-pool-controller-card` instances even
-// when Lovelace wrappers / shadowRoot timing prevents the instance method
-// from running during initial render. Best-effort: call `_attachHandlers()`
-// on the element or its internal `_card` wrapper, set a DOM marker and
-// `window.__pc_attach_called` for runtime verification.
-(function(){
-	function ensureAttached(card){
-		try{
-			if(!card) return;
-			// Already handled?
-			try{ if(card.getAttribute && card.getAttribute('data-pc-attach')) return; } catch(_e){}
-
-			// Prefer direct method on the card
-			try{
-				if(typeof card._attachHandlers === 'function'){
-					card._attachHandlers();
-				} else if(card._card && typeof card._card._attachHandlers === 'function'){
-					card._card._attachHandlers();
-				}
-			} catch(_e){}
-
-			try{ card.setAttribute && card.setAttribute('data-pc-attach','true'); } catch(_e){}
-			try{ window.__pc_attach_called = true; } catch(_e){}
-		} catch(_err){}
-	}
-
-	function scanRoot(rootNode){
-		const found = [];
-		try{
-			// simple selectors where possible
-			try{ Array.from((rootNode || document).querySelectorAll('pc-pool-controller, pc-pool-controller-card')).forEach(e => found.push(e)); } catch(_e){}
-
-			// deeper traversal: walk tree and shadowRoots to find custom elements
-			const walk = (node) => {
-				if(!node) return;
-				try{
-					if(node.shadowRoot){
-						try{ Array.from(node.shadowRoot.querySelectorAll('pc-pool-controller, pc-pool-controller-card')).forEach(e => found.push(e)); } catch(_e){}
-						Array.from(node.shadowRoot.children || []).forEach(ch => walk(ch));
-					}
-				} catch(_e){}
-				try{ Array.from(node.children || []).forEach(ch => walk(ch)); } catch(_e){}
-			};
-			walk(document);
-		} catch(_e){}
-		return Array.from(new Set(found));
-	}
-
-	function scanAndAttach(){
-		try{
-			const nodes = scanRoot(document);
-			nodes.forEach(ensureAttached);
-		} catch(_e){}
-	}
-
-	// initial attempt
-	try{ scanAndAttach(); } catch(_e){}
-
-	// Observe DOM mutations and re-run the scan when nodes are added
-	try{
-		if(!window.__pc_global_attach_observer){
-			const mo = new MutationObserver(() => { scanAndAttach(); });
-			mo.observe(document, { childList: true, subtree: true });
-			window.__pc_global_attach_observer = mo;
-		}
-	} catch(_e){}
-})();
