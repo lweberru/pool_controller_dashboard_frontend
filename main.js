@@ -1325,10 +1325,15 @@ class PoolControllerCard extends HTMLElement {
 			customElements.whenDefined('hui-history-graph-card').then(() => {
 				try {
 					const card = document.createElement('hui-history-graph-card');
-					// Ensure the config includes the Lovelace card `type` so the card
-					// initializes correctly in all HA versions.
+					// Some Lovelace cards expect `hass` to be present before setConfig.
+					// Set `hass` first to avoid initialization errors, then set the config
+					// including the explicit `type` so the card initializes correctly.
+					try {
+						card.hass = this._hass;
+					} catch (err_hass) {
+						try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {}
+					}
 					card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title });
-					card.hass = this._hass;
 					if (customElements.get('ha-dialog')) {
 						const dialog = document.createElement('ha-dialog');
 						dialog.appendChild(card);
