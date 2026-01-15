@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.24";
+const VERSION = "2.0.28";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 // One-time global capture listener to ensure we can observe click events
@@ -1573,55 +1573,95 @@ class PoolControllerCard extends HTMLElement {
 		// Normalize
 		const ents = Array.isArray(entities) ? entities.filter(Boolean) : [entities];
 		if (!ents.length) return;
-		try {
-			customElements.whenDefined('hui-history-graph-card').then(() => {
-				try {
-					const card = document.createElement('hui-history-graph-card');
-					// Some Lovelace cards expect `hass` to be present before setConfig.
-					// Set `hass` first to avoid initialization errors, then set the config
-					// including the explicit `type` so the card initializes correctly.
-					try {
-						card.hass = this._hass;
-					} catch (err_hass) {
-						try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {}
-					}
-					card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title });
-					if (customElements.get('ha-dialog')) {
-						const dialog = document.createElement('ha-dialog');
-						dialog.appendChild(card);
-						document.body.appendChild(dialog);
-						dialog.opened = true;
-						dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
-					} else {
-						// Fallback: append the card and remove later
-						document.body.appendChild(card);
-						setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
-					}
-				} catch (err) {
-					// Log error to browser console for diagnostics and fallback
-					try {
-						console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: failed to create history card/dialog', err, { entities: ents, title, hours });
-					} catch (_logErr) {}
-					// Fallback to more-info for first entity
-					try {
-						console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
-						this._openMoreInfo(ents[0]);
-					} catch (e) {
-						try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', e); } catch (_e) {}
-					}
-				}
-			});
-		} catch (e) {
 			try {
-				console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: unexpected error', e, { entities: ents, title, hours });
-			} catch (_logErr) {}
-			try { 
-				console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
-				this._openMoreInfo(ents[0]); 
-			} catch (err) {
-				try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', err); } catch (_e) {}
+				// Debug: quick visibility into whether the element is already defined
+				try { console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: customElements.get(hui-history-graph-card)=', customElements.get('hui-history-graph-card')); } catch (_e) {}
+				// Protect against a whenDefined that never resolves by racing with a short timeout.
+				const waitDef = customElements.whenDefined('hui-history-graph-card');
+				const race = Promise.race([waitDef, new Promise((res) => setTimeout(() => res('timeout'), 300))]);
+				race.then((res) => {
+					try {
+						if (res === 'timeout') {
+							try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: whenDefined timed out, attempting to create history card anyway'); } catch (_e) {}
+						} else {
+							try { console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: whenDefined resolved for hui-history-graph-card'); } catch (_e) {}
+						}
+
+						const card = document.createElement('hui-history-graph-card');
+						// Some Lovelace cards expect `hass` to be present before setConfig.
+						// Set `hass` first to avoid initialization errors, then set the config
+						// including the explicit `type` so the card initializes correctly.
+						try {
+							card.hass = this._hass;
+						} catch (err_hass) {
+							try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {}
+						}
+						try { card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title }); } catch (cfgErr) { try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: setConfig failed', cfgErr); } catch (_e) {} }
+
+						// Attempt to open a dialog wrapper
+						if (customElements.get('ha-dialog')) {
+							try {
+								const dialog = document.createElement('ha-dialog');
+								dialog.appendChild(card);
+								document.body.appendChild(dialog);
+								dialog.opened = true;
+								console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog appended and opened', { dialog });
+								dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
+								// Quick verification after a short tick whether the dialog is present/open
+								setTimeout(() => {
+									try {
+										const found = Array.from(document.querySelectorAll('ha-dialog')).find(d => d.contains(card));
+										if (!found) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog not found after append');
+										else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: ha-dialog present in DOM');
+									} catch (_e) {}
+								}, 250);
+							} catch (errDlg) {
+								try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: creating/using ha-dialog failed', errDlg); } catch (_e) {}
+								// Fallback: append the card directly
+								try { document.body.appendChild(card); setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000); } catch (_e) {}
+							}
+						} else {
+							// Fallback: append the card directly and log presence
+							try {
+								document.body.appendChild(card);
+								console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: appended history card directly to document.body');
+								setTimeout(() => {
+									try {
+										const present = document.body.contains(card);
+										if (!present) console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: history card not present after append');
+										else console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: history card present in DOM');
+									} catch (_e) {}
+								}, 250);
+								setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
+							} catch (errAppend) {
+								try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: append fallback failed', errAppend); } catch (_e) {}
+							}
+						}
+					} catch (err) {
+						// Log error to browser console for diagnostics and fallback
+						try {
+							console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: failed to create history card/dialog', err, { entities: ents, title, hours });
+						} catch (_logErr) {}
+						// Fallback to more-info for first entity
+						try {
+							console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
+							this._openMoreInfo(ents[0]);
+						} catch (e) {
+							try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', e); } catch (_e) {}
+						}
+					}
+				});
+			} catch (e) {
+				try {
+					console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: unexpected error', e, { entities: ents, title, hours });
+				} catch (_logErr) {}
+				try { 
+					console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
+					this._openMoreInfo(ents[0]); 
+				} catch (err) {
+					try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', err); } catch (_e) {}
+				}
 			}
-		}
 	}
 
 	_triggerEntity(entityId, turnOn = true) {
