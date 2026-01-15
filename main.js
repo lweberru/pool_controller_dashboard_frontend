@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.22";
+const VERSION = "2.0.23";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1129,24 +1129,29 @@ class PoolControllerCard extends HTMLElement {
 		try {
 			const powerEl = this.shadowRoot.querySelector('.power-top');
 			if (powerEl) {
-				powerEl.addEventListener('click', (ev) => {
-					ev.stopPropagation();
-					if (!this._hass) return;
-					const d = this._renderData || {};
-					const main = d.mainPowerEntityId;
-					const aux = d.auxPowerEntityId;
-					// If we have at least one sensor, open the reusable history-graph dialog
-					if (main || aux) {
-						const entities = [main, aux].filter(Boolean);
-						this._openHistoryGraph(entities, 'Power history', 24);
-						return;
-					}
-					// No combined sensors available: fallback to single-entity more-info
-					if (d.powerMoreInfoEntityId) this._openMoreInfo(d.powerMoreInfoEntityId);
-				});
+				if (powerEl.__pc_power_listener_attached) {
+					console.warn('[pool_controller_dashboard_frontend] _attachHandlers: power-top already has click listener attached');
+				} else {
+					powerEl.addEventListener('click', (ev) => {
+						ev.stopPropagation();
+						if (!this._hass) return;
+						const d = this._renderData || {};
+						const main = d.mainPowerEntityId;
+						const aux = d.auxPowerEntityId;
+						// If we have at least one sensor, open the reusable history-graph dialog
+						if (main || aux) {
+							const entities = [main, aux].filter(Boolean);
+							this._openHistoryGraph(entities, 'Power history', 24);
+							return;
+						}
+						// No combined sensors available: fallback to single-entity more-info
+						if (d.powerMoreInfoEntityId) this._openMoreInfo(d.powerMoreInfoEntityId);
+					});
+					try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
+				}
 			}
 		} catch (e) {
-			// best-effort: ignore
+			console.error('[pool_controller_dashboard_frontend] _attachHandlers: power pill handler registration failed', e);
 		}
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
