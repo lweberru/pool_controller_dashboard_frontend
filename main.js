@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.30";
+const VERSION = "2.0.20";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -195,41 +195,6 @@ const I18N = {
 		}
 	}
 };
-
-/**
- * Erzeugt eine generische Home Assistant History-Graph Karte.
- * * @param {Object} hass - Das Home Assistant State Objekt.
- * @param {Array<string|Object>} entities - Liste der Entitäten (z.B. ['sensor.temp1', 'sensor.temp2']).
- * @param {number} hoursToShow - Zeitraum in Stunden (Standard: 24).
- * @param {number} refreshInterval - Aktualisierungsrate in Sekunden (Standard: 0 = aus).
- * @returns {Promise<HTMLElement>} - Das fertige HTML-Element der Karte.
- */
-async function createHistoryGraph(hass, entities, hoursToShow = 24, refreshInterval = 0) {
-  // Prüfen, ob die Card-Helper verfügbar sind
-  if (!window.loadCardHelpers) {
-    console.error("Home Assistant Card Helpers konnten nicht gefunden werden.");
-    return null;
-  }
-
-  const helpers = await window.loadCardHelpers();
-
-  // Konfiguration dynamisch aufbauen
-  const cardConfig = {
-    type: "history-graph",
-    entities: entities,
-    hours_to_show: hoursToShow,
-    refresh_interval: refreshInterval
-  };
-
-  // Kartenelement erstellen
-  const element = await helpers.createCardElement(cardConfig);
-
-  // Das hass-Objekt injizieren, damit die Karte Daten abrufen kann
-  element.hass = hass;
-
-  return element;
-}
-
 
 function _langFromHass(hass) { return (hass?.language || hass?.locale?.language || 'de').split('-')[0]; }
 function _t(lang, key, vars) {
@@ -1155,66 +1120,34 @@ class PoolControllerCard extends HTMLElement {
 			el.addEventListener("pointerdown", (ev) => ev.stopPropagation());
 			el.addEventListener("click", (ev) => {
 				ev.stopPropagation();
-				// Use the existing in-file helper `createHistoryGraph` for power/history popups.
-				// For other entities, fall back to the regular more-info dialog.
-				try {
-					const eff = this._withDerivedConfig(this._config || {});
-					const powerCandidates = [eff.main_power_entity, eff.aux_power_entity, eff.pv_power_entity, eff.power_entity].filter(Boolean);
-					const isPowerWidget = el.classList?.contains?.('power-top') || (entityId && powerCandidates.includes(entityId));
-					if (isPowerWidget && powerCandidates.length > 0) {
-						(async () => {
-							try {
-								const card = await createHistoryGraph(this._hass, powerCandidates, 24, 0);
-								if (!card) {
-									this._openMoreInfo(entityId);
-									return;
-								}
-								// Inline lightweight overlay (avoid adding a new named helper).
-								const overlay = document.createElement('div');
-								Object.assign(overlay.style, {
-									position: 'fixed',
-									left: '8px',
-									right: '8px',
-									top: '8px',
-									bottom: '8px',
-									background: 'rgba(255,255,255,0.98)',
-									zIndex: 999999,
-									boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-									padding: '12px',
-									borderRadius: '12px',
-									overflow: 'auto',
-								});
-								const closeBtn = document.createElement('button');
-								closeBtn.textContent = '✕';
-								Object.assign(closeBtn.style, {
-									position: 'absolute',
-									right: '12px',
-									top: '12px',
-									zIndex: 1000000,
-									background: 'transparent',
-									border: 'none',
-									fontSize: '18px',
-									cursor: 'pointer',
-								});
-								closeBtn.addEventListener('click', () => { try { overlay.remove(); } catch (_e) {} });
-								overlay.addEventListener('pointerdown', (e) => e.stopPropagation());
-								overlay.appendChild(closeBtn);
-								overlay.appendChild(card);
-								document.body.appendChild(overlay);
-								return;
-							} catch (e) {
-								// fallback to more-info
-								try { this._openMoreInfo(entityId); } catch (_e) {}
-							}
-						})();
-						return;
-					}
-				} catch (_e) {
-					// ignore and fallback
-				}
 				this._openMoreInfo(entityId);
 			});
 		});
+
+		// Special handler: clicking the power pill should open a history-graph modal
+		// showing both main and aux heater power if available. Falls back to more-info.
+		try {
+			const powerEl = this.shadowRoot.querySelector('.power-top');
+			if (powerEl) {
+				powerEl.addEventListener('click', (ev) => {
+					ev.stopPropagation();
+					if (!this._hass) return;
+					const d = this._renderData || {};
+					const main = d.mainPowerEntityId;
+					const aux = d.auxPowerEntityId;
+					// If we have at least one sensor, open the reusable history-graph dialog
+					if (main || aux) {
+						const entities = [main, aux].filter(Boolean);
+						this._openHistoryGraph(entities, 'Power history', 24);
+						return;
+					}
+					// No combined sensors available: fallback to single-entity more-info
+					if (d.powerMoreInfoEntityId) this._openMoreInfo(d.powerMoreInfoEntityId);
+				});
+			}
+		} catch (e) {
+			// best-effort: ignore
+		}
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
 		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
@@ -1380,6 +1313,38 @@ class PoolControllerCard extends HTMLElement {
 			}
 		} catch (_e) {
 			// ignore
+		}
+	}
+
+	_openHistoryGraph(entities, title = 'History', hours = 24) {
+		if (!entities || !entities.length) return;
+		// Normalize
+		const ents = Array.isArray(entities) ? entities.filter(Boolean) : [entities];
+		if (!ents.length) return;
+		try {
+			customElements.whenDefined('hui-history-graph-card').then(() => {
+				try {
+					const card = document.createElement('hui-history-graph-card');
+					card.setConfig({ entities: ents, hours_to_show: hours, title: title });
+					card.hass = this._hass;
+					if (customElements.get('ha-dialog')) {
+						const dialog = document.createElement('ha-dialog');
+						dialog.appendChild(card);
+						document.body.appendChild(dialog);
+						dialog.opened = true;
+						dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
+					} else {
+						// Fallback: append the card and remove later
+						document.body.appendChild(card);
+						setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
+					}
+				} catch (err) {
+					// Fallback to more-info for first entity
+					try { this._openMoreInfo(ents[0]); } catch (e) {}
+				}
+			});
+		} catch (e) {
+			try { this._openMoreInfo(ents[0]); } catch (err) {}
 		}
 	}
 
