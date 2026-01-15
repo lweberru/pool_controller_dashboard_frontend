@@ -1341,12 +1341,29 @@ class PoolControllerCard extends HTMLElement {
 						setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
 					}
 				} catch (err) {
+					// Log error to browser console for diagnostics and fallback
+					try {
+						console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: failed to create history card/dialog', err, { entities: ents, title, hours });
+					} catch (_logErr) {}
 					// Fallback to more-info for first entity
-					try { this._openMoreInfo(ents[0]); } catch (e) {}
+					try {
+						console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
+						this._openMoreInfo(ents[0]);
+					} catch (e) {
+						try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', e); } catch (_e) {}
+					}
 				}
 			});
 		} catch (e) {
-			try { this._openMoreInfo(ents[0]); } catch (err) {}
+			try {
+				console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: unexpected error', e, { entities: ents, title, hours });
+			} catch (_logErr) {}
+			try { 
+				console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
+				this._openMoreInfo(ents[0]); 
+			} catch (err) {
+				try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', err); } catch (_e) {}
+			}
 		}
 	}
 
