@@ -29,6 +29,53 @@ try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); }
 	} catch (_e) {}
 })();
 
+// Global delegated handler: reliably handle clicks on `.power-top` anywhere
+// in the document (including inside shadow roots) by inspecting
+// `event.composedPath()` and dispatching a `hass-more-info` event for the
+// entity found in `data-more-info` (fallback). This avoids needing the
+// card instance to successfully attach its own handlers in some Lovelace wrappers.
+(function(){
+	if (window.__pc_global_power_handler_attached) return;
+	const _powerDelegatedHandler = (ev) => {
+		try {
+			const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
+			const hit = path.find((e) => e && e.classList && typeof e.classList.contains === 'function' && e.classList.contains('power-top'));
+			if (!hit) return;
+			// prevent duplicate/bubbled handlers
+			try { ev.stopPropagation(); } catch (_) {}
+
+			// Prefer explicit data-more-info attribute on the hit, then children
+			let ent = null;
+			try { ent = hit.getAttribute && hit.getAttribute('data-more-info'); } catch (_) { ent = null; }
+			if (!ent) {
+				try { const c = hit.querySelector && hit.querySelector('[data-more-info]'); ent = c && c.getAttribute && c.getAttribute('data-more-info'); } catch (_) { ent = null; }
+			}
+
+			if (ent) {
+				try {
+					const more = new CustomEvent('hass-more-info', { detail: { entityId: ent }, bubbles: true, composed: true });
+					// Dispatch from HA root if available (works in many wrappers)
+					const haRoot = document.querySelector('home-assistant') || document;
+					haRoot.dispatchEvent && haRoot.dispatchEvent(more);
+					console.info('[pc-global] delegated power-top click -> hass-more-info', ent);
+				} catch (e) {
+					console.error('[pc-global] failed to dispatch hass-more-info', e);
+				}
+			} else {
+				console.warn('[pc-global] power-top clicked but no data-more-info found');
+			}
+		} catch (e) {
+			console.error('[pc-global] power delegated handler error', e);
+		}
+	};
+
+	try { document.addEventListener('click', _powerDelegatedHandler, { capture: true }); } catch (_) { document.addEventListener('click', _powerDelegatedHandler); }
+	try { document.addEventListener('pointerdown', _powerDelegatedHandler, { capture: true }); } catch (_) { document.addEventListener('pointerdown', _powerDelegatedHandler); }
+	window.__pc_global_power_handler_attached = true;
+	console.info('[pc-global] power delegated handler attached');
+})();
+
+
 const CARD_TYPE = "pc-pool-controller";
 const DEFAULTS = { content: "controller" };
 
