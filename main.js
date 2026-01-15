@@ -1226,7 +1226,52 @@ class PoolControllerCard extends HTMLElement {
 								try { powerEl.addEventListener('click', _powerClickHandler); } catch (_e2) {}
 							}
 							try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
-				}
+						}
+						// Robust fallback: attach a shadow-root level capture listener so clicks
+						// are handled even if the inner `.power-top` element is replaced by a later render.
+						if (!this.__pc_power_root_listener_attached) {
+							try {
+								const _powerRootHandler = (ev) => {
+									try {
+										const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
+										const hit = path.find((e) => e && e.classList && typeof e.classList.contains === 'function' && e.classList.contains('power-top'));
+										if (!hit) return;
+										ev.stopPropagation();
+										if (!this._hass) return;
+										const d = this._renderData || {};
+										const main = d.mainPowerEntityId;
+										const aux = d.auxPowerEntityId;
+										try { console.debug('[pool_controller_dashboard_frontend] power-top clicked (root)', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: hit.getAttribute && hit.getAttribute('data-more-info') }); } catch (_e) {}
+										if (main || aux) {
+											const entities = [main, aux].filter(Boolean);
+											this._openHistoryGraph(entities, 'Power history', 24);
+											return;
+										}
+										if (d.powerMoreInfoEntityId) {
+											this._openMoreInfo(d.powerMoreInfoEntityId);
+											return;
+										}
+										try {
+											const domAttr = hit.getAttribute && hit.getAttribute('data-more-info');
+											if (domAttr) { this._openMoreInfo(domAttr); return; }
+										} catch (_e) {}
+										try {
+											const child = hit.querySelector && hit.querySelector('[data-more-info]');
+											const childEnt = child && child.getAttribute && child.getAttribute('data-more-info');
+											if (childEnt) { this._openMoreInfo(childEnt); return; }
+										} catch (_e) {}
+										console.warn('[pool_controller_dashboard_frontend] power-top click (root): no target entity available to open (main/aux/powerMoreInfo/data-more-info missing)');
+									} catch (e) {
+										console.error('[pool_controller_dashboard_frontend] power-top root handler error', e);
+									}
+								};
+								try { this.shadowRoot.addEventListener('click', _powerRootHandler, { capture: true }); } catch (_e) { try { this.shadowRoot.addEventListener('click', _powerRootHandler); } catch (_e2) {} }
+								try { this.shadowRoot.addEventListener('pointerdown', _powerRootHandler, { capture: true }); } catch (_e) { try { this.shadowRoot.addEventListener('pointerdown', _powerRootHandler); } catch (_e2) {} }
+								this.__pc_power_root_listener_attached = true;
+							} catch (err) {
+								console.warn('[pool_controller_dashboard_frontend] could not attach shadow-root power listener', err);
+							}
+						}
 			}
 		} catch (e) {
 			console.error('[pool_controller_dashboard_frontend] _attachHandlers: power pill handler registration failed', e);
