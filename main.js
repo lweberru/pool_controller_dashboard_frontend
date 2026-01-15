@@ -63,11 +63,35 @@ try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); }
 						if (typeof cardEl._openHistoryGraph === 'function') {
 							cardEl._openHistoryGraph(entities, 'Power history', 24);
 							console.info('[pc-global] delegated power-top click -> openHistoryGraph', entities);
+							// Fallback: if no history dialog/card appeared shortly, open more-info for first entity
+							try {
+								const first = entities && entities[0];
+								setTimeout(() => {
+									try {
+										const hasHistory = !!(document.querySelector('hui-history-graph-card') || document.querySelector('ha-dialog hui-history-graph-card') || document.querySelector('ha-dialog'));
+										if (!hasHistory && first) {
+											try { const more = new CustomEvent('hass-more-info', { detail: { entityId: first }, bubbles: true, composed: true }); (document.querySelector('home-assistant') || document).dispatchEvent(more); console.info('[pc-global] fallback -> hass-more-info', first); } catch (_e) {}
+										}
+									} catch (_e) {}
+								}, 450);
+							} catch (_e) {}
 							return;
 						}
 						if (cardEl._card && typeof cardEl._card._openHistoryGraph === 'function') {
 							cardEl._card._openHistoryGraph(entities, 'Power history', 24);
 							console.info('[pc-global] delegated power-top click -> openHistoryGraph (wrapped)', entities);
+							// Fallback: same as above
+							try {
+								const first = entities && entities[0];
+								setTimeout(() => {
+									try {
+										const hasHistory = !!(document.querySelector('hui-history-graph-card') || document.querySelector('ha-dialog hui-history-graph-card') || document.querySelector('ha-dialog'));
+										if (!hasHistory && first) {
+											try { const more = new CustomEvent('hass-more-info', { detail: { entityId: first }, bubbles: true, composed: true }); (document.querySelector('home-assistant') || document).dispatchEvent(more); console.info('[pc-global] fallback -> hass-more-info', first); } catch (_e) {}
+										}
+									} catch (_e) {}
+								}, 450);
+							} catch (_e) {}
 							return;
 						}
 					} catch (e) {
