@@ -1142,6 +1142,30 @@ class PoolControllerCard extends HTMLElement {
 		// showing both main and aux heater power if available. Falls back to more-info.
 		try {
 			const powerEl = this.shadowRoot.querySelector('.power-top');
+
+				// TEMP DEBUG: global capture-phase listeners to trace click/pointer events
+				// Will log composedPath (first entries) to help identify why `.power-top`
+				// clicks are not observed by the local handler. Removed once diagnosed.
+				try {
+					if (!window.__pc_global_click_debug) {
+						window.__pc_global_click_debug = true;
+						const _dbg = (ev) => {
+							try {
+								const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
+								const short = path.slice(0, 8).map((e) => {
+									if (!e) return String(e);
+									try { return (e.className && typeof e.className === 'string') ? `${e.tagName || ''}.${e.className}` : (e.tagName || e.nodeName || String(e)); } catch (_e) { return String(e); }
+								});
+								console.debug('[pc-debug] global-capture', ev.type, { target: ev.target && (ev.target.tagName || ev.target.nodeName), path: short });
+							} catch (e) { console.error('[pc-debug] global-capture error', e); }
+						};
+						try { window.addEventListener('click', _dbg, { capture: true }); } catch (_) { try { window.addEventListener('click', _dbg); } catch (_) {} }
+						try { window.addEventListener('pointerdown', _dbg, { capture: true }); } catch (_) { try { window.addEventListener('pointerdown', _dbg); } catch (_) {} }
+					}
+				} catch (_e) {
+					console.warn('[pc-debug] could not attach global debug listeners', _e);
+				}
+
 			if (powerEl) {
 				if (powerEl.__pc_power_listener_attached) {
 					console.warn('[pool_controller_dashboard_frontend] _attachHandlers: power-top already has click listener attached');
