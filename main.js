@@ -51,10 +51,37 @@ try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); }
 				try { const c = hit.querySelector && hit.querySelector('[data-more-info]'); ent = c && c.getAttribute && c.getAttribute('data-more-info'); } catch (_) { ent = null; }
 			}
 
+			// Try to open history graph if the card instance exposes main/aux power entities
+			try {
+				const cardEl = path.find((e) => e && e.tagName && String(e.tagName).toLowerCase().includes('pc-pool-controller')) ||
+											 path.find((e) => e && e.tagName && String(e.tagName).toLowerCase().includes('pc-pool-controller-card')) || null;
+				const renderData = cardEl ? (cardEl._renderData || (cardEl._card && cardEl._card._renderData) || null) : null;
+				if (renderData && (renderData.mainPowerEntityId || renderData.auxPowerEntityId)) {
+					const entities = [renderData.mainPowerEntityId, renderData.auxPowerEntityId].filter(Boolean);
+					try {
+						// Prefer card method on the element, fallback to wrapped _card
+						if (typeof cardEl._openHistoryGraph === 'function') {
+							cardEl._openHistoryGraph(entities, 'Power history', 24);
+							console.info('[pc-global] delegated power-top click -> openHistoryGraph', entities);
+							return;
+						}
+						if (cardEl._card && typeof cardEl._card._openHistoryGraph === 'function') {
+							cardEl._card._openHistoryGraph(entities, 'Power history', 24);
+							console.info('[pc-global] delegated power-top click -> openHistoryGraph (wrapped)', entities);
+							return;
+						}
+					} catch (e) {
+						console.warn('[pc-global] openHistoryGraph failed, falling back to more-info', e);
+					}
+				}
+			} catch (e) {
+				console.debug('[pc-global] card-history lookup failed', e);
+			}
+
+			// Fallback: dispatch hass-more-info for the found entity (if any)
 			if (ent) {
 				try {
 					const more = new CustomEvent('hass-more-info', { detail: { entityId: ent }, bubbles: true, composed: true });
-					// Dispatch from HA root if available (works in many wrappers)
 					const haRoot = document.querySelector('home-assistant') || document;
 					haRoot.dispatchEvent && haRoot.dispatchEvent(more);
 					console.info('[pc-global] delegated power-top click -> hass-more-info', ent);
