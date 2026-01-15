@@ -1136,6 +1136,9 @@ class PoolControllerCard extends HTMLElement {
 
 		// More-info popups (Home Assistant entity details)
 			console.info('[pool_controller_dashboard_frontend] _attachHandlers: start');
+			// DOM-visible marker + global flag for out-of-band verification
+			try { this.setAttribute && this.setAttribute('data-pc-attach', 'true'); } catch (_e) {}
+			try { window.__pc_attach_called = true; } catch (_e) {}
 			this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
 			const entityId = el.getAttribute("data-more-info");
 			if (!entityId) return;
