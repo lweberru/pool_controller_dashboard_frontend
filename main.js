@@ -1113,7 +1113,8 @@ class PoolControllerCard extends HTMLElement {
 		const maintenanceActive = !!this._renderData?.maintenanceActive;
 
 		// More-info popups (Home Assistant entity details)
-		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
+			console.info('[pool_controller_dashboard_frontend] _attachHandlers: start');
+			this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
 			const entityId = el.getAttribute("data-more-info");
 			if (!entityId) return;
 			// If this element is the power-top pill, skip the generic more-info
@@ -1180,7 +1181,7 @@ class PoolControllerCard extends HTMLElement {
 									const main = d.mainPowerEntityId;
 									const aux = d.auxPowerEntityId;
 									// Debug info to help trace why clicks may be silent
-									try { console.debug('[pool_controller_dashboard_frontend] power-top clicked', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: powerEl.getAttribute && powerEl.getAttribute('data-more-info') }); } catch (_e) {}
+									try { console.info('[pc-power] power-top clicked', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: powerEl.getAttribute && powerEl.getAttribute('data-more-info') }); } catch (_e) {}
 
 									// If we have at least one sensor, open the reusable history-graph dialog
 									if (main || aux) {
@@ -1241,7 +1242,7 @@ class PoolControllerCard extends HTMLElement {
 										const d = this._renderData || {};
 										const main = d.mainPowerEntityId;
 										const aux = d.auxPowerEntityId;
-										try { console.debug('[pool_controller_dashboard_frontend] power-top clicked (root)', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: hit.getAttribute && hit.getAttribute('data-more-info') }); } catch (_e) {}
+										try { console.info('[pc-power] power-top clicked (root)', { main, aux, powerMoreInfoEntityId: d.powerMoreInfoEntityId, dataAttr: hit.getAttribute && hit.getAttribute('data-more-info') }); } catch (_e) {}
 										if (main || aux) {
 											const entities = [main, aux].filter(Boolean);
 											this._openHistoryGraph(entities, 'Power history', 24);
