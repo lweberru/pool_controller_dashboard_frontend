@@ -1146,7 +1146,9 @@ class PoolControllerCard extends HTMLElement {
 				if (powerEl.__pc_power_listener_attached) {
 					console.warn('[pool_controller_dashboard_frontend] _attachHandlers: power-top already has click listener attached');
 				} else {
-							powerEl.addEventListener('click', (ev) => {
+							// Register click listener in capture phase so it runs before
+							// any child/bubble handlers that may stop propagation.
+							const _powerClickHandler = (ev) => {
 								ev.stopPropagation();
 								try {
 									if (!this._hass) return;
@@ -1192,7 +1194,13 @@ class PoolControllerCard extends HTMLElement {
 								} catch (e) {
 									console.error('[pool_controller_dashboard_frontend] power-top click handler error', e);
 								}
-							});
+							};
+							try {
+								powerEl.addEventListener('click', _powerClickHandler, { capture: true });
+							} catch (_e) {
+								// Fallback for older browsers/environments
+								try { powerEl.addEventListener('click', _powerClickHandler); } catch (_e2) {}
+							}
 							try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
 				}
 			}
