@@ -7,6 +7,28 @@
 const VERSION = "2.0.24";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
+// One-time global capture listener to ensure we can observe click events
+// even if other listeners are removed/replaced. Helpful for debugging.
+(function(){
+	try {
+		if (!window.__pc_global_once_attached) {
+			const dbg = (ev) => {
+				try {
+					const path = (ev.composedPath && typeof ev.composedPath === 'function') ? ev.composedPath() : [ev.target];
+					const short = path.slice(0,8).map((e) => {
+						if (!e) return String(e);
+						try { return (e.className && typeof e.className === 'string') ? `${e.tagName || ''}.${e.className}` : (e.tagName || e.nodeName || String(e)); } catch (_e) { return String(e); }
+					});
+					console.info('[pc-global] capture', ev.type, { target: ev.target && (ev.target.tagName || ev.target.nodeName), path: short });
+				} catch (_e) { /* ignore */ }
+			};
+			try { document.addEventListener('click', dbg, { capture: true }); } catch (_) { try { document.addEventListener('click', dbg); } catch (_) {} }
+			try { document.addEventListener('pointerdown', dbg, { capture: true }); } catch (_) { try { document.addEventListener('pointerdown', dbg); } catch (_) {} }
+			window.__pc_global_once_attached = true;
+		}
+	} catch (_e) {}
+})();
+
 const CARD_TYPE = "pc-pool-controller";
 const DEFAULTS = { content: "controller" };
 
