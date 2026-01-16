@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.39";
+const VERSION = "2.0.40";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -234,16 +234,10 @@ function _t(lang, key, vars) {
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
-  // 1. Hass-Objekt "reparieren" (Prototyp-Kette erhalten)
-  // Das löst den 'darkMode' und 'get' (localize) Fehler
+  // 1. Hass-Objekt absichern (Prototyp-Kette behalten)
   const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass);
-  
-  // Sicherstellen, dass Themes existieren
-  if (!safeHass.themes) {
-    safeHass.themes = { darkMode: false, themes: {}, default_theme: "default" };
-  }
 
-  // 2. Overlay & Dialog erstellen
+  // 2. Overlay & Dialog (wie gehabt)
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -258,7 +252,7 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     color: "var(--primary-text-color, white)",
     borderRadius: "16px", padding: "24px", width: "95%", maxWidth: "650px",
     display: "flex", flexDirection: "column", boxShadow: "0px 20px 50px rgba(0,0,0,0.7)",
-    overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)"
+    overflow: "hidden"
   });
 
   dialog.innerHTML = `
@@ -269,34 +263,46 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     <div id="chart-container" style="height: 400px; width: 100%;"></div>
   `;
 
-  // 3. Die Karte erstellen
+  // 3. Karte erstellen
   const cardConfig = {
     type: "history-graph",
     entities: entities.map(e => ({ entity: e })),
-    hours_to_show: hours,
+    hours_to_show: Number(hours), // Sicherstellen, dass es eine Zahl ist
     refresh_interval: 0
   };
 
   const cardElement = await helpers.createCardElement(cardConfig);
 
-  // 4. In das DOM einhängen (WICHTIG: Erst einhängen, dann konfigurieren)
+  // 4. Erst ins DOM einhängen
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
-  dialog.querySelector("#chart-container").appendChild(cardElement);
+  const container = dialog.querySelector("#chart-container");
+  container.appendChild(cardElement);
 
-  // 5. Initialisierungs-Sequenz (verhindert den /unknown/ 404 Fehler)
+  // 5. Der "Lifecycle-Kick"
+  // Wir müssen warten, bis die Karte 'connected' ist, bevor wir hass setzen
   requestAnimationFrame(() => {
-    // Erst jetzt weisen wir hass zu
-    cardElement.hass = safeHass;
-    
-    // Erzwinge Sichtbarkeit für die Grafik-Engine
     setTimeout(() => {
+      // Setze Hass - das sollte den normalen Ladevorgang triggern
+      cardElement.hass = safeHass;
+      
+      // Falls die Karte eine interne Methode zum Laden hat, rufen wir sie auf
+      // Viele HA-Cards nutzen _updateHistory oder ähnliches intern
+      if (cardElement._updateHistory) {
+          cardElement._updateHistory();
+      }
+
+      // Resize-Event erzwingen, damit ECharts die Maße nimmt
       window.dispatchEvent(new Event('resize'));
       overlay.style.opacity = 1;
       
-      // Falls die Karte immer noch "lädt", stoßen wir sie manuell an
-      if (cardElement.requestUpdate) cardElement.requestUpdate();
-    }, 100);
+      // Zweiter Kick nach 500ms, falls der erste zu früh war
+      setTimeout(() => {
+          cardElement.hass = safeHass;
+          if (cardElement.requestUpdate) cardElement.requestUpdate();
+      }, 500);
+      
+    }, 50);
   });
 
   // 6. Schließen-Logik
