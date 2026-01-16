@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.44";
+const VERSION = "2.0.45";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1227,41 +1227,41 @@ class PoolControllerCard extends HTMLElement {
 		});
 
 
-	const powerTopDiv = this.shadowRoot.querySelector('.power-top');
+		// const powerTopDiv = this.shadowRoot.querySelector('.power-top');
 
-    if (powerTopDiv) {
-        // 1. Cursor setzen
-        powerTopDiv.style.cursor = "pointer";
+		// if (powerTopDiv) {
+		// 	// 1. Cursor setzen
+		// 	powerTopDiv.style.cursor = "pointer";
 
-        // 2. Bestehenden Listener entfernen (verhindert doppelte Trigger, falls die Methode mehrfach läuft)
-        powerTopDiv.onclick = null; 
+		// 	// 2. Bestehenden Listener entfernen (verhindert doppelte Trigger, falls die Methode mehrfach läuft)
+		// 	powerTopDiv.onclick = null; 
 
-        // 3. Den Click-Listener hinzufügen
-        powerTopDiv.onclick = (event) => {
-            event.stopPropagation();
-            
-            // Daten sicher extrahieren
-            const d = this._renderData || {};
-            // const entities = [d.mainPowerEntityId, d.auxPowerEntityId].filter(Boolean);
-			// Sicherstellen, dass wir nur echte Strings in der Liste haben
-        	const entities = [d.mainPowerEntityId, d.auxPowerEntityId]
-            	.filter(id => id && typeof id === 'string');
+		// 	// 3. Den Click-Listener hinzufügen
+		// 	powerTopDiv.onclick = (event) => {
+		// 		event.stopPropagation();
+				
+		// 		// Daten sicher extrahieren
+		// 		const d = this._renderData || {};
+		// 		// const entities = [d.mainPowerEntityId, d.auxPowerEntityId].filter(Boolean);
+		// 		// Sicherstellen, dass wir nur echte Strings in der Liste haben
+		// 		const entities = [d.mainPowerEntityId, d.auxPowerEntityId]
+		// 			.filter(id => id && typeof id === 'string');
 
-            if (entities.length === 0) {
-                console.warn("Keine Entitäten für das Power-History-Popup gefunden.");
-                return;
-            }
+		// 		if (entities.length === 0) {
+		// 			console.warn("Keine Entitäten für das Power-History-Popup gefunden.");
+		// 			return;
+		// 		}
 
-            // 4. Die Popup-Funktion aufrufen
-            showHistoryPopup(
-                powerTopDiv, 
-                this._hass, 
-                entities,
-                24, 
-                'Power history'
-            );
-        };
-    }
+		// 		// 4. Die Popup-Funktion aufrufen
+		// 		showHistoryPopup(
+		// 			powerTopDiv, 
+		// 			this._hass, 
+		// 			entities,
+		// 			24, 
+		// 			'Power history'
+		// 		);
+		// 	};
+		// }
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
 		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
