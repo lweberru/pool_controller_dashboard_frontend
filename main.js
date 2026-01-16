@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.30";
+const VERSION = "2.0.31";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -213,6 +213,93 @@ function _t(lang, key, vars) {
 		}
 	}
 	return res;
+}
+
+/**
+ * Erzeugt ein modales Popup mit einem History-Graph.
+ * @param {HTMLElement} triggerElement - Das Element, auf das geklickt wurde.
+ * @param {Object} hass - Das Home Assistant State Objekt.
+ * @param {Array} entities - Liste der Sensoren.
+ * @param {number} hours - Stunden (default 24).
+ * @param {string} title - Titel des Popups.
+ */
+async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Verlauf") {
+  // 1. Helfer laden
+  const helpers = await window.loadCardHelpers();
+
+  // 2. Hintergrund-Overlay erstellen (Backdrop)
+  const overlay = document.createElement("div");
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    backdropFilter: "blur(5px)",
+    zIndex: "1000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0,
+    transition: "opacity 0.3s ease"
+  });
+
+  // 3. Container für den Inhalt (Das "Fenster")
+  const dialog = document.createElement("div");
+  Object.assign(dialog.style, {
+    backgroundColor: "var(--card-background-color, white)",
+    borderRadius: "12px",
+    padding: "20px",
+    width: "90%",
+    maxWidth: "500px", // Begrenzte Größe
+    maxHeight: "80vh",
+    overflowY: "auto",
+    boxShadow: "0px 10px 25px rgba(0,0,0,0.5)",
+    position: "relative"
+  });
+
+  // 4. Titel & Schließen-Button
+  dialog.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h3 style="margin: 0; color: var(--primary-text-color);">${title}</h3>
+      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 24px;">&times;</button>
+    </div>
+    <div id="chart-container"></div>
+  `;
+
+  // 5. Die History-Card generieren
+  const cardConfig = {
+    type: "history-graph",
+    entities: entities,
+    hours_to_show: hours,
+    refresh_interval: 0
+  };
+
+  const cardElement = await helpers.createCardElement(cardConfig);
+  cardElement.hass = hass;
+  dialog.querySelector("#chart-container").appendChild(cardElement);
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  // Animation: Einblenden
+  setTimeout(() => overlay.style.opacity = 1, 10);
+
+  // 6. Schließen-Logik
+  const close = () => {
+    overlay.style.opacity = 0;
+    setTimeout(() => document.body.removeChild(overlay), 300);
+  };
+
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  dialog.querySelector("#close-popup").addEventListener("click", close);
+
+  // Event-Listener an das übergebene Element binden (falls nicht schon geschehen)
+  triggerElement.style.cursor = "pointer";
+  triggerElement.onclick = () => {
+     // Da das Element bereits im DOM ist, rufen wir hier nur die Anzeige-Logik auf
+  };
 }
 
 class PoolControllerCard extends HTMLElement {
@@ -896,7 +983,7 @@ class PoolControllerCard extends HTMLElement {
 		return `<div class="dial-container">
 				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
-						<div class="power-top" ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''} ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
+						<div class="power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
 							${d.displayPower !== null ? `<span class="power-pill">${d.displayPower}W</span>` : ""}
 						</div>
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
@@ -1124,30 +1211,34 @@ class PoolControllerCard extends HTMLElement {
 			});
 		});
 
-		// Special handler: clicking the power pill should open a history-graph modal
-		// showing both main and aux heater power if available. Falls back to more-info.
-		try {
-			const powerEl = this.shadowRoot.querySelector('.power-top');
-			if (powerEl) {
-				powerEl.addEventListener('click', (ev) => {
-					ev.stopPropagation();
-					if (!this._hass) return;
-					const d = this._renderData || {};
-					const main = d.mainPowerEntityId;
-					const aux = d.auxPowerEntityId;
-					// If we have at least one sensor, open the reusable history-graph dialog
-					if (main || aux) {
-						const entities = [main, aux].filter(Boolean);
-						this._openHistoryGraph(entities, 'Power history', 24);
-						return;
-					}
-					// No combined sensors available: fallback to single-entity more-info
-					if (d.powerMoreInfoEntityId) this._openMoreInfo(d.powerMoreInfoEntityId);
-				});
-			}
-		} catch (e) {
-			// best-effort: ignore
+
+		const powerTopDiv = this.shadowRoot.querySelector('.power-top');
+
+		if (powerTopDiv) {
+			// Cursor auf Pointer setzen, damit der User sieht, dass es klickbar ist
+			powerTopDiv.style.cursor = "pointer";
+
+			// 2. Den Click-Listener hinzufügen
+			powerTopDiv.addEventListener('click', (event) => {
+				// Verhindert, dass der Klick an übergeordnete Elemente weitergereicht wird
+				event.stopPropagation();
+
+				const main = d.mainPowerEntityId;
+				const aux = d.auxPowerEntityId;
+				const entities = [main, aux].filter(Boolean);
+
+
+				// 3. Unsere generische Popup-Funktion aufrufen
+				showHistoryPopup(
+					powerTopDiv, 
+					this._hass, 
+					entities,
+					24, // 24 Stunden
+					'Power history' // Titel
+				);
+			});
 		}
+
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
 		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
@@ -1313,38 +1404,6 @@ class PoolControllerCard extends HTMLElement {
 			}
 		} catch (_e) {
 			// ignore
-		}
-	}
-
-	_openHistoryGraph(entities, title = 'History', hours = 24) {
-		if (!entities || !entities.length) return;
-		// Normalize
-		const ents = Array.isArray(entities) ? entities.filter(Boolean) : [entities];
-		if (!ents.length) return;
-		try {
-			customElements.whenDefined('hui-history-graph-card').then(() => {
-				try {
-					const card = document.createElement('hui-history-graph-card');
-					card.setConfig({ entities: ents, hours_to_show: hours, title: title });
-					card.hass = this._hass;
-					if (customElements.get('ha-dialog')) {
-						const dialog = document.createElement('ha-dialog');
-						dialog.appendChild(card);
-						document.body.appendChild(dialog);
-						dialog.opened = true;
-						dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
-					} else {
-						// Fallback: append the card and remove later
-						document.body.appendChild(card);
-						setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
-					}
-				} catch (err) {
-					// Fallback to more-info for first entity
-					try { this._openMoreInfo(ents[0]); } catch (e) {}
-				}
-			});
-		} catch (e) {
-			try { this._openMoreInfo(ents[0]); } catch (err) {}
 		}
 	}
 
