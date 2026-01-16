@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.40";
+const VERSION = "2.0.41";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -231,11 +231,11 @@ function _t(lang, key, vars) {
  * Erzeugt ein modales Popup mit einem History-Graph.
  * Version: 2026-Stable-Fix
  */
-async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
+async function showHistoryPopup(triggerElement, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
   // 1. Hass-Objekt absichern (Prototyp-Kette behalten)
-  const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass);
+  // const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass);
 
   // 2. Overlay & Dialog (wie gehabt)
   const overlay = document.createElement("div");
@@ -284,7 +284,7 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
   requestAnimationFrame(() => {
     setTimeout(() => {
       // Setze Hass - das sollte den normalen Ladevorgang triggern
-      cardElement.hass = safeHass;
+      cardElement.hass = hass;
       
       // Falls die Karte eine interne Methode zum Laden hat, rufen wir sie auf
       // Viele HA-Cards nutzen _updateHistory oder ähnliches intern
@@ -298,7 +298,7 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
       
       // Zweiter Kick nach 500ms, falls der erste zu früh war
       setTimeout(() => {
-          cardElement.hass = safeHass;
+          cardElement.hass = hass;
           if (cardElement.requestUpdate) cardElement.requestUpdate();
       }, 500);
       
@@ -1252,7 +1252,6 @@ class PoolControllerCard extends HTMLElement {
             // 4. Die Popup-Funktion aufrufen
             showHistoryPopup(
                 powerTopDiv, 
-                this._hass, 
                 entities,
                 24, 
                 'Power history'
