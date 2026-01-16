@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.33";
+const VERSION = "2.0.34";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1226,7 +1226,7 @@ class PoolControllerCard extends HTMLElement {
 			// Sicherstellen, dass wir nur echte Strings in der Liste haben
         	const entities = [d.mainPowerEntityId, d.auxPowerEntityId]
             	.filter(id => id && typeof id === 'string');
-				
+
             if (entities.length === 0) {
                 console.warn("Keine Entitäten für das Power-History-Popup gefunden.");
                 return;
