@@ -223,11 +223,29 @@ function _t(lang, key, vars) {
  * @param {number} hours - Stunden (default 24).
  * @param {string} title - Titel des Popups.
  */
+/**
+ * Erzeugt ein modales Popup mit einem History-Graph.
+ * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
+ */
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Verlauf") {
-  // 1. Helfer laden
+  // 1. Hass-Objekt absichern (Wichtig für interne HA-Charts)
+  const safeHass = {
+    ...hass,
+    themes: hass?.themes || { 
+      darkMode: false, 
+      themes: {}, 
+      default_theme: "default", 
+      default_dark_theme: "default" 
+    },
+    localize: hass?.localize || ((key) => key),
+    locale: hass?.locale || { language: "de" },
+    language: hass?.language || "de"
+  };
+
+  // 2. Card-Helper laden
   const helpers = await window.loadCardHelpers();
 
-  // 2. Hintergrund-Overlay erstellen (Backdrop)
+  // 3. Hintergrund-Overlay erstellen
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed",
@@ -237,7 +255,7 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     height: "100%",
     backgroundColor: "rgba(0, 0, 0, 0.7)",
     backdropFilter: "blur(5px)",
-    zIndex: "1000",
+    zIndex: "10000",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -245,30 +263,31 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     transition: "opacity 0.3s ease"
   });
 
-  // 3. Container für den Inhalt (Das "Fenster")
+  // 4. Dialog-Container
   const dialog = document.createElement("div");
   Object.assign(dialog.style, {
-    backgroundColor: "var(--card-background-color, white)",
+    backgroundColor: "var(--card-background-color, #1c1c1c)",
+    color: "var(--primary-text-color, white)",
     borderRadius: "12px",
     padding: "20px",
     width: "90%",
-    maxWidth: "500px", // Begrenzte Größe
-    maxHeight: "80vh",
-    overflowY: "auto",
-    boxShadow: "0px 10px 25px rgba(0,0,0,0.5)",
-    position: "relative"
+    maxWidth: "550px",
+    maxHeight: "85vh",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    boxShadow: "0px 10px 30px rgba(0,0,0,0.6)"
   });
 
-  // 4. Titel & Schließen-Button
   dialog.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-      <h3 style="margin: 0; color: var(--primary-text-color);">${title}</h3>
-      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 24px;">&times;</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
+      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 28px; line-height: 1;">&times;</button>
     </div>
-    <div id="chart-container"></div>
+    <div id="chart-container" style="flex: 1; width: 100%; min-height: 300px;"></div>
   `;
 
-  // 5. Die History-Card generieren
+  // 5. Die History-Card erstellen
   const cardConfig = {
     type: "history-graph",
     entities: entities,
@@ -277,29 +296,33 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
   };
 
   const cardElement = await helpers.createCardElement(cardConfig);
-  cardElement.hass = hass;
+
+  // 6. DOM-Reihenfolge einhalten
+  // Erst das Overlay/Dialog in den Body, dann das Chart ins Dialog
+  document.body.appendChild(overlay);
+  overlay.appendChild(dialog);
   dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
+  // Chart erst triggern, wenn es im DOM existiert (verhindert Rendering-Fehler)
+  requestAnimationFrame(() => {
+    cardElement.hass = safeHass;
+    overlay.style.opacity = 1;
+  });
 
-  // Animation: Einblenden
-  setTimeout(() => overlay.style.opacity = 1, 10);
-
-  // 6. Schließen-Logik
+  // 7. Schließen-Logik
   const close = () => {
     overlay.style.opacity = 0;
-    setTimeout(() => document.body.removeChild(overlay), 300);
+    setTimeout(() => {
+      if (overlay.parentNode) document.body.removeChild(overlay);
+    }, 300);
   };
 
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   dialog.querySelector("#close-popup").addEventListener("click", close);
-
-  // Event-Listener an das übergebene Element binden (falls nicht schon geschehen)
-  triggerElement.style.cursor = "pointer";
-  triggerElement.onclick = () => {
-     // Da das Element bereits im DOM ist, rufen wir hier nur die Anzeige-Logik auf
-  };
+  
+  // Optional: Schließen mit Escape-Taste
+  const escListener = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", escListener); } };
+  document.addEventListener("keydown", escListener);
 }
 
 class PoolControllerCard extends HTMLElement {
@@ -1212,33 +1235,38 @@ class PoolControllerCard extends HTMLElement {
 		});
 
 
-		const powerTopDiv = this.shadowRoot.querySelector('.power-top');
+	const powerTopDiv = this.shadowRoot.querySelector('.power-top');
 
-		if (powerTopDiv) {
-			// Cursor auf Pointer setzen, damit der User sieht, dass es klickbar ist
-			powerTopDiv.style.cursor = "pointer";
+    if (powerTopDiv) {
+        // 1. Cursor setzen
+        powerTopDiv.style.cursor = "pointer";
 
-			// 2. Den Click-Listener hinzufügen
-			powerTopDiv.addEventListener('click', (event) => {
-				// Verhindert, dass der Klick an übergeordnete Elemente weitergereicht wird
-				event.stopPropagation();
-				const d = this._renderData || {};
-				const main = d.mainPowerEntityId;
-				const aux = d.auxPowerEntityId;
-				const entities = [main, aux].filter(Boolean);
+        // 2. Bestehenden Listener entfernen (verhindert doppelte Trigger, falls die Methode mehrfach läuft)
+        powerTopDiv.onclick = null; 
 
+        // 3. Den Click-Listener hinzufügen
+        powerTopDiv.onclick = (event) => {
+            event.stopPropagation();
+            
+            // Daten sicher extrahieren
+            const d = this._renderData || {};
+            const entities = [d.mainPowerEntityId, d.auxPowerEntityId].filter(Boolean);
 
-				// 3. Unsere generische Popup-Funktion aufrufen
-				showHistoryPopup(
-					powerTopDiv, 
-					this._hass, 
-					entities,
-					24, // 24 Stunden
-					'Power history' // Titel
-				);
-			});
-		}
+            if (entities.length === 0) {
+                console.warn("Keine Entitäten für das Power-History-Popup gefunden.");
+                return;
+            }
 
+            // 4. Die Popup-Funktion aufrufen
+            showHistoryPopup(
+                powerTopDiv, 
+                this._hass, 
+                entities,
+                24, 
+                'Power history'
+            );
+        };
+    }
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
 		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
