@@ -228,17 +228,17 @@ function _t(lang, key, vars) {
  * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
  */
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
+  // Debug: Prüfe in der Browser-Konsole (F12), ob hier die richtigen IDs stehen
+  console.log("Lade Verlauf für:", entities);
+
   const helpers = await window.loadCardHelpers();
 
-  // 1. Overlay und Dialog erstellen (wie gehabt)
+  // 1. Overlay & Dialog (Styling wie gehabt)
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
-    position: "fixed",
-    top: 0, left: 0, width: "100%", height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    backdropFilter: "blur(5px)",
-    zIndex: "10000",
-    display: "flex", alignItems: "center", justifyContent: "center",
+    position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(5px)",
+    zIndex: "10000", display: "flex", alignItems: "center", justifyContent: "center",
     opacity: 0, transition: "opacity 0.3s ease"
   });
 
@@ -246,47 +246,54 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
   Object.assign(dialog.style, {
     backgroundColor: "var(--card-background-color, #1c1c1c)",
     color: "var(--primary-text-color, white)",
-    borderRadius: "12px", padding: "20px",
-    width: "90%", maxWidth: "550px", maxHeight: "85vh",
-    display: "flex", flexDirection: "column",
-    boxShadow: "0px 10px 30px rgba(0,0,0,0.6)",
-    overflow: "hidden"
+    borderRadius: "12px", padding: "20px", width: "95%", maxWidth: "600px",
+    maxHeight: "90vh", display: "flex", flexDirection: "column",
+    boxShadow: "0px 10px 30px rgba(0,0,0,0.6)", overflow: "hidden"
   });
 
   dialog.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0; font-family: var(--paper-font-body1_-_font-family, sans-serif);">${title}</h3>
+      <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
       <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 28px;">&times;</button>
     </div>
-    <div id="chart-container" style="min-height: 300px; width: 100%;"></div>
+    <div id="chart-container" style="min-height: 350px; width: 100%; display: block;"></div>
   `;
 
-  // 2. Card erstellen, aber NOCH NICHT mit hass füllen
-  const cardElement = await helpers.createCardElement({
+  // 2. Erstelle das Karten-Element explizit mit Konfiguration
+  const cardConfig = {
     type: "history-graph",
     entities: entities,
     hours_to_show: hours,
     refresh_interval: 0
-  });
+  };
 
-  // 3. Erst ins DOM einfügen
+  const cardElement = await helpers.createCardElement(cardConfig);
+
+  // 3. Ins DOM einhängen (MUSS vor der Zuweisung von hass passieren)
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
-  dialog.querySelector("#chart-container").appendChild(cardElement);
+  const container = dialog.querySelector("#chart-container");
+  container.appendChild(cardElement);
 
-  // 4. WICHTIG: Verzögerte Zuweisung von hass
-  // Das gibt ECharts Zeit, den DOM-Kontext zu erkennen.
+  // 4. Daten-Zuweisung mit allen notwendigen Kontexten
+  // Wir warten einen winzigen Moment, bis das Element "connected" ist
   setTimeout(() => {
-    // Ein extrem robustes Hass-Proxy-Objekt erstellen
-    const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass, {
-      themes: hass.themes || { darkMode: false, themes: {}, default_theme: "default" },
-      localize: hass.localize || ((k) => k),
-      locale: hass.locale || { language: "de" }
-    });
-
-    cardElement.hass = safeHass;
-    overlay.style.opacity = 1;
-  }, 100);
+    if (cardElement) {
+      // Wir übergeben das originale hass Objekt, stellen aber sicher, 
+      // dass Themes und Localize vorhanden sind (wegen deines vorigen Fehlers)
+      const enhancedHass = {
+        ...hass,
+        themes: hass.themes || { darkMode: false, themes: {}, default_theme: "default" },
+        localize: hass.localize || ((k) => k)
+      };
+      
+      cardElement.hass = enhancedHass;
+      
+      // Manchmal braucht die Karte einen Schubs, um die Größe neu zu berechnen
+      window.dispatchEvent(new Event('resize'));
+      overlay.style.opacity = 1;
+    }
+  }, 50);
 
   // 5. Schließen-Logik
   const close = () => {
