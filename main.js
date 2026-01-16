@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.37";
+const VERSION = "2.0.38";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -230,7 +230,7 @@ function _t(lang, key, vars) {
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
-  // 1. Overlay & Dialog (wie gehabt)
+  // 1. Overlay & Dialog (Styling bleibt gleich)
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -244,57 +244,63 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     backgroundColor: "var(--card-background-color, #1c1c1c)",
     color: "var(--primary-text-color, white)",
     borderRadius: "16px", padding: "24px", width: "95%", maxWidth: "650px",
-    maxHeight: "90vh", display: "flex", flexDirection: "column",
-    boxShadow: "0px 20px 50px rgba(0,0,0,0.7)", overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.1)"
+    display: "flex", flexDirection: "column", boxShadow: "0px 20px 50px rgba(0,0,0,0.7)"
   });
 
   dialog.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0; font-family: sans-serif; font-size: 1.2rem;">${title}</h3>
-      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 32px; line-height: 1;">&times;</button>
+      <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
+      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 32px;">&times;</button>
     </div>
-    <div id="chart-container" style="min-height: 400px; width: 100%; overflow: hidden;"></div>
+    <div id="chart-container" style="height: 400px; width: 100%;"></div>
   `;
 
-  // 2. Erstelle die Karte mit Panel-Modus (erzwingt oft das Laden)
+  // 2. Karte erstellen
   const cardConfig = {
     type: "history-graph",
-    entities: entities.map(e => (typeof e === 'string' ? { entity: e } : e)),
+    entities: entities.map(e => ({ entity: e })),
     hours_to_show: hours,
-    refresh_interval: 0,
-    is_panel: true // Trick 1: Versetzt die Karte in den Panel-Modus
+    refresh_interval: 0
   };
 
-  const cardElement = await helpers.createCardElement(cardConfig);
+  // Wir nutzen hui-history-graph-card direkt, da sie bereits geladen ist
+  const cardElement = document.createElement("hui-history-graph-card");
+  
+  // 3. Konfiguration setzen BEVOR es ans DOM geht
+  if (cardElement.setConfig) {
+    cardElement.setConfig(cardConfig);
+  }
 
-  // 3. Ins DOM einhängen
+  // 4. In DOM einfügen
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
-  const container = dialog.querySelector("#chart-container");
-  container.appendChild(cardElement);
+  dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  // 4. Lifecycle-Trigger
-  // Wir warten kurz, bis das Element "connected" ist
-  setTimeout(async () => {
-    // Trick 2: Wir weisen hass zu, wenn die Karte sicher im DOM ist
+  // 5. Der "Heavy-Nudge" um den Ladevorgang zu erzwingen
+  const triggerLoading = () => {
+    // Falls die Karte im Shadow-DOM versteckt ist, rufen wir connectedCallback auf
+    if (cardElement.connectedCallback) cardElement.connectedCallback();
+    
+    // Hass-Objekt zuweisen
     cardElement.hass = hass;
     
-    // Trick 3: Wir rufen requestUpdate manuell auf (falls Lit-Element)
-    if (cardElement.requestUpdate) {
-      cardElement.requestUpdate();
-    }
+    // Ein spezieller HA-Event, der signalisiert, dass sich das Fenster geändert hat
+    window.dispatchEvent(new Event('resize'));
+    
+    // Erzwinge ein Update des Lit-Elements
+    if (cardElement.requestUpdate) cardElement.requestUpdate();
+  };
 
-    // Trick 4: Ein Resize-Event hilft ECharts, die Größe zu berechnen
-    // Manchmal muss dies mehrfach passieren
-    for (let delay of [10, 100, 500]) {
-      setTimeout(() => window.dispatchEvent(new Event('resize')), delay);
-    }
-
+  // Wir führen den Trigger mehrmals aus, um Race-Conditions zu vermeiden
+  requestAnimationFrame(() => {
+    triggerLoading();
     overlay.style.opacity = 1;
-  }, 50);
+  });
 
-  // 5. Schließen-Logik
+  // Falls es nach 500ms immer noch nicht lädt, setzen wir hass erneut
+  setTimeout(triggerLoading, 500);
+
+  // 6. Schließen
   const close = () => {
     overlay.style.opacity = 0;
     setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 300);
