@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.43";
+const VERSION = "2.0.44";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -231,38 +231,28 @@ function _t(lang, key, vars) {
  * Erzeugt ein modales Popup mit einem History-Graph.
  * Version: 2026-Stable-Fix
  */
-async function showHistoryPopup(
-  triggerElement,
-  hass,
-  entities,
-  hours = 24,
-  title = "Power history"
-) {
+async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
-  /* -------------------------------------------------------
-   * Overlay
-   * ----------------------------------------------------- */
+  // --- Overlay ---
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed",
-    top: "0",
-    left: "0",
+    top: 0,
+    left: 0,
     width: "100%",
     height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    backgroundColor: "rgba(0,0,0,0.8)",
     backdropFilter: "blur(8px)",
     zIndex: "10000",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    opacity: "0",
+    opacity: 0,
     transition: "opacity 0.3s ease"
   });
 
-  /* -------------------------------------------------------
-   * Dialog
-   * ----------------------------------------------------- */
+  // --- Dialog ---
   const dialog = document.createElement("div");
   Object.assign(dialog.style, {
     backgroundColor: "var(--card-background-color, #1c1c1c)",
@@ -289,11 +279,9 @@ async function showHistoryPopup(
     <div id="chart-container" style="height:400px;width:100%;"></div>
   `;
 
-  /* -------------------------------------------------------
-   * History Graph Card
-   * ----------------------------------------------------- */
+  // --- Karte erstellen ---
   const cardConfig = {
-    type: "history-graph",
+    type: "statistics-graph",
     entities: entities.map(e => ({ entity: e })),
     hours_to_show: Number(hours),
     refresh_interval: 0
@@ -301,52 +289,30 @@ async function showHistoryPopup(
 
   const cardElement = await helpers.createCardElement(cardConfig);
 
-  /* -------------------------------------------------------
-   * DOM einhängen
-   * ----------------------------------------------------- */
+  // --- DOM anhängen ---
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
   dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  /* -------------------------------------------------------
-   * Hass + Lovelace korrekt setzen
-   * ----------------------------------------------------- */
+  // --- Hass setzen ---
+  cardElement.hass = hass;
+
+  // --- Fade-in ---
   requestAnimationFrame(() => {
-    const lovelace =
-      document
-        .querySelector("home-assistant")
-        ?.shadowRoot.querySelector("home-assistant-main")
-        ?.shadowRoot.querySelector("ha-panel-lovelace")
-        ?.lovelace;
-
-    if (!lovelace) {
-      console.warn(
-        "Lovelace context not found – history graph may stay in loading state"
-      );
-    }
-
-    cardElement.hass = hass;
-    cardElement.lovelace = lovelace;
-
     overlay.style.opacity = "1";
   });
 
-  /* -------------------------------------------------------
-   * Close handling
-   * ----------------------------------------------------- */
+  // --- Close-Logik ---
   const close = () => {
     overlay.style.opacity = "0";
     setTimeout(() => {
-      if (overlay.parentNode) {
-        document.body.removeChild(overlay);
-      }
+      if (overlay.parentNode) document.body.removeChild(overlay);
     }, 300);
   };
 
   overlay.addEventListener("click", e => {
     if (e.target === overlay) close();
   });
-
   dialog.querySelector("#close-popup").addEventListener("click", close);
 }
 
