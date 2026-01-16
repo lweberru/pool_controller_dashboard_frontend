@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.42";
+const VERSION = "2.0.43";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -231,88 +231,125 @@ function _t(lang, key, vars) {
  * Erzeugt ein modales Popup mit einem History-Graph.
  * Version: 2026-Stable-Fix
  */
-async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
+async function showHistoryPopup(
+  triggerElement,
+  hass,
+  entities,
+  hours = 24,
+  title = "Power history"
+) {
   const helpers = await window.loadCardHelpers();
 
-  // 1. Hass-Objekt absichern (Prototyp-Kette behalten)
-  // const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass);
-
-  // 2. Overlay & Dialog (wie gehabt)
+  /* -------------------------------------------------------
+   * Overlay
+   * ----------------------------------------------------- */
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
-    position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.8)", backdropFilter: "blur(8px)",
-    zIndex: "10000", display: "flex", alignItems: "center", justifyContent: "center",
-    opacity: 0, transition: "opacity 0.3s ease"
+    position: "fixed",
+    top: "0",
+    left: "0",
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    backdropFilter: "blur(8px)",
+    zIndex: "10000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: "0",
+    transition: "opacity 0.3s ease"
   });
 
+  /* -------------------------------------------------------
+   * Dialog
+   * ----------------------------------------------------- */
   const dialog = document.createElement("div");
   Object.assign(dialog.style, {
     backgroundColor: "var(--card-background-color, #1c1c1c)",
     color: "var(--primary-text-color, white)",
-    borderRadius: "16px", padding: "24px", width: "95%", maxWidth: "650px",
-    display: "flex", flexDirection: "column", boxShadow: "0px 20px 50px rgba(0,0,0,0.7)",
+    borderRadius: "16px",
+    padding: "24px",
+    width: "95%",
+    maxWidth: "650px",
+    display: "flex",
+    flexDirection: "column",
+    boxShadow: "0px 20px 50px rgba(0,0,0,0.7)",
     overflow: "hidden"
   });
 
   dialog.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
-      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 32px; line-height: 1;">&times;</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;font-family:sans-serif;">${title}</h3>
+      <button id="close-popup"
+              style="background:none;border:none;color:var(--primary-text-color);
+                     cursor:pointer;font-size:32px;line-height:1;">
+        &times;
+      </button>
     </div>
-    <div id="chart-container" style="height: 400px; width: 100%;"></div>
+    <div id="chart-container" style="height:400px;width:100%;"></div>
   `;
 
-  // 3. Karte erstellen
+  /* -------------------------------------------------------
+   * History Graph Card
+   * ----------------------------------------------------- */
   const cardConfig = {
     type: "history-graph",
     entities: entities.map(e => ({ entity: e })),
-    hours_to_show: Number(hours), // Sicherstellen, dass es eine Zahl ist
+    hours_to_show: Number(hours),
     refresh_interval: 0
   };
 
   const cardElement = await helpers.createCardElement(cardConfig);
 
-  // 4. Erst ins DOM einhängen
+  /* -------------------------------------------------------
+   * DOM einhängen
+   * ----------------------------------------------------- */
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
-  const container = dialog.querySelector("#chart-container");
-  container.appendChild(cardElement);
+  dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  // 5. Der "Lifecycle-Kick"
-  // Wir müssen warten, bis die Karte 'connected' ist, bevor wir hass setzen
+  /* -------------------------------------------------------
+   * Hass + Lovelace korrekt setzen
+   * ----------------------------------------------------- */
   requestAnimationFrame(() => {
-    setTimeout(() => {
-      // Setze Hass - das sollte den normalen Ladevorgang triggern
-      cardElement.hass = hass;
-      
-      // Falls die Karte eine interne Methode zum Laden hat, rufen wir sie auf
-      // Viele HA-Cards nutzen _updateHistory oder ähnliches intern
-      if (cardElement._updateHistory) {
-          cardElement._updateHistory();
-      }
+    const lovelace =
+      document
+        .querySelector("home-assistant")
+        ?.shadowRoot.querySelector("home-assistant-main")
+        ?.shadowRoot.querySelector("ha-panel-lovelace")
+        ?.lovelace;
 
-      // Resize-Event erzwingen, damit ECharts die Maße nimmt
-      window.dispatchEvent(new Event('resize'));
-      overlay.style.opacity = 1;
-      
-      // Zweiter Kick nach 500ms, falls der erste zu früh war
-      setTimeout(() => {
-          cardElement.hass = hass;
-          if (cardElement.requestUpdate) cardElement.requestUpdate();
-      }, 500);
-      
-    }, 50);
+    if (!lovelace) {
+      console.warn(
+        "Lovelace context not found – history graph may stay in loading state"
+      );
+    }
+
+    cardElement.hass = hass;
+    cardElement.lovelace = lovelace;
+
+    overlay.style.opacity = "1";
   });
 
-  // 6. Schließen-Logik
+  /* -------------------------------------------------------
+   * Close handling
+   * ----------------------------------------------------- */
   const close = () => {
-    overlay.style.opacity = 0;
-    setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 300);
+    overlay.style.opacity = "0";
+    setTimeout(() => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    }, 300);
   };
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) close();
+  });
+
   dialog.querySelector("#close-popup").addEventListener("click", close);
 }
+
 
 class PoolControllerCard extends HTMLElement {
 	setConfig(config) {
