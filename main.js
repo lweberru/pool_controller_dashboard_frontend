@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.36";
+const VERSION = "2.0.37";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -228,15 +228,13 @@ function _t(lang, key, vars) {
  * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
  */
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
-  console.log("Starte Verlauf-Abruf für:", entities);
-
   const helpers = await window.loadCardHelpers();
 
-  // 1. Overlay & Dialog erstellen (wie gehabt)
+  // 1. Overlay & Dialog (wie gehabt)
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(5px)",
+    backgroundColor: "rgba(0, 0, 0, 0.8)", backdropFilter: "blur(8px)",
     zIndex: "10000", display: "flex", alignItems: "center", justifyContent: "center",
     opacity: 0, transition: "opacity 0.3s ease"
   });
@@ -245,56 +243,58 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
   Object.assign(dialog.style, {
     backgroundColor: "var(--card-background-color, #1c1c1c)",
     color: "var(--primary-text-color, white)",
-    borderRadius: "12px", padding: "20px", width: "95%", maxWidth: "600px",
+    borderRadius: "16px", padding: "24px", width: "95%", maxWidth: "650px",
     maxHeight: "90vh", display: "flex", flexDirection: "column",
-    boxShadow: "0px 10px 30px rgba(0,0,0,0.6)", overflow: "hidden"
+    boxShadow: "0px 20px 50px rgba(0,0,0,0.7)", overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.1)"
   });
 
   dialog.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
-      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 28px;">&times;</button>
+      <h3 style="margin: 0; font-family: sans-serif; font-size: 1.2rem;">${title}</h3>
+      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 32px; line-height: 1;">&times;</button>
     </div>
-    <div id="chart-container" style="min-height: 350px; width: 100%;"></div>
+    <div id="chart-container" style="min-height: 400px; width: 100%; overflow: hidden;"></div>
   `;
 
-  // 2. Konfiguration mit Objekten (Sicherer als reine Strings)
+  // 2. Erstelle die Karte mit Panel-Modus (erzwingt oft das Laden)
   const cardConfig = {
     type: "history-graph",
     entities: entities.map(e => (typeof e === 'string' ? { entity: e } : e)),
     hours_to_show: hours,
-    refresh_interval: 0
+    refresh_interval: 0,
+    is_panel: true // Trick 1: Versetzt die Karte in den Panel-Modus
   };
 
-  // 3. Element erstellen
   const cardElement = await helpers.createCardElement(cardConfig);
 
-  // 4. In das DOM einfügen
+  // 3. Ins DOM einhängen
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
-  dialog.querySelector("#chart-container").appendChild(cardElement);
+  const container = dialog.querySelector("#chart-container");
+  container.appendChild(cardElement);
 
-  // 5. WICHTIG: Die Zuweisung muss "sauber" erfolgen
-  // Wir warten kurz, damit das Element 'connected' ist
-  setTimeout(() => {
-    // Wir nutzen das Original-Hass, ergänzen aber nur das Nötigste
-    // um die Prototyp-Kette (connection, callApi, etc.) nicht zu brechen
-    if (cardElement) {
-      cardElement.hass = hass;
-      
-      // Falls die Karte eine 'isPanel' oder 'editMode' Property hat, 
-      // setzen wir diese, um ein Redraw zu erzwingen
-      if (cardElement.requestUpdate) {
-        cardElement.requestUpdate();
-      }
-      
-      // Ein Resize-Event hilft der Chart-Engine die Größe zu finden
-      window.dispatchEvent(new Event('resize'));
-      overlay.style.opacity = 1;
+  // 4. Lifecycle-Trigger
+  // Wir warten kurz, bis das Element "connected" ist
+  setTimeout(async () => {
+    // Trick 2: Wir weisen hass zu, wenn die Karte sicher im DOM ist
+    cardElement.hass = hass;
+    
+    // Trick 3: Wir rufen requestUpdate manuell auf (falls Lit-Element)
+    if (cardElement.requestUpdate) {
+      cardElement.requestUpdate();
     }
-  }, 100);
 
-  // 6. Schließen-Logik
+    // Trick 4: Ein Resize-Event hilft ECharts, die Größe zu berechnen
+    // Manchmal muss dies mehrfach passieren
+    for (let delay of [10, 100, 500]) {
+      setTimeout(() => window.dispatchEvent(new Event('resize')), delay);
+    }
+
+    overlay.style.opacity = 1;
+  }, 50);
+
+  // 5. Schließen-Logik
   const close = () => {
     overlay.style.opacity = 0;
     setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 300);
