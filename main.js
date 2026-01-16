@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.35";
+const VERSION = "2.0.36";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -228,12 +228,11 @@ function _t(lang, key, vars) {
  * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
  */
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
-  // Debug: Prüfe in der Browser-Konsole (F12), ob hier die richtigen IDs stehen
-  console.log("Lade Verlauf für:", entities);
+  console.log("Starte Verlauf-Abruf für:", entities);
 
   const helpers = await window.loadCardHelpers();
 
-  // 1. Overlay & Dialog (Styling wie gehabt)
+  // 1. Overlay & Dialog erstellen (wie gehabt)
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -256,46 +255,46 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
       <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
       <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 28px;">&times;</button>
     </div>
-    <div id="chart-container" style="min-height: 350px; width: 100%; display: block;"></div>
+    <div id="chart-container" style="min-height: 350px; width: 100%;"></div>
   `;
 
-  // 2. Erstelle das Karten-Element explizit mit Konfiguration
+  // 2. Konfiguration mit Objekten (Sicherer als reine Strings)
   const cardConfig = {
     type: "history-graph",
-    entities: entities,
+    entities: entities.map(e => (typeof e === 'string' ? { entity: e } : e)),
     hours_to_show: hours,
     refresh_interval: 0
   };
 
+  // 3. Element erstellen
   const cardElement = await helpers.createCardElement(cardConfig);
 
-  // 3. Ins DOM einhängen (MUSS vor der Zuweisung von hass passieren)
+  // 4. In das DOM einfügen
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
-  const container = dialog.querySelector("#chart-container");
-  container.appendChild(cardElement);
+  dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  // 4. Daten-Zuweisung mit allen notwendigen Kontexten
-  // Wir warten einen winzigen Moment, bis das Element "connected" ist
+  // 5. WICHTIG: Die Zuweisung muss "sauber" erfolgen
+  // Wir warten kurz, damit das Element 'connected' ist
   setTimeout(() => {
+    // Wir nutzen das Original-Hass, ergänzen aber nur das Nötigste
+    // um die Prototyp-Kette (connection, callApi, etc.) nicht zu brechen
     if (cardElement) {
-      // Wir übergeben das originale hass Objekt, stellen aber sicher, 
-      // dass Themes und Localize vorhanden sind (wegen deines vorigen Fehlers)
-      const enhancedHass = {
-        ...hass,
-        themes: hass.themes || { darkMode: false, themes: {}, default_theme: "default" },
-        localize: hass.localize || ((k) => k)
-      };
+      cardElement.hass = hass;
       
-      cardElement.hass = enhancedHass;
+      // Falls die Karte eine 'isPanel' oder 'editMode' Property hat, 
+      // setzen wir diese, um ein Redraw zu erzwingen
+      if (cardElement.requestUpdate) {
+        cardElement.requestUpdate();
+      }
       
-      // Manchmal braucht die Karte einen Schubs, um die Größe neu zu berechnen
+      // Ein Resize-Event hilft der Chart-Engine die Größe zu finden
       window.dispatchEvent(new Event('resize'));
       overlay.style.opacity = 1;
     }
-  }, 50);
+  }, 100);
 
-  // 5. Schließen-Logik
+  // 6. Schließen-Logik
   const close = () => {
     overlay.style.opacity = 0;
     setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 300);
