@@ -1222,7 +1222,7 @@ class PoolControllerCard extends HTMLElement {
 			powerTopDiv.addEventListener('click', (event) => {
 				// Verhindert, dass der Klick an übergeordnete Elemente weitergereicht wird
 				event.stopPropagation();
-
+				const d = this._renderData || {};
 				const main = d.mainPowerEntityId;
 				const aux = d.auxPowerEntityId;
 				const entities = [main, aux].filter(Boolean);
