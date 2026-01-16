@@ -231,7 +231,7 @@ function _t(lang, key, vars) {
  * Erzeugt ein modales Popup mit einem History-Graph.
  * Version: 2026-Stable-Fix
  */
-async function showHistoryPopup(triggerElement, entities, hours = 24, title = "Power history") {
+async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
   // 1. Hass-Objekt absichern (Prototyp-Kette behalten)
@@ -1252,6 +1252,7 @@ class PoolControllerCard extends HTMLElement {
             // 4. Die Popup-Funktion aufrufen
             showHistoryPopup(
                 powerTopDiv, 
+                this._hass, 
                 entities,
                 24, 
                 'Power history'
