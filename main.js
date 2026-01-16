@@ -227,102 +227,74 @@ function _t(lang, key, vars) {
  * Erzeugt ein modales Popup mit einem History-Graph.
  * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
  */
-async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Verlauf") {
-  // 1. Hass-Objekt absichern (Wichtig für interne HA-Charts)
-  const safeHass = {
-    ...hass,
-    themes: hass?.themes || { 
-      darkMode: false, 
-      themes: {}, 
-      default_theme: "default", 
-      default_dark_theme: "default" 
-    },
-    localize: hass?.localize || ((key) => key),
-    locale: hass?.locale || { language: "de" },
-    language: hass?.language || "de"
-  };
-
-  // 2. Card-Helper laden
+async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
-  // 3. Hintergrund-Overlay erstellen
+  // 1. Overlay und Dialog erstellen (wie gehabt)
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
+    top: 0, left: 0, width: "100%", height: "100%",
     backgroundColor: "rgba(0, 0, 0, 0.7)",
     backdropFilter: "blur(5px)",
     zIndex: "10000",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    opacity: 0,
-    transition: "opacity 0.3s ease"
+    display: "flex", alignItems: "center", justifyContent: "center",
+    opacity: 0, transition: "opacity 0.3s ease"
   });
 
-  // 4. Dialog-Container
   const dialog = document.createElement("div");
   Object.assign(dialog.style, {
     backgroundColor: "var(--card-background-color, #1c1c1c)",
     color: "var(--primary-text-color, white)",
-    borderRadius: "12px",
-    padding: "20px",
-    width: "90%",
-    maxWidth: "550px",
-    maxHeight: "85vh",
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0px 10px 30px rgba(0,0,0,0.6)"
+    borderRadius: "12px", padding: "20px",
+    width: "90%", maxWidth: "550px", maxHeight: "85vh",
+    display: "flex", flexDirection: "column",
+    boxShadow: "0px 10px 30px rgba(0,0,0,0.6)",
+    overflow: "hidden"
   });
 
   dialog.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
-      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 28px; line-height: 1;">&times;</button>
+      <h3 style="margin: 0; font-family: var(--paper-font-body1_-_font-family, sans-serif);">${title}</h3>
+      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 28px;">&times;</button>
     </div>
-    <div id="chart-container" style="flex: 1; width: 100%; min-height: 300px;"></div>
+    <div id="chart-container" style="min-height: 300px; width: 100%;"></div>
   `;
 
-  // 5. Die History-Card erstellen
-  const cardConfig = {
+  // 2. Card erstellen, aber NOCH NICHT mit hass füllen
+  const cardElement = await helpers.createCardElement({
     type: "history-graph",
     entities: entities,
     hours_to_show: hours,
     refresh_interval: 0
-  };
+  });
 
-  const cardElement = await helpers.createCardElement(cardConfig);
-
-  // 6. DOM-Reihenfolge einhalten
-  // Erst das Overlay/Dialog in den Body, dann das Chart ins Dialog
+  // 3. Erst ins DOM einfügen
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
   dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  // Chart erst triggern, wenn es im DOM existiert (verhindert Rendering-Fehler)
-  requestAnimationFrame(() => {
+  // 4. WICHTIG: Verzögerte Zuweisung von hass
+  // Das gibt ECharts Zeit, den DOM-Kontext zu erkennen.
+  setTimeout(() => {
+    // Ein extrem robustes Hass-Proxy-Objekt erstellen
+    const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass, {
+      themes: hass.themes || { darkMode: false, themes: {}, default_theme: "default" },
+      localize: hass.localize || ((k) => k),
+      locale: hass.locale || { language: "de" }
+    });
+
     cardElement.hass = safeHass;
     overlay.style.opacity = 1;
-  });
+  }, 100);
 
-  // 7. Schließen-Logik
+  // 5. Schließen-Logik
   const close = () => {
     overlay.style.opacity = 0;
-    setTimeout(() => {
-      if (overlay.parentNode) document.body.removeChild(overlay);
-    }, 300);
+    setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 300);
   };
-
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   dialog.querySelector("#close-popup").addEventListener("click", close);
-  
-  // Optional: Schließen mit Escape-Taste
-  const escListener = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", escListener); } };
-  document.addEventListener("keydown", escListener);
 }
 
 class PoolControllerCard extends HTMLElement {
@@ -1250,8 +1222,11 @@ class PoolControllerCard extends HTMLElement {
             
             // Daten sicher extrahieren
             const d = this._renderData || {};
-            const entities = [d.mainPowerEntityId, d.auxPowerEntityId].filter(Boolean);
-
+            // const entities = [d.mainPowerEntityId, d.auxPowerEntityId].filter(Boolean);
+			// Sicherstellen, dass wir nur echte Strings in der Liste haben
+        	const entities = [d.mainPowerEntityId, d.auxPowerEntityId]
+            	.filter(id => id && typeof id === 'string');
+				
             if (entities.length === 0) {
                 console.warn("Keine Entitäten für das Power-History-Popup gefunden.");
                 return;
