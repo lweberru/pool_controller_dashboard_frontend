@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.38";
+const VERSION = "2.0.39";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -227,10 +227,23 @@ function _t(lang, key, vars) {
  * Erzeugt ein modales Popup mit einem History-Graph.
  * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
  */
+/**
+ * Erzeugt ein modales Popup mit einem History-Graph.
+ * Version: 2026-Stable-Fix
+ */
 async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
   const helpers = await window.loadCardHelpers();
 
-  // 1. Overlay & Dialog (Styling bleibt gleich)
+  // 1. Hass-Objekt "reparieren" (Prototyp-Kette erhalten)
+  // Das löst den 'darkMode' und 'get' (localize) Fehler
+  const safeHass = Object.assign(Object.create(Object.getPrototypeOf(hass)), hass);
+  
+  // Sicherstellen, dass Themes existieren
+  if (!safeHass.themes) {
+    safeHass.themes = { darkMode: false, themes: {}, default_theme: "default" };
+  }
+
+  // 2. Overlay & Dialog erstellen
   const overlay = document.createElement("div");
   Object.assign(overlay.style, {
     position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
@@ -244,18 +257,19 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     backgroundColor: "var(--card-background-color, #1c1c1c)",
     color: "var(--primary-text-color, white)",
     borderRadius: "16px", padding: "24px", width: "95%", maxWidth: "650px",
-    display: "flex", flexDirection: "column", boxShadow: "0px 20px 50px rgba(0,0,0,0.7)"
+    display: "flex", flexDirection: "column", boxShadow: "0px 20px 50px rgba(0,0,0,0.7)",
+    overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)"
   });
 
   dialog.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h3 style="margin: 0; font-family: sans-serif;">${title}</h3>
-      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 32px;">&times;</button>
+      <button id="close-popup" style="background: none; border: none; color: var(--primary-text-color); cursor: pointer; font-size: 32px; line-height: 1;">&times;</button>
     </div>
     <div id="chart-container" style="height: 400px; width: 100%;"></div>
   `;
 
-  // 2. Karte erstellen
+  // 3. Die Karte erstellen
   const cardConfig = {
     type: "history-graph",
     entities: entities.map(e => ({ entity: e })),
@@ -263,44 +277,29 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
     refresh_interval: 0
   };
 
-  // Wir nutzen hui-history-graph-card direkt, da sie bereits geladen ist
-  const cardElement = document.createElement("hui-history-graph-card");
-  
-  // 3. Konfiguration setzen BEVOR es ans DOM geht
-  if (cardElement.setConfig) {
-    cardElement.setConfig(cardConfig);
-  }
+  const cardElement = await helpers.createCardElement(cardConfig);
 
-  // 4. In DOM einfügen
+  // 4. In das DOM einhängen (WICHTIG: Erst einhängen, dann konfigurieren)
   document.body.appendChild(overlay);
   overlay.appendChild(dialog);
   dialog.querySelector("#chart-container").appendChild(cardElement);
 
-  // 5. Der "Heavy-Nudge" um den Ladevorgang zu erzwingen
-  const triggerLoading = () => {
-    // Falls die Karte im Shadow-DOM versteckt ist, rufen wir connectedCallback auf
-    if (cardElement.connectedCallback) cardElement.connectedCallback();
-    
-    // Hass-Objekt zuweisen
-    cardElement.hass = hass;
-    
-    // Ein spezieller HA-Event, der signalisiert, dass sich das Fenster geändert hat
-    window.dispatchEvent(new Event('resize'));
-    
-    // Erzwinge ein Update des Lit-Elements
-    if (cardElement.requestUpdate) cardElement.requestUpdate();
-  };
-
-  // Wir führen den Trigger mehrmals aus, um Race-Conditions zu vermeiden
+  // 5. Initialisierungs-Sequenz (verhindert den /unknown/ 404 Fehler)
   requestAnimationFrame(() => {
-    triggerLoading();
-    overlay.style.opacity = 1;
+    // Erst jetzt weisen wir hass zu
+    cardElement.hass = safeHass;
+    
+    // Erzwinge Sichtbarkeit für die Grafik-Engine
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+      overlay.style.opacity = 1;
+      
+      // Falls die Karte immer noch "lädt", stoßen wir sie manuell an
+      if (cardElement.requestUpdate) cardElement.requestUpdate();
+    }, 100);
   });
 
-  // Falls es nach 500ms immer noch nicht lädt, setzen wir hass erneut
-  setTimeout(triggerLoading, 500);
-
-  // 6. Schließen
+  // 6. Schließen-Logik
   const close = () => {
     overlay.style.opacity = 0;
     setTimeout(() => { if (overlay.parentNode) document.body.removeChild(overlay); }, 300);
