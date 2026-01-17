@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.45";
+const VERSION = "2.0.46";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1271,7 +1271,10 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass) return;
 				const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
 				if (this._hasService("pool_controller", svc)) {
-					this._hass.callService("pool_controller", svc, { climate_entity: this._config?.climate_entity });
+					const target = this._config?.config_entry_id
+						? { config_entry_id: this._config.config_entry_id }
+						: { climate_entity: this._config?.climate_entity };
+					this._hass.callService("pool_controller", svc, target);
 					return;
 				}
 				this._hass.callService("climate", "set_hvac_mode", {
@@ -1355,17 +1358,20 @@ class PoolControllerCard extends HTMLElement {
 
 				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
 					if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
-					const svc = active ? `stop_${mode}` : `start_${mode}`;
-					const data = active
-						? { climate_entity: this._config?.climate_entity }
-						: { climate_entity: this._config?.climate_entity, duration_minutes: Number.isFinite(duration) ? duration : undefined };
-					this._hass.callService("pool_controller", svc, data);
-						// backend services will trigger coordinator refresh; still request entity update as fallback
-						try {
-							this._requestBackendEntityRefresh(eff);
-						} catch (e) {}
-						return;
-				}
+						const svc = active ? `stop_${mode}` : `start_${mode}`;
+						const target = this._config?.config_entry_id
+							? { config_entry_id: this._config.config_entry_id }
+							: { climate_entity: this._config?.climate_entity };
+						const data = active
+							? target
+							: { ...target, duration_minutes: Number.isFinite(duration) ? duration : undefined };
+						this._hass.callService("pool_controller", svc, data);
+							// backend services will trigger coordinator refresh; still request entity update as fallback
+							try {
+								this._requestBackendEntityRefresh(eff);
+							} catch (e) {}
+							return;
+					}
 
 				if (active && stop) {
 					this._triggerEntity(stop, false);
@@ -1374,7 +1380,10 @@ class PoolControllerCard extends HTMLElement {
 					this._triggerEntity(start, true);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
-					this._hass.callService("pool_controller", `stop_${mode}`, { climate_entity: this._config?.climate_entity });
+					const target = this._config?.config_entry_id
+						? { config_entry_id: this._config.config_entry_id }
+						: { climate_entity: this._config?.climate_entity };
+					this._hass.callService("pool_controller", `stop_${mode}`, target);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				}
 			});
