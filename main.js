@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.46";
+const VERSION = "2.0.47";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -322,6 +322,7 @@ class PoolControllerCard extends HTMLElement {
 		if (!config || !config.climate_entity) {
 			throw new Error(_t("de", "errors.required_climate"));
 		}
+		// Migration: climate_entity bleibt als Entity-Referenz, aber Target-Objekte werden ab jetzt immer als { target: { entity_id: ... } } gebaut
 		this._config = { ...DEFAULTS, ...config };
 		this._derivedEntities = null;
 		this._derivedForClimate = null;
@@ -1271,9 +1272,7 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass) return;
 				const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
 				if (this._hasService("pool_controller", svc)) {
-					const target = this._config?.config_entry_id
-						? { config_entry_id: this._config.config_entry_id }
-						: { climate_entity: this._config?.climate_entity };
+					const target = { target: { entity_id: this._config?.climate_entity } };
 					this._hass.callService("pool_controller", svc, target);
 					return;
 				}
@@ -1359,9 +1358,7 @@ class PoolControllerCard extends HTMLElement {
 				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
 					if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
 						const svc = active ? `stop_${mode}` : `start_${mode}`;
-						const target = this._config?.config_entry_id
-							? { config_entry_id: this._config.config_entry_id }
-							: { climate_entity: this._config?.climate_entity };
+						const target = { target: { entity_id: this._config?.climate_entity } };
 						const data = active
 							? target
 							: { ...target, duration_minutes: Number.isFinite(duration) ? duration : undefined };
@@ -1380,9 +1377,7 @@ class PoolControllerCard extends HTMLElement {
 					this._triggerEntity(start, true);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
-					const target = this._config?.config_entry_id
-						? { config_entry_id: this._config.config_entry_id }
-						: { climate_entity: this._config?.climate_entity };
+					const target = { target: { entity_id: this._config?.climate_entity } };
 					this._hass.callService("pool_controller", `stop_${mode}`, target);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				}
