@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.47";
+const VERSION = "2.0.52";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1209,6 +1209,24 @@ class PoolControllerCard extends HTMLElement {
 		</div>`;
 	}
 
+	/**
+	 * Baut das Target-Objekt für Service-Calls, unterstützt sowohl entity_id als auch device_id.
+	 */
+	_buildTargetObject() {
+		// device_id kann im Config oder Derived Entities liegen
+		const deviceId = this._config?.device_id || this._derivedEntities?.device_id || null;
+		const entityId = this._config?.climate_entity || this._derivedEntities?.climate_entity || null;
+		if (deviceId) {
+			return { target: { device_id: deviceId } };
+		}
+		if (entityId) {
+			return { target: { entity_id: entityId } };
+		}
+		// Fallback: leeres Objekt, damit der Service nicht crasht
+		return { target: {} };
+	}
+
+
 	// ========================================
 	// Event Handlers
 	// ========================================
@@ -1272,8 +1290,8 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass) return;
 				const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
 				if (this._hasService("pool_controller", svc)) {
-					const target = { target: { entity_id: this._config?.climate_entity } };
-					this._hass.callService("pool_controller", svc, target);
+					const targetObj = this._buildTargetObject();
+					this._hass.callService("pool_controller", svc, targetObj);
 					return;
 				}
 				this._hass.callService("climate", "set_hvac_mode", {
@@ -1356,19 +1374,19 @@ class PoolControllerCard extends HTMLElement {
 				const stop = btn.dataset.stop;
 
 				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
-					if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
-						const svc = active ? `stop_${mode}` : `start_${mode}`;
-						const target = { target: { entity_id: this._config?.climate_entity } };
-						const data = active
-							? target
-							: { ...target, duration_minutes: Number.isFinite(duration) ? duration : undefined };
-						this._hass.callService("pool_controller", svc, data);
-							// backend services will trigger coordinator refresh; still request entity update as fallback
-							try {
-								this._requestBackendEntityRefresh(eff);
-							} catch (e) {}
-							return;
-					}
+				if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
+					const svc = active ? `stop_${mode}` : `start_${mode}`;
+					const targetObj = this._buildTargetObject();
+					const data = active
+						? targetObj
+						: { ...targetObj, duration_minutes: Number.isFinite(duration) ? duration : undefined };
+					this._hass.callService("pool_controller", svc, data);
+					// backend services will trigger coordinator refresh; still request entity update as fallback
+					try {
+						this._requestBackendEntityRefresh(eff);
+					} catch (e) {}
+					return;
+				}
 
 				if (active && stop) {
 					this._triggerEntity(stop, false);
@@ -1377,8 +1395,8 @@ class PoolControllerCard extends HTMLElement {
 					this._triggerEntity(start, true);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
-					const target = { target: { entity_id: this._config?.climate_entity } };
-					this._hass.callService("pool_controller", `stop_${mode}`, target);
+					const targetObj = this._buildTargetObject();
+					this._hass.callService("pool_controller", `stop_${mode}`, targetObj);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				}
 			});
@@ -2388,14 +2406,18 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!selected || !selected.config_entry_id) return;
 		const ceid = selected.config_entry_id;
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
-		
+
+		// device_id aus Entity-Registry übernehmen (falls vorhanden)
+		const deviceId = selected.device_id || null;
+
 		const pick = (domain, suffix) => {
 			const hit = entries.find((e) => e.entity_id.startsWith(`${domain}.`) && (suffix ? e.unique_id?.endsWith(`_${suffix}`) : true));
 			return hit?.entity_id;
 		};
-			const cfg = {
+		const cfg = {
 			controller_entity: this._config.controller_entity,
 			climate_entity: pick("climate", "climate") || this._config.climate_entity,
+			device_id: deviceId,
 			outdoor_temp_entity: pick("sensor", "outdoor_temp") || this._config.outdoor_temp_entity,
 			next_frost_mins_entity: pick("sensor", "next_frost_mins") || this._config.next_frost_mins_entity,
 			sanitizer_mode_entity: pick("sensor", "sanitizer_mode") || this._config.sanitizer_mode_entity,
