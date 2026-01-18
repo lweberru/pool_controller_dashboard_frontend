@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.52";
+const VERSION = "2.1.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -49,6 +49,7 @@ const I18N = {
 			pv: "PV",
 			frost: "Frostschutz",
 			quiet: "Ruhezeit",
+			event_rain_blocked: "Event entfällt wegen Regen ({pct}%)",
 			additional_heater: "Zusatzheizung",
 			sanitizer: "Desinfektion",
 			in_short: "in",
@@ -83,7 +84,8 @@ const I18N = {
 			filter: { active: "Filter — verbleibend: {mins} min — Klick beendet", inactive: "Filtern für {mins} Minuten starten" },
 			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
 			pause: { active: "Pause — verbleibend: {mins} min — Klick beendet", inactive: "Pause für {mins} Minuten starten" },
-			aux: { active: "Zusatzheizung erlauben an", inactive: "Zusatzheizung erlauben aus" }
+			aux: { active: "Zusatzheizung erlauben an", inactive: "Zusatzheizung erlauben aus" },
+			rain: "Regenwahrscheinlichkeit: {pct}%"
 		},
 		dial: {
 			bathing_left: "Baden — verbleibend: {mins} min",
@@ -141,6 +143,7 @@ const I18N = {
 			pv: "PV",
 			frost: "Frost protection",
 			quiet: "Quiet hours",
+			event_rain_blocked: "Event canceled due to rain ({pct}%)",
 			additional_heater: "Auxiliary heater",
 			in_short: "in",
 			days_short: "d",
@@ -174,7 +177,8 @@ const I18N = {
 			filter: { active: "Filter — left: {mins} min — click to stop", inactive: "Start filter for {mins} minutes" },
 			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
 			pause: { active: "Pause — left: {mins} min — click to stop", inactive: "Start pause for {mins} minutes" },
-			aux: { active: "Allow auxiliary heater on", inactive: "Allow auxiliary heater off" }
+			aux: { active: "Allow auxiliary heater on", inactive: "Allow auxiliary heater off" },
+			rain: "Rain probability: {pct}%"
 		},
 		dial: {
 			bathing_left: "Bathing — left: {mins} min",
@@ -616,6 +620,10 @@ class PoolControllerCard extends HTMLElement {
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
+		const eventRainProbabilityEntityId = c.event_rain_probability_entity || this._derivedEntities?.event_rain_probability_entity || null;
+		const eventRainBlockedEntityId = c.event_rain_blocked_entity || this._derivedEntities?.event_rain_blocked_entity || null;
+		const eventRainProbability = eventRainProbabilityEntityId ? this._num(h.states[eventRainProbabilityEntityId]?.state) : null;
+		const eventRainBlocked = eventRainBlockedEntityId ? this._isOn(h.states[eventRainBlockedEntityId]) : false;
 
 		const dialAngle = this._calcDial(current ?? tc.min_temp, tc.min_temp, tc.max_temp);
 		const targetAngle = this._calcDial(target ?? current ?? tc.min_temp, tc.min_temp, tc.max_temp);
@@ -664,6 +672,8 @@ class PoolControllerCard extends HTMLElement {
 			nextFrostMinsEntityId,
 			mainPowerEntityId: mainPowerEntityId,
 			auxPowerEntityId: auxPowerEntityId,
+			eventRainProbabilityEntityId,
+			eventRainBlockedEntityId,
 			shouldMainOnEntityId,
 			shouldPumpOnEntityId,
 			shouldAuxOnEntityId,
@@ -692,6 +702,7 @@ class PoolControllerCard extends HTMLElement {
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
+			eventRainProbability, eventRainBlocked,
 			nextStartMinsEntityId: c.next_start_entity || null,
 			nextFilterMinsEntityId: c.next_filter_in || null,
 			nextEventEntityId: c.next_event_entity || null,
@@ -780,6 +791,7 @@ class PoolControllerCard extends HTMLElement {
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
+			.status-icon.rain.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
 			.dial-core { position: absolute; top: 57.5%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
@@ -986,6 +998,9 @@ class PoolControllerCard extends HTMLElement {
 		const finalFilterDur = Number.isFinite(Number(cfgFilter)) ? cfgFilter : filterDur;
 		const finalChlorDur = Number.isFinite(Number(cfgChlor)) ? cfgChlor : chlorDur;
 		const finalBathDur = Number.isFinite(Number(cfgBath)) ? cfgBath : bathingDur;
+		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
+		const rainTooltip = _t(lang, "tooltips.rain", { pct: rainPct });
+		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 44;
@@ -1029,6 +1044,9 @@ class PoolControllerCard extends HTMLElement {
 							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
+								<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
+									<ha-icon icon="mdi:weather-rainy"></ha-icon>
+								</div>
 						</div>
 					</div>
 					<div class="dial-core">
@@ -1171,7 +1189,10 @@ class PoolControllerCard extends HTMLElement {
         const lang = _langFromHass(this._hass);
 		const nextStart = d.nextStartMins;
 		const nextFilter = d.nextFilterMins;
-		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
+		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
+		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
+		const nextEventSummaryBase = d.nextEventSummary || _t(lang, "ui.scheduled_start");
+		const nextEventSummary = d.eventRainBlocked ? `${nextEventSummaryBase} — ${rainInfo}` : nextEventSummaryBase;
  		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
  		// Tooltip titles: use the absolute datetime strings when available
  		const nextEventTitle = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : '';
@@ -1866,6 +1887,8 @@ class PoolControllerCard extends HTMLElement {
 			this._config.next_event_entity,
 			this._config.next_event_end_entity,
 			this._config.next_event_summary_entity,
+			this._config.event_rain_probability_entity,
+			this._config.event_rain_blocked_entity,
 		].filter(Boolean);
 
 		const derived = this._derivedEntities ? Object.values(this._derivedEntities).filter(Boolean) : [];
@@ -2069,6 +2092,8 @@ class PoolControllerCard extends HTMLElement {
 			next_event_entity: prefer('next_event_entity'),
 			next_event_end_entity: prefer('next_event_end_entity'),
 			next_event_summary_entity: prefer('next_event_summary_entity'),
+			event_rain_probability_entity: prefer('event_rain_probability_entity'),
+			event_rain_blocked_entity: prefer('event_rain_blocked_entity'),
 		};
 	}
 
@@ -2190,6 +2215,8 @@ class PoolControllerCard extends HTMLElement {
 			next_event_entity: this._pickEntity(entries, "sensor", ["next_event"]) || null,
 			next_event_end_entity: this._pickEntity(entries, "sensor", ["next_event_end"]) || null,
 			next_event_summary_entity: this._pickEntity(entries, "sensor", ["next_event_summary"]) || null,
+			event_rain_probability_entity: this._pickEntity(entries, "sensor", ["event_rain_probability"]) || null,
+			event_rain_blocked_entity: this._pickEntity(entries, "binary_sensor", ["event_rain_blocked"]) || null,
 
 			// Config value sensors (configured durations)
 			filter_duration_entity: this._pickEntity(entries, "sensor", ["config_filter_minutes", "filter_minutes_config", "filter_minutes"]) || null,
