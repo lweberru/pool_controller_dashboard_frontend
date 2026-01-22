@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.0";
+const VERSION = "2.1.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1189,6 +1189,7 @@ class PoolControllerCard extends HTMLElement {
         const lang = _langFromHass(this._hass);
 		const nextStart = d.nextStartMins;
 		const nextFilter = d.nextFilterMins;
+		const nextFrost = d.nextFrostMins;
 		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
 		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
 		const nextEventSummaryBase = d.nextEventSummary || _t(lang, "ui.scheduled_start");
@@ -1199,10 +1200,14 @@ class PoolControllerCard extends HTMLElement {
  		const nextStartInfo = nextStart != null ? this._formatCountdown(lang, nextStart) : null;
  		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
  		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
+		const nextFrostInfo = nextFrost != null ? this._formatCountdown(lang, nextFrost) : null;
+		const nextFrostText = nextFrostInfo ? nextFrostInfo.text : '–';
+		const nextFrostTitle = nextFrostInfo ? nextFrostInfo.title : '';
 		return `<div class="calendar-block">
 			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
 			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time" title="${nextEventTitle}">${nextEvent}</div><div style="margin-top:6px" title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
 			${nextFilter != null ? `<div style="margin-top:8px" title="${this._formatCountdown(lang, nextFilter).title}">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
+			${nextFrost != null ? `<div style="margin-top:8px" title="${nextFrostTitle}">${_t(lang, "ui.next_frost_cycle")}: ${nextFrostText}</div>` : ''}
 		</div>`;
 	}
 
