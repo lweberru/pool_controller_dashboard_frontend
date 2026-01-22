@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.1";
+const VERSION = "2.1.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -18,6 +18,7 @@ const I18N = {
 			waterquality_title: "Wasserqualität",
 			maintenance_title: "Wartungsarbeiten",
 			select_content: "Angezeigter Inhalt",
+			now_short: "jetzt",
 			maintenance_mode_title: "Wartungsmodus aktiv",
 			maintenance_mode_text: "Automatik ist deaktiviert. Schalte Wartung aus, um Automatik wieder zu erlauben.",
 			maintenance: "Wartung",
@@ -112,6 +113,7 @@ const I18N = {
 			waterquality_title: "Water quality",
 			maintenance_title: "Maintenance",
 			select_content: "Displayed content",
+			now_short: "now",
 			maintenance_mode_title: "Maintenance mode active",
 			maintenance_mode_text: "Automation is disabled. Turn off maintenance to resume automation.",
 			maintenance: "Maintenance",
