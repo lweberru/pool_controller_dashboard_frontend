@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.3";
+const VERSION = "2.1.4";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -743,18 +743,23 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_getStyles() {
 		return `<style>
-			:host { display: block; }
+			:host {
+				display: block;
+				--pc-surface: var(--ha-card-background, var(--card-background-color, #fff));
+				--pc-border: var(--divider-color, #d0d7de);
+				--pc-muted: var(--secondary-text-color, #666);
+			}
 			[data-more-info] { cursor: pointer; }
-			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); container-type: inline-size; }
+			ha-card { padding: 16px; background: var(--pc-surface); color: var(--primary-text-color); container-type: inline-size; }
 			* { box-sizing: border-box; }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
 			.header-actions { display: flex; align-items: center; gap: 10px; }
 			.header-actions .action-btn { padding: 8px 10px; font-size: 12px; }
 			.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
-			.maintenance-mode { border: 1px solid #f3c2a2; border-radius: 12px; padding: 12px 14px; background: #fff9f5; margin: 0 0 12px 0; }
+			.maintenance-mode { border: 1px solid #f3c2a2; border-radius: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--pc-surface) 90%, #f3c2a2 10%); margin: 0 0 12px 0; }
 			.maintenance-mode-title { font-weight: 700; color: #c0392b; }
 			.maintenance-mode-text { margin-top: 4px; color: #8a3b32; font-weight: 500; }
-			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f4f6f8; color: #333; }
+			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); color: var(--primary-text-color); }
 			.pill.on { background: #d0f0d0; color: #0f6b2f; }
 			.pill.warn { background: #ffe5d5; color: #b44; }
 			.pill.active { background: #8a3b32; color: #fff; }
@@ -777,20 +782,20 @@ class PoolControllerCard extends HTMLElement {
 			
 			/* SVG Ring */
 			.ring-svg { position: absolute; width: 100%; height: 100%; }
-			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; stroke-linecap: round; }
+			.ring-track { fill: none; stroke: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); stroke-width: 8; stroke-linecap: round; }
 			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; }
 			.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 8; stroke-linecap: round; }
 			.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 10; stroke-linecap: round; opacity: 0.4; }
 			.ring-dot-current { fill: var(--accent, #8a3b32); }
-			.ring-dot-target { fill: #fff; stroke: #d0d7de; stroke-width: 2; }
+			.ring-dot-target { fill: var(--pc-surface); stroke: var(--pc-border); stroke-width: 2; }
 			
-			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
+			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, var(--pc-surface) 68%, transparent 69%); }
 			
 			/* Power badge: keep inside ring (avoid overlapping arc on small screens) */
 			.power-top { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); z-index: 2; }
-			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.94); border: 1px solid #e0e6ed; color: #4a5568; }
+			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--pc-surface) 92%, transparent 8%); border: 1px solid var(--pc-border); color: var(--primary-text-color); }
 			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
-			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
+			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); display: grid; place-items: center; border: 2px solid var(--pc-border); opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon.rain.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
@@ -798,7 +803,7 @@ class PoolControllerCard extends HTMLElement {
 			
 			.dial-core { position: absolute; top: 57.5%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
 			.temp-current { font-size: 42px; font-weight: 700; line-height: 1; }
-			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
+			.divider { width: 80px; height: 2px; background: var(--pc-border); margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
 			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
@@ -807,48 +812,48 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 
 			.switch-icons-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 6px; }
-			.switch-icon { width: 26px; height: 26px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.45; transition: all 200ms ease; }
+			.switch-icon { width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); display: grid; place-items: center; border: 2px solid var(--pc-border); opacity: 0.45; transition: all 200ms ease; }
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
 			.dial-timer { position: relative; margin: 12px auto 0; left: auto; bottom: auto; transform: none; width: 60%; max-width: 320px; z-index: 1; }
-			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
+			.timer-bar { height: 4px; background: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
-			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
+			.timer-text { font-size: 11px; color: var(--pc-muted); margin-top: 4px; text-align: center; }
 
 			/* right-column styles removed (no dedicated right column in markup) */
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
-			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid var(--pc-border); background: var(--pc-surface); cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
 			.action-btn.maintenance.active { background: #c0392b; border-color: #c0392b; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
 			.action-btn.chlorine.active { background: #27ae60; border-color: #27ae60; }
-			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: #d0d7de; }
-			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: #d0d7de; }
+			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
+			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
 			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
-			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
+			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid var(--pc-border); background: var(--pc-surface); font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
 			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
-			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: #d0d7de; }
-			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: #d0d7de; }
+			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
+			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			
-			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
+			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid var(--pc-border); border-radius: 10px; background: var(--pc-surface); display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
 			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 			.aux-switch.active { background: #27ae60; color: #fff; border-color: #27ae60; }
 			.aux-switch.disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 			.aux-switch.disabled:hover { box-shadow: none; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
 			.aux-switch-label ha-icon { --mdc-icon-size: 20px; }
-			.toggle { width: 44px; height: 24px; background: #d0d7de; border-radius: 999px; position: relative; transition: background 200ms ease; }
+			.toggle { width: 44px; height: 24px; background: var(--pc-border); border-radius: 999px; position: relative; transition: background 200ms ease; }
 			.toggle::after { content: ""; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 200ms ease; }
 			.aux-switch.active .toggle { background: #fff; }
 			.aux-switch.active .toggle::after { left: 23px; background: #27ae60; }
 			
-			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; }
-			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
+			.quality { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 20px; }
+			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pc-muted); margin-bottom: 8px; }
 			
 			.scale-container { position: relative; }
 			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
@@ -860,9 +865,9 @@ class PoolControllerCard extends HTMLElement {
 			.scale-tick.major { height: 70%; background: rgba(255,255,255,0.6); width: 3px; }
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
-			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--pc-muted); font-weight: 600; }
 			/* Absolute-positioned labels (used for pH 0-14 to avoid 2-digit misalignment) */
-			.scale-labels-abs { position: relative; height: 14px; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			.scale-labels-abs { position: relative; height: 14px; margin-top: 6px; font-size: 11px; color: var(--pc-muted); font-weight: 600; }
 			.scale-label-abs { position: absolute; bottom: 0; transform: translateX(-50%); white-space: nowrap; }
 			.scale-label-abs.first { transform: translateX(0); }
 			.scale-label-abs.last { transform: translateX(-100%); }
@@ -884,23 +889,23 @@ class PoolControllerCard extends HTMLElement {
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
 			}
-			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
+			.info-badge { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); font-size: 13px; border: 1px solid var(--pc-border); font-weight: 500; }
 			
-			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 16px; }
+			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: color-mix(in srgb, var(--pc-surface) 90%, #f3c2a2 10%); margin-top: 16px; }
 			.maintenance .section-title { color: #c0392b; }
 			.maintenance-items { display: grid; gap: 12px; margin-top: 12px; }
-			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #f3c2a2; }
+			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: var(--pc-surface); border: 1px solid #f3c2a2; }
 			.maintenance-item ha-icon { --mdc-icon-size: 24px; color: #c0392b; }
 			.maintenance-text { flex: 1; }
 			.maintenance-label { font-weight: 600; color: #8a3b32; }
 			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
 			
-			.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 16px; }
-			.event { padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e9f0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+			.calendar { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 10px; margin-top: 16px; }
+			.event { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 92%, var(--pc-border) 8%); border: 1px solid var(--pc-border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 			.event-title { font-weight: 500; }
-			.event-time { color: #555; font-size: 13px; }
+			.event-time { color: var(--pc-muted); font-size: 13px; }
 			
-			.next-start { background: #e8f5e9; border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
+			.next-start { background: color-mix(in srgb, var(--pc-surface) 90%, #b8e3b8 10%); border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
 			.next-start-label { font-weight: 600; color: #0f6b2f; }
 			.next-start-time { color: #0f6b2f; font-size: 14px; }
 
@@ -1121,7 +1126,6 @@ class PoolControllerCard extends HTMLElement {
 		// Safety: never show manual chlorine dosing recommendation in pure saltwater mode.
 		const showChlorDose = (d.chlorDoseNum != null && d.chlorDoseNum > 0) && !isSaltwater;
 		return `<div class="quality">
-				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
 				${d.sanitizerModeLabel ? `<div class="info-badge" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
 					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.ph")}</div>
