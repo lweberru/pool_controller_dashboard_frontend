@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.4";
+const VERSION = "2.1.5";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -856,7 +856,11 @@ class PoolControllerCard extends HTMLElement {
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pc-muted); margin-bottom: 8px; }
 			
 			.scale-container { position: relative; }
+			.scale-title-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+			.scale-title { font-weight: 600; }
+			.scale-value { font-weight: 700; color: var(--primary-text-color); }
 			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
+			.scale-marker-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #0b132b; transform: translateX(-50%); z-index: 1; }
 			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 7%, #fbb13c 14%, #f6d32b 21%, #8bd448 35%, #27ae60 50%, #1abc9c 65%, #1c9ed8 78%, #2a7fdb 85%, #5c4ac7 100%); }
 			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
 			.salt-bar { background: linear-gradient(90deg, #e6f7ff 0%, #7fd1ff 50%, #0a84ff 100%); }
@@ -1115,6 +1119,11 @@ class PoolControllerCard extends HTMLElement {
 				: `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
 
+		const phValueText = d.ph != null ? `${d.ph.toFixed(2)}` : "–";
+		const chlorValueText = d.chlor != null ? `${d.chlor.toFixed(0)} mV` : "–";
+		const saltValueText = d.salt != null ? `${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)` : "–";
+		const tdsValueText = d.tds != null ? `${d.tds.toFixed(0)} ppm` : "–";
+
 		const chlorOkMin = Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min;
 		const chlorLow = (d.chlor != null) && (chlorOkMin != null) && (Number(d.chlor) < Number(chlorOkMin));
 		const isSaltwater = d.sanitizerMode === "saltwater";
@@ -1128,9 +1137,12 @@ class PoolControllerCard extends HTMLElement {
 		return `<div class="quality">
 				${d.sanitizerModeLabel ? `<div class="info-badge" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.ph")}</div>
-					<div style="position: relative;">
-						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 0, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
+					<div class="scale-title-row" title="${phValueText}">
+						<div class="scale-title">${_t(lang, "ui.ph")}</div>
+						<div class="scale-value">${phValueText}</div>
+					</div>
+					<div style="position: relative;" title="${phValueText}">
+						${d.ph != null ? `<div class="scale-marker-line" style="left: ${this._pct(d.ph, 0, 14)}%"></div>` : ""}
 						<div class="scale-bar ph-bar">
 							${Array.from({length: 15}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 14) * 100}%"></div>`).join("")}
 							${Array.from({length: 14}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("")}
@@ -1145,9 +1157,12 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 				
 				<div class="scale-container" ${d.chlorEntityId ? `data-more-info="${d.chlorEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.chlorine")}</div>
-					<div style="position: relative;">
-						${d.chlor != null ? `<div class="scale-marker" style="left: ${this._pct(d.chlor, 0, 1200)}%"><div class="marker-value">${d.chlor.toFixed(0)} mV</div></div>` : ""}
+					<div class="scale-title-row" title="${chlorValueText}">
+						<div class="scale-title">${_t(lang, "ui.chlorine")}</div>
+						<div class="scale-value">${chlorValueText}</div>
+					</div>
+					<div style="position: relative;" title="${chlorValueText}">
+						${d.chlor != null ? `<div class="scale-marker-line" style="left: ${this._pct(d.chlor, 0, 1200)}%"></div>` : ""}
 						<div class="scale-bar chlor-bar">
 							${[0, 300, 600, 900, 1200].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 							${[1, 2, 3].map(i => `<div class="scale-tick minor" style="left: ${((i - 0.5) / 4) * 100}%"></div>`).join("")}
@@ -1160,9 +1175,12 @@ class PoolControllerCard extends HTMLElement {
 				
 				${(d.salt != null) ? `
 				<div class="scale-container" ${d.saltEntityId ? `data-more-info="${d.saltEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.salt")}</div>
-					<div style="position: relative;">
-						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)</div></div>
+					<div class="scale-title-row" title="${saltValueText}">
+						<div class="scale-title">${_t(lang, "ui.salt")}</div>
+						<div class="scale-value">${saltValueText}</div>
+					</div>
+					<div style="position: relative;" title="${saltValueText}">
+						<div class="scale-marker-line" style="left: ${this._pct(d.salt, 0, 10)}%"></div>
 						<div class="scale-bar salt-bar">
 							${[0,2.5,5,7.5,10].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
@@ -1177,9 +1195,12 @@ class PoolControllerCard extends HTMLElement {
 
 				${(d.tds != null) ? `
 				<div class="scale-container" ${d.tdsEntityId ? `data-more-info="${d.tdsEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.tds")}</div>
-					<div style="position: relative;">
-						<div class="scale-marker" style="left: ${this._pct(d.tds, 0, 2000)}%"><div class="marker-value">${d.tds.toFixed(0)} ppm</div></div>
+					<div class="scale-title-row" title="${tdsValueText}">
+						<div class="scale-title">${_t(lang, "ui.tds")}</div>
+						<div class="scale-value">${tdsValueText}</div>
+					</div>
+					<div style="position: relative;" title="${tdsValueText}">
+						<div class="scale-marker-line" style="left: ${this._pct(d.tds, 0, 2000)}%"></div>
 						<div class="scale-bar tds-bar">
 							${[0,500,1000,1500,2000].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
