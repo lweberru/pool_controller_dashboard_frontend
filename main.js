@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.5";
+const VERSION = "2.1.6";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -31,6 +31,10 @@ const I18N = {
 			chlorine: "Chlor (mV)",
 			salt: "Salz",
 			tds: "TDS",
+			credit_label: "Gutschrift",
+			credit_filter_label: "Filter-Gutschrift",
+			credit_frost_label: "Frost-Gutschrift",
+			credit_shift_label: "Frost verschoben",
 			add_ph_plus: "pH+ hinzufügen",
 			add_ph_minus: "pH- hinzufügen",
 			add_salt: "Salz hinzufügen",
@@ -126,6 +130,10 @@ const I18N = {
 			chlorine: "Chlorine (mV)",
 			salt: "Salt",
 			tds: "TDS",
+			credit_label: "Credit",
+			credit_filter_label: "Filter credit",
+			credit_frost_label: "Frost credit",
+			credit_shift_label: "Frost shifted",
 			add_ph_plus: "Add pH+",
 			add_ph_minus: "Add pH-",
 			add_salt: "Add salt",
@@ -445,6 +453,19 @@ class PoolControllerCard extends HTMLElement {
 		const runReasonEntityId = c.run_reason_entity || this._derivedEntities?.run_reason_entity || null;
 		const heatReason = heatReasonEntityId ? (h.states[heatReasonEntityId]?.state || null) : null;
 		const runReason = runReasonEntityId ? (h.states[runReasonEntityId]?.state || null) : null;
+		const runCreditSourceEntityId = c.run_credit_source_entity || this._derivedEntities?.run_credit_source_entity || null;
+		const runCreditMinutesEntityId = c.run_credit_minutes_entity || this._derivedEntities?.run_credit_minutes_entity || null;
+		const filterCreditMinutesEntityId = c.filter_credit_minutes_entity || this._derivedEntities?.filter_credit_minutes_entity || null;
+		const filterMissingMinutesEntityId = c.filter_missing_minutes_entity || this._derivedEntities?.filter_missing_minutes_entity || null;
+		const frostCreditMinutesEntityId = c.frost_credit_minutes_entity || this._derivedEntities?.frost_credit_minutes_entity || null;
+		const frostCreditShiftMinutesEntityId = c.frost_credit_shift_minutes_entity || this._derivedEntities?.frost_credit_shift_minutes_entity || null;
+
+		const runCreditSource = runCreditSourceEntityId ? (h.states[runCreditSourceEntityId]?.state || null) : null;
+		const runCreditMinutes = runCreditMinutesEntityId ? this._num(h.states[runCreditMinutesEntityId]?.state) : null;
+		const filterCreditMinutes = filterCreditMinutesEntityId ? this._num(h.states[filterCreditMinutesEntityId]?.state) : null;
+		const filterMissingMinutes = filterMissingMinutesEntityId ? this._num(h.states[filterMissingMinutesEntityId]?.state) : null;
+		const frostCreditMinutes = frostCreditMinutesEntityId ? this._num(h.states[frostCreditMinutesEntityId]?.state) : null;
+		const frostCreditShiftMinutes = frostCreditShiftMinutesEntityId ? this._num(h.states[frostCreditShiftMinutesEntityId]?.state) : null;
 
 		// Physical switch states (mirrored by backend as binary_sensors)
 		const mainSwitchOnEntityId = c.main_switch_on_entity || this._derivedEntities?.main_switch_on_entity || null;
@@ -657,6 +678,12 @@ class PoolControllerCard extends HTMLElement {
 			maintenanceEntityId: maintenanceEntityId,
 			heatReasonEntityId: heatReasonEntityId,
 			runReasonEntityId: runReasonEntityId,
+			runCreditSourceEntityId,
+			runCreditMinutesEntityId,
+			filterCreditMinutesEntityId,
+			filterMissingMinutesEntityId,
+			frostCreditMinutesEntityId,
+			frostCreditShiftMinutesEntityId,
 			sanitizerModeEntityId,
 			mainSwitchOnEntityId,
 			pumpSwitchOnEntityId,
@@ -685,6 +712,12 @@ class PoolControllerCard extends HTMLElement {
 			maintenanceActive,
 			heatReason,
 			runReason,
+			runCreditSource,
+			runCreditMinutes,
+			filterCreditMinutes,
+			filterMissingMinutes,
+			frostCreditMinutes,
+			frostCreditShiftMinutes,
 			mainSwitchOn,
 			pumpSwitchOn,
 			auxHeatingSwitchOn,
@@ -820,6 +853,8 @@ class PoolControllerCard extends HTMLElement {
 			.timer-bar { height: 4px; background: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
 			.timer-text { font-size: 11px; color: var(--pc-muted); margin-top: 4px; text-align: center; }
+			.credit-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+			.credit-pill { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--primary-text-color); background: color-mix(in srgb, var(--pc-surface) 92%, var(--pc-border) 8%); border: 1px solid var(--pc-border); }
 
 			/* right-column styles removed (no dedicated right column in markup) */
 			
@@ -1012,6 +1047,20 @@ class PoolControllerCard extends HTMLElement {
 		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
 		const rainTooltip = _t(lang, "tooltips.rain", { pct: rainPct });
 		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
+		const creditItems = [];
+		const creditSourceLabel = d.runCreditSource ? this._creditSourceLabel(d.runCreditSource) : null;
+		if (Number.isFinite(Number(d.runCreditMinutes)) && d.runCreditMinutes > 0 && creditSourceLabel) {
+			creditItems.push(`<div class="credit-pill" ${d.runCreditMinutesEntityId ? `data-more-info="${d.runCreditMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_label")}: ${creditSourceLabel} +${d.runCreditMinutes} min</div>`);
+		}
+		if (Number.isFinite(Number(d.filterCreditMinutes)) && d.filterCreditMinutes > 0) {
+			creditItems.push(`<div class="credit-pill" ${d.filterCreditMinutesEntityId ? `data-more-info="${d.filterCreditMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_filter_label")}: ${d.filterCreditMinutes} min</div>`);
+		}
+		if (Number.isFinite(Number(d.frostCreditMinutes)) && d.frostCreditMinutes > 0) {
+			creditItems.push(`<div class="credit-pill" ${d.frostCreditMinutesEntityId ? `data-more-info="${d.frostCreditMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_frost_label")}: ${d.frostCreditMinutes} min</div>`);
+		}
+		if (Number.isFinite(Number(d.frostCreditShiftMinutes)) && d.frostCreditShiftMinutes > 0) {
+			creditItems.push(`<div class="credit-pill" ${d.frostCreditShiftMinutesEntityId ? `data-more-info="${d.frostCreditShiftMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_shift_label")}: ${d.frostCreditShiftMinutes} min</div>`);
+		}
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 44;
@@ -1082,6 +1131,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				${this._renderDialTimer(d)}
+				${creditItems.length ? `<div class="credit-row">${creditItems.join("")}</div>` : ""}
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
@@ -1673,6 +1723,13 @@ class PoolControllerCard extends HTMLElement {
 		return labels?.[lang]?.[r] || r || null;
 	}
 
+	_creditSourceLabel(source) {
+		const s = String(source || "").toLowerCase();
+		if (!s) return null;
+		if (s === "thermostat") return this._heatReasonLabel("thermostat");
+		return this._runReasonLabel(s) || this._heatReasonLabel(s) || s;
+	}
+
 	_renderStatusMidIcon(d) {
 		const title = d.statusText || "";
 		const lang = _langFromHass(this._hass);
@@ -1873,6 +1930,12 @@ class PoolControllerCard extends HTMLElement {
 			this._config.maintenance_entity,
 			this._config.heat_reason_entity,
 			this._config.run_reason_entity,
+			this._config.run_credit_source_entity,
+			this._config.run_credit_minutes_entity,
+			this._config.filter_credit_minutes_entity,
+			this._config.filter_missing_minutes_entity,
+			this._config.frost_credit_minutes_entity,
+			this._config.frost_credit_shift_minutes_entity,
 			this._config.sanitizer_mode_entity,
 			this._config.aux_entity,
 			this._config.manual_timer_entity,
@@ -2074,6 +2137,12 @@ class PoolControllerCard extends HTMLElement {
 			maintenance_entity: prefer('maintenance_entity'),
 			heat_reason_entity: prefer('heat_reason_entity'),
 			run_reason_entity: prefer('run_reason_entity'),
+			run_credit_source_entity: prefer('run_credit_source_entity'),
+			run_credit_minutes_entity: prefer('run_credit_minutes_entity'),
+			filter_credit_minutes_entity: prefer('filter_credit_minutes_entity'),
+			filter_missing_minutes_entity: prefer('filter_missing_minutes_entity'),
+			frost_credit_minutes_entity: prefer('frost_credit_minutes_entity'),
+			frost_credit_shift_minutes_entity: prefer('frost_credit_shift_minutes_entity'),
 			manual_timer_entity: prefer('manual_timer_entity'),
 			auto_filter_timer_entity: prefer('auto_filter_timer_entity'),
 			pause_timer_entity: prefer('pause_timer_entity'),
@@ -2186,6 +2255,12 @@ class PoolControllerCard extends HTMLElement {
 			// Transparency
 			heat_reason_entity: this._pickEntity(entries, "sensor", ["heat_reason"]) || null,
 			run_reason_entity: this._pickEntity(entries, "sensor", ["run_reason"]) || null,
+			run_credit_source_entity: this._pickEntity(entries, "sensor", ["run_credit_source"]) || null,
+			run_credit_minutes_entity: this._pickEntity(entries, "sensor", ["run_credit_minutes"]) || null,
+			filter_credit_minutes_entity: this._pickEntity(entries, "sensor", ["filter_credit_minutes"]) || null,
+			filter_missing_minutes_entity: this._pickEntity(entries, "sensor", ["filter_missing_minutes"]) || null,
+			frost_credit_minutes_entity: this._pickEntity(entries, "sensor", ["frost_credit_minutes"]) || null,
+			frost_credit_shift_minutes_entity: this._pickEntity(entries, "sensor", ["frost_credit_shift_minutes"]) || null,
 
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: this._pickEntity(entries, "sensor", ["manual_timer_mins"]) || null,
@@ -2487,6 +2562,12 @@ class PoolControllerCardEditor extends HTMLElement {
 			maintenance_entity: pick("binary_sensor", "maintenance_active") || this._config.maintenance_entity,
 			heat_reason_entity: pick("sensor", "heat_reason") || this._config.heat_reason_entity,
 			run_reason_entity: pick("sensor", "run_reason") || this._config.run_reason_entity,
+			run_credit_source_entity: pick("sensor", "run_credit_source") || this._config.run_credit_source_entity,
+			run_credit_minutes_entity: pick("sensor", "run_credit_minutes") || this._config.run_credit_minutes_entity,
+			filter_credit_minutes_entity: pick("sensor", "filter_credit_minutes") || this._config.filter_credit_minutes_entity,
+			filter_missing_minutes_entity: pick("sensor", "filter_missing_minutes") || this._config.filter_missing_minutes_entity,
+			frost_credit_minutes_entity: pick("sensor", "frost_credit_minutes") || this._config.frost_credit_minutes_entity,
+			frost_credit_shift_minutes_entity: pick("sensor", "frost_credit_shift_minutes") || this._config.frost_credit_shift_minutes_entity,
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
 			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
