@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.7";
+const VERSION = "2.1.8";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2271,7 +2271,7 @@ class PoolControllerCard extends HTMLElement {
 
 			// Core / controls
 			climate_entity: this._pickEntity(entries, "climate", ["climate"]) || null,
-			aux_entity: this._pickEntity(entries, "switch", ["aux"]) || null,
+			aux_entity: this._pickEntity(entries, "switch", ["aux_allowed", "aux"]) || null,
 			// Binary sensor indicating an aux heater is configured (picked by unique_id suffix)
 			aux_binary: this._pickEntity(entries, "binary_sensor", ["aux_present", "aux_configured", "aux"]) || null,
 			bathing_entity: this._pickEntity(entries, "switch", ["bathing"]) || null,
@@ -2572,7 +2572,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
 			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
 			pause_timer_entity: pick("sensor", "pause_timer_mins") || this._config.pause_timer_entity,
-			aux_entity: pick("switch", "aux") || this._config.aux_entity,
+			aux_entity: pick("switch", "aux_allowed") || pick("switch", "aux") || this._config.aux_entity,
 			// Binary sensor indicating aux presence (aux_present / aux_configured)
 			aux_binary: pick("binary_sensor", "aux_present") || pick("binary_sensor", "aux_configured") || pick("binary_sensor", "aux") || this._config.aux_binary,
 			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
