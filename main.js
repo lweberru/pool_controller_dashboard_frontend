@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.8";
+const VERSION = "2.1.9";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1047,20 +1047,6 @@ class PoolControllerCard extends HTMLElement {
 		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
 		const rainTooltip = _t(lang, "tooltips.rain", { pct: rainPct });
 		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
-		const creditItems = [];
-		const creditSourceLabel = d.runCreditSource ? this._creditSourceLabel(d.runCreditSource) : null;
-		if (Number.isFinite(Number(d.runCreditMinutes)) && d.runCreditMinutes > 0 && creditSourceLabel) {
-			creditItems.push(`<div class="credit-pill" ${d.runCreditMinutesEntityId ? `data-more-info="${d.runCreditMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_label")}: ${creditSourceLabel} +${d.runCreditMinutes} min</div>`);
-		}
-		if (Number.isFinite(Number(d.filterCreditMinutes)) && d.filterCreditMinutes > 0) {
-			creditItems.push(`<div class="credit-pill" ${d.filterCreditMinutesEntityId ? `data-more-info="${d.filterCreditMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_filter_label")}: ${d.filterCreditMinutes} min</div>`);
-		}
-		if (Number.isFinite(Number(d.frostCreditMinutes)) && d.frostCreditMinutes > 0) {
-			creditItems.push(`<div class="credit-pill" ${d.frostCreditMinutesEntityId ? `data-more-info="${d.frostCreditMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_frost_label")}: ${d.frostCreditMinutes} min</div>`);
-		}
-		if (Number.isFinite(Number(d.frostCreditShiftMinutes)) && d.frostCreditShiftMinutes > 0) {
-			creditItems.push(`<div class="credit-pill" ${d.frostCreditShiftMinutesEntityId ? `data-more-info="${d.frostCreditShiftMinutesEntityId}"` : ''}>${_t(lang, "ui.credit_shift_label")}: ${d.frostCreditShiftMinutes} min</div>`);
-		}
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 44;
@@ -1131,7 +1117,6 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				${this._renderDialTimer(d)}
-				${creditItems.length ? `<div class="credit-row">${creditItems.join("")}</div>` : ""}
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
@@ -1278,14 +1263,52 @@ class PoolControllerCard extends HTMLElement {
  		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
  		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
 		const showNextFrost = !!d.frost && nextFrost != null && Number(nextFrost) > 0;
+		const creditLines = [];
+		const creditSourceLabel = d.runCreditSource ? this._creditSourceLabel(d.runCreditSource) : null;
+		if (Number.isFinite(Number(d.runCreditMinutes)) && d.runCreditMinutes > 0 && creditSourceLabel) {
+			creditLines.push({
+				label: `${_t(lang, "ui.credit_label")}: ${creditSourceLabel}`,
+				value: `+${d.runCreditMinutes} min`,
+				entityId: d.runCreditMinutesEntityId,
+			});
+		}
+		if (Number.isFinite(Number(d.filterCreditMinutes)) && d.filterCreditMinutes > 0) {
+			creditLines.push({
+				label: _t(lang, "ui.credit_filter_label"),
+				value: `${d.filterCreditMinutes} min`,
+				entityId: d.filterCreditMinutesEntityId,
+			});
+		}
+		if (Number.isFinite(Number(d.frostCreditMinutes)) && d.frostCreditMinutes > 0) {
+			creditLines.push({
+				label: _t(lang, "ui.credit_frost_label"),
+				value: `${d.frostCreditMinutes} min`,
+				entityId: d.frostCreditMinutesEntityId,
+			});
+		}
+		if (Number.isFinite(Number(d.frostCreditShiftMinutes)) && d.frostCreditShiftMinutes > 0) {
+			creditLines.push({
+				label: _t(lang, "ui.credit_shift_label"),
+				value: `${d.frostCreditShiftMinutes} min`,
+				entityId: d.frostCreditShiftMinutesEntityId,
+			});
+		}
 		const nextFrostInfo = showNextFrost ? this._formatCountdown(lang, nextFrost) : null;
 		const nextFrostText = nextFrostInfo ? nextFrostInfo.text : '–';
 		const nextFrostTitle = nextFrostInfo ? nextFrostInfo.title : '';
+		const creditHtml = creditLines.length
+			? `<div class="next-rows" style="margin-top:8px;">
+				${creditLines
+					.map((line) => `<div class="next-row" ${line.entityId ? `data-more-info="${line.entityId}"` : ''}><div class="next-row-title">${line.label}</div><div class="next-row-value">${line.value}</div></div>`)
+					.join("")}
+			</div>`
+			: '';
 		return `<div class="calendar-block">
 			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
 			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time" title="${nextEventTitle}">${nextEvent}</div><div style="margin-top:6px" title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
 			${nextFilter != null ? `<div style="margin-top:8px" title="${this._formatCountdown(lang, nextFilter).title}">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
 			${showNextFrost ? `<div style="margin-top:8px" title="${nextFrostTitle}">${_t(lang, "ui.next_frost_cycle")}: ${nextFrostText}</div>` : ''}
+			${creditHtml}
 		</div>`;
 	}
 
