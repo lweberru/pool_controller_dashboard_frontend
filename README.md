@@ -8,7 +8,8 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 
 ## Screenshot
 
-![Card example](card_example_1.png)
+![Card example 1](card_example_1.png)
+![Card example 2](card_example_2.png)
 
 ## Features (high level)
 
