@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.1.9";
+const VERSION = "2.2.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -108,6 +108,11 @@ const I18N = {
 			filter: "Filtern",
 			heating: "Heizbetrieb",
 			off: "Aus"
+		},
+		errors: {
+			required_controller: "Bitte Device oder Climate-Entity angeben",
+			entity_not_found: "Entity nicht gefunden: {entity}",
+			device_not_found: "Device nicht gefunden: {device}"
 		}
 	},
 	en: {
@@ -206,6 +211,11 @@ const I18N = {
 			filter: "Filter",
 			heating: "Heating",
 			off: "Off"
+		},
+		errors: {
+			required_controller: "Please provide a device or climate entity",
+			entity_not_found: "Entity not found: {entity}",
+			device_not_found: "Device not found: {device}"
 		}
 	}
 };
@@ -333,13 +343,20 @@ async function showHistoryPopup(triggerElement, hass, entities, hours = 24, titl
 
 class PoolControllerCard extends HTMLElement {
 	setConfig(config) {
-		if (!config || !config.climate_entity) {
-			throw new Error(_t("de", "errors.required_climate"));
+		if (!config || (!config.climate_entity && !config.device_id)) {
+			throw new Error(_t("de", "errors.required_controller"));
 		}
-		// Migration: climate_entity bleibt als Entity-Referenz, aber Target-Objekte werden ab jetzt immer als { target: { entity_id: ... } } gebaut
-		this._config = { ...DEFAULTS, ...config };
+		// Only store controller + content config (no per-entity overrides)
+		const next = { content: config.content ?? DEFAULTS.content };
+		if (config.device_id) {
+			next.device_id = config.device_id;
+		} else if (config.climate_entity) {
+			next.climate_entity = config.climate_entity;
+		}
+		this._config = next;
 		this._derivedEntities = null;
 		this._derivedForClimate = null;
+		this._derivedForDevice = null;
 		if (!this.shadowRoot) {
 			this.attachShadow({ mode: "open" });
 		}
@@ -373,15 +390,20 @@ class PoolControllerCard extends HTMLElement {
 		const h = this._hass;
 		const c = this._config;
 		const lang = _langFromHass(h);
-		const climate = h.states[c.climate_entity];
-		if (!climate) {
-			this._renderError(_t(lang, "errors.entity_not_found", { entity: c.climate_entity }));
-			return;
-		}
 
 		// Falls optionale Entities nicht im Config sind, leite sie aus der Backend-Instanz ab.
 		await this._ensureDerivedEntities();
 		const effectiveConfig = this._withDerivedConfig(c);
+		const climateEntityId = effectiveConfig.climate_entity || c.climate_entity || null;
+		const climate = climateEntityId ? h.states[climateEntityId] : null;
+		if (!climate) {
+			if (effectiveConfig.device_id) {
+				this._renderError(_t(lang, "errors.device_not_found", { device: effectiveConfig.device_id }));
+			} else {
+				this._renderError(_t(lang, "errors.entity_not_found", { entity: climateEntityId }));
+			}
+			return;
+		}
 
 		// Daten vorbereiten
 		const data = this._prepareData(h, effectiveConfig, climate);
@@ -674,7 +696,7 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			// Entity IDs (for HA more-info popups)
-			climateEntityId: c.climate_entity,
+			climateEntityId: climate?.entity_id || c.climate_entity,
 			maintenanceEntityId: maintenanceEntityId,
 			heatReasonEntityId: heatReasonEntityId,
 			runReasonEntityId: runReasonEntityId,
@@ -755,7 +777,8 @@ class PoolControllerCard extends HTMLElement {
 
 	_effectiveTempConfig() {
 		const c = this._config || DEFAULTS;
-		const climate = this._hass?.states?.[c.climate_entity];
+		const climateEntityId = this._renderData?.climateEntityId || c.climate_entity || this._derivedEntities?.climate_entity;
+		const climate = climateEntityId ? this._hass?.states?.[climateEntityId] : null;
 		const a = climate?.attributes || {};
 		const min_temp = this._num(a.min_temp) ?? Number(c.min_temp);
 		const max_temp = this._num(a.max_temp) ?? Number(c.max_temp);
@@ -1256,12 +1279,12 @@ class PoolControllerCard extends HTMLElement {
 		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
 		const nextEventSummaryBase = d.nextEventSummary || _t(lang, "ui.scheduled_start");
 		const nextEventSummary = d.eventRainBlocked ? `${nextEventSummaryBase} — ${rainInfo}` : nextEventSummaryBase;
- 		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
- 		// Tooltip titles: use the absolute datetime strings when available
- 		const nextEventTitle = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : '';
- 		const nextStartInfo = nextStart != null ? this._formatCountdown(lang, nextStart) : null;
- 		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
- 		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
+		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
+		// Tooltip titles: use the absolute datetime strings when available
+		const nextEventTitle = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : '';
+		const nextStartInfo = nextStart != null ? this._formatCountdown(lang, nextStart) : null;
+		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
+		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
 		const showNextFrost = !!d.frost && nextFrost != null && Number(nextFrost) > 0;
 		const creditLines = [];
 		const creditSourceLabel = d.runCreditSource ? this._creditSourceLabel(d.runCreditSource) : null;
@@ -1296,19 +1319,52 @@ class PoolControllerCard extends HTMLElement {
 		const nextFrostInfo = showNextFrost ? this._formatCountdown(lang, nextFrost) : null;
 		const nextFrostText = nextFrostInfo ? nextFrostInfo.text : '–';
 		const nextFrostTitle = nextFrostInfo ? nextFrostInfo.title : '';
-		const creditHtml = creditLines.length
+
+		const rows = [];
+		if (nextEvent) {
+			rows.push({
+				label: nextEventSummary,
+				value: nextEvent,
+				title: nextEventTitle,
+			});
+		}
+		rows.push({
+			label: _t(lang, "ui.next_event"),
+			value: nextStartText,
+			title: nextStartTitle,
+		});
+		if (nextFilter != null) {
+			const nf = this._formatCountdown(lang, nextFilter);
+			rows.push({
+				label: _t(lang, "ui.next_filter_cycle"),
+				value: nf.text,
+				title: nf.title,
+			});
+		}
+		if (showNextFrost) {
+			rows.push({
+				label: _t(lang, "ui.next_frost_cycle"),
+				value: nextFrostText,
+				title: nextFrostTitle,
+			});
+		}
+		creditLines.forEach((line) => rows.push({
+			label: line.label,
+			value: line.value,
+			title: "",
+			entityId: line.entityId,
+		}));
+
+		const rowsHtml = rows.length
 			? `<div class="next-rows" style="margin-top:8px;">
-				${creditLines
-					.map((line) => `<div class="next-row" ${line.entityId ? `data-more-info="${line.entityId}"` : ''}><div class="next-row-title">${line.label}</div><div class="next-row-value">${line.value}</div></div>`)
+				${rows
+					.map((row) => `<div class="next-row" ${row.entityId ? `data-more-info="${row.entityId}"` : ''} ${row.title ? `title=\"${row.title}\"` : ''}><div class="next-row-title">${row.label}</div><div class="next-row-value">${row.value}</div></div>`)
 					.join("")}
 			</div>`
 			: '';
 		return `<div class="calendar-block">
 			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
-			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time" title="${nextEventTitle}">${nextEvent}</div><div style="margin-top:6px" title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
-			${nextFilter != null ? `<div style="margin-top:8px" title="${this._formatCountdown(lang, nextFilter).title}">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
-			${showNextFrost ? `<div style="margin-top:8px" title="${nextFrostTitle}">${_t(lang, "ui.next_frost_cycle")}: ${nextFrostText}</div>` : ''}
-			${creditHtml}
+			${rowsHtml}
 		</div>`;
 	}
 
@@ -1421,8 +1477,9 @@ class PoolControllerCard extends HTMLElement {
 					this._hass.callService("pool_controller", svc, targetObj);
 					return;
 				}
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
 				this._hass.callService("climate", "set_hvac_mode", {
-					entity_id: this._config?.climate_entity,
+					entity_id: climateEntityId,
 					hvac_mode: maintenanceActive ? "heat" : "off",
 				});
 			});
@@ -1436,7 +1493,8 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass) return;
 				const tc = this._effectiveTempConfig();
 				const step = Number(tc.step || 0.5);
-				const climate = this._hass.states[this._config.climate_entity];
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+				const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
 				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
 				const next = action === "inc" ? currentTarget + step : currentTarget - step;
 				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
@@ -1445,13 +1503,13 @@ class PoolControllerCard extends HTMLElement {
 				if (climate) {
 					const optimisticState = { ...climate };
 					optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-					this._hass.states[this._config.climate_entity] = optimisticState;
+					this._hass.states[climateEntityId] = optimisticState;
 					this._render();
 				}
 				
 				// Service call im Hintergrund
 				this._hass.callService("climate", "set_temperature", { 
-					entity_id: this._config.climate_entity, 
+					entity_id: climateEntityId, 
 					temperature: newTemp 
 				});
 			});
@@ -2063,15 +2121,16 @@ class PoolControllerCard extends HTMLElement {
 		if (this._dialDragTemp == null) return;
 		const newTemp = this._dialDragTemp;
 		this._dialDragTemp = null;
-		const climate = this._hass.states[this._config.climate_entity];
+		const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+		const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
 		if (climate) {
 			const optimisticState = { ...climate };
 			optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-			this._hass.states[this._config.climate_entity] = optimisticState;
+			this._hass.states[climateEntityId] = optimisticState;
 			this._render();
 		}
 		this._hass.callService("climate", "set_temperature", {
-			entity_id: this._config.climate_entity,
+			entity_id: climateEntityId,
 			temperature: newTemp,
 		});
 	}
@@ -2148,6 +2207,8 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			climate_entity: prefer('climate_entity'),
+			device_id: prefer('device_id'),
 			outdoor_temp_entity: prefer('outdoor_temp_entity'),
 			next_frost_mins_entity: prefer('next_frost_mins_entity'),
 			sanitizer_mode_entity: prefer('sanitizer_mode_entity'),
@@ -2244,8 +2305,14 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	async _ensureDerivedEntities() {
-		if (!this._hass || !this._config?.climate_entity) return;
-		if (this._derivedEntities && this._derivedForClimate === this._config.climate_entity) return;
+		if (!this._hass || (!this._config?.climate_entity && !this._config?.device_id)) return;
+		if (
+			this._derivedEntities
+			&& this._derivedForClimate === this._config?.climate_entity
+			&& this._derivedForDevice === this._config?.device_id
+		) {
+			return;
+		}
 
 		let reg = [];
 		try {
@@ -2253,12 +2320,21 @@ class PoolControllerCard extends HTMLElement {
 		} catch (e) {
 			return;
 		}
-		const selected = reg.find((r) => r.entity_id === this._config.climate_entity);
+		let selected = reg.find((r) => r.entity_id === this._config?.climate_entity);
+		if (!selected && this._config?.device_id) {
+			selected = reg.find(
+				(r) =>
+					r.device_id === this._config.device_id
+					&& r.platform === "pool_controller"
+					&& r.entity_id?.startsWith("climate.")
+			);
+		}
 		if (!selected?.config_entry_id) return;
 		const ceid = selected.config_entry_id;
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			device_id: selected.device_id || this._config?.device_id || null,
 			outdoor_temp_entity: this._pickEntity(entries, "sensor", ["outdoor_temp"]) || null,
 			next_frost_mins_entity: this._pickEntity(entries, "sensor", ["next_frost_mins"]) || null,
 			sanitizer_mode_entity: this._pickEntity(entries, "sensor", ["sanitizer_mode"]) || null,
@@ -2354,7 +2430,8 @@ class PoolControllerCard extends HTMLElement {
 			chlorine_duration_entity: this._pickEntity(entries, "sensor", ["config_chlorine_minutes", "chlorine_duration", "chlorine_minutes"]) || null,
 			bathing_duration_entity: this._pickEntity(entries, "sensor", ["config_bathing_minutes", "bathing_minutes"]) || null,
 		};
-		this._derivedForClimate = this._config.climate_entity;
+		this._derivedForClimate = selected.entity_id || this._config?.climate_entity;
+		this._derivedForDevice = selected.device_id || this._config?.device_id;
 	}
 
 	_renderError(msg) {
@@ -2381,16 +2458,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		this._config = { ...DEFAULTS, ...config };
 		this._initialized = false;
 		this._render();
-		// If a controller_entity is already present in the config (editing an existing card),
-		// immediately derive its related entities so the editor shows the mapped fields
-		// without requiring the user to delete & recreate the card.
-		try {
-			if (this._config && this._config.controller_entity) {
-				setTimeout(() => this._deriveFromController(), 100);
-			}
-		} catch (_e) {
-			// best-effort: ignore errors during editor boot
-		}
 	}
 
 	get value() {
@@ -2401,23 +2468,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!this.shadowRoot) this.attachShadow({ mode: "open" });
 		const c = this._config || DEFAULTS;
 		const lang = this._lang || _langFromHass(this._hass);
-		// Only show temperature bounds/step when the editor's content is 'controller'
-		const showTempControls = (String(c.content || '').trim() === 'controller');
-		const tempControlsHtml = showTempControls ? `
-			<div class="grid2">
-				<div class="row">
-					<label>${_t(lang, "editor.temp_min")}</label>
-					<input id="min_temp" type="number" step="0.5" value="${c.min_temp}">
-				</div>
-				<div class="row">
-					<label>${_t(lang, "editor.temp_max")}</label>
-					<input id="max_temp" type="number" step="0.5" value="${c.max_temp}">
-				</div>
-				<div class="row">
-					<label>${_t(lang, "editor.step")}</label>
-					<input id="step" type="number" step="0.1" value="${c.step || 0.5}">
-				</div>
-			</div>` : '';
 		this.shadowRoot.innerHTML = `
 		<style>
 			:host { display:block; }
@@ -2426,15 +2476,9 @@ class PoolControllerCardEditor extends HTMLElement {
 			label { font-weight:600; }
 			.grid2 { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; }
 			.box { border:1px solid #d0d7de; border-radius:10px; padding:10px; background:#fff; }
-			.badge { display:inline-block; padding:4px 8px; border-radius:8px; background:#f4f6f8; border:1px solid #e0e6ed; margin:2px 4px 0 0; font-size:12px; }
 			button { border:1px solid #d0d7de; border-radius:8px; padding:8px 10px; cursor:pointer; background:#fff; font-weight:600; }
 		</style>
 		<div class="wrapper">
-			<div class="row" id="derived-box" style="display:none;">
-				<label>Abgeleitete Entities</label>
-				<div id="derived-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-			</div>
-
 			<div class="row">
 				<label>${_t(lang, "editor.select_controller")}</label>
 				<select id="controller-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
@@ -2450,44 +2494,12 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="maintenance">${_t(lang, "editor.content_options.maintenance")}</option>
 				</select>
 			</div>
-			${tempControlsHtml}
 		</div>`;
 
 		this._populateControllerSelect();
 
-		this.shadowRoot.querySelectorAll("input").forEach((inp) => {
-			inp.addEventListener("change", () => {
-				const id = inp.id;
-				const num = Number(inp.value);
-				this._updateConfig({ [id]: Number.isFinite(num) ? num : inp.value });
-			});
-		});
+		// No extra inputs to bind (device + content only)
 
-		// Populate derived list if we have derived keys
-		setTimeout(() => {
-			const derivedBox = this.shadowRoot?.querySelector('#derived-box');
-			const list = this.shadowRoot?.querySelector('#derived-list');
-			if (!derivedBox || !list) return;
-			list.innerHTML = '';
-			const keys = ['filter_duration_entity','chlorine_duration_entity','bathing_duration_entity'];
-			let any = false;
-			for (const k of keys) {
-				const v = this._config?.[k];
-				if (v) {
-					any = true;
-					const span = document.createElement('span');
-					span.className = 'badge';
-					span.textContent = `${k}: ${v}`;
-					span.title = 'Klicken für more-info';
-					span.style.cursor = 'pointer';
-					span.addEventListener('click', () => {
-						this._openMoreInfo(v);
-					});
-					list.appendChild(span);
-				}
-			}
-			derivedBox.style.display = any ? 'block' : 'none';
-		}, 150);
 	}
 
 	async _populateControllerSelect() {
@@ -2503,32 +2515,37 @@ class PoolControllerCardEditor extends HTMLElement {
 		);
 
 		select.innerHTML = `<option value="">${_t(lang, "editor.please_choose")}</option>`;
+		let selectedEntityId = this._config?.climate_entity || null;
+		if (!selectedEntityId && this._config?.device_id) {
+			const match = poolControllers.find((entity) => entity.device_id === this._config.device_id);
+			selectedEntityId = match?.entity_id || null;
+		}
 		poolControllers.forEach((entity) => {
 			const state = this._hass.states[entity.entity_id];
 			const name = state?.attributes?.friendly_name || entity.entity_id;
 			const option = document.createElement("option");
 			option.value = entity.entity_id;
 			option.textContent = name;
-			if (entity.entity_id === this._config?.controller_entity) {
+			if (entity.entity_id === selectedEntityId) {
 				option.selected = true;
 			}
 			select.appendChild(option);
 		});
 
-		if (poolControllers.length === 1 && !this._config?.controller_entity) {
-			const firstController = poolControllers[0].entity_id;
-			select.value = firstController;
-			this._updateConfig({ controller_entity: firstController, climate_entity: firstController });
-			setTimeout(() => this._deriveFromController(), 100);
+		if (poolControllers.length === 1 && !this._config?.climate_entity && !this._config?.device_id) {
+			const first = poolControllers[0];
+			select.value = first.entity_id;
+			const patch = first.device_id ? { device_id: first.device_id } : { climate_entity: first.entity_id };
+			this._updateConfig(patch);
 		}
 
 		// Use `onchange` to avoid stacking multiple anonymous listeners across re-renders.
 		select.onchange = (ev) => {
 			const val = ev.target.value;
 			if (val) {
-				this._updateConfig({ controller_entity: val, climate_entity: val });
-				// Automatisch alle Entities vom ausgewählten Controller ableiten
-				setTimeout(() => this._deriveFromController(), 100);
+				const entry = poolControllers.find((entity) => entity.entity_id === val);
+				const patch = entry?.device_id ? { device_id: entry.device_id } : { climate_entity: val };
+				this._updateConfig(patch);
 			}
 		};
 
@@ -2557,94 +2574,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		// will call `setConfig()` when config changes. Avoid redundant re-renders.
 	}
 
-	async _deriveFromController() {
-		if (!this._hass || !this._config?.controller_entity) return;
-		const reg = await this._getEntityRegistry();
-		const selected = reg.find((r) => r.entity_id === this._config.controller_entity);
-		if (!selected || !selected.config_entry_id) return;
-		const ceid = selected.config_entry_id;
-		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
-
-		// device_id aus Entity-Registry übernehmen (falls vorhanden)
-		const deviceId = selected.device_id || null;
-
-		const pick = (domain, suffix) => {
-			const hit = entries.find((e) => e.entity_id.startsWith(`${domain}.`) && (suffix ? e.unique_id?.endsWith(`_${suffix}`) : true));
-			return hit?.entity_id;
-		};
-		const cfg = {
-			controller_entity: this._config.controller_entity,
-			climate_entity: pick("climate", "climate") || this._config.climate_entity,
-			device_id: deviceId,
-			outdoor_temp_entity: pick("sensor", "outdoor_temp") || this._config.outdoor_temp_entity,
-			next_frost_mins_entity: pick("sensor", "next_frost_mins") || this._config.next_frost_mins_entity,
-			sanitizer_mode_entity: pick("sensor", "sanitizer_mode") || this._config.sanitizer_mode_entity,
-			main_switch_on_entity: pick("binary_sensor", "main_switch_on") || this._config.main_switch_on_entity,
-			pump_switch_on_entity: pick("binary_sensor", "pump_switch_on") || this._config.pump_switch_on_entity,
-			aux_heating_switch_on_entity: pick("binary_sensor", "aux_heating_switch_on") || this._config.aux_heating_switch_on_entity,
-			maintenance_entity: pick("binary_sensor", "maintenance_active") || this._config.maintenance_entity,
-			heat_reason_entity: pick("sensor", "heat_reason") || this._config.heat_reason_entity,
-			run_reason_entity: pick("sensor", "run_reason") || this._config.run_reason_entity,
-			run_credit_source_entity: pick("sensor", "run_credit_source") || this._config.run_credit_source_entity,
-			run_credit_minutes_entity: pick("sensor", "run_credit_minutes") || this._config.run_credit_minutes_entity,
-			filter_credit_minutes_entity: pick("sensor", "filter_credit_minutes") || this._config.filter_credit_minutes_entity,
-			filter_missing_minutes_entity: pick("sensor", "filter_missing_minutes") || this._config.filter_missing_minutes_entity,
-			frost_credit_minutes_entity: pick("sensor", "frost_credit_minutes") || this._config.frost_credit_minutes_entity,
-			frost_credit_shift_minutes_entity: pick("sensor", "frost_credit_shift_minutes") || this._config.frost_credit_shift_minutes_entity,
-			// New v2 timers (minutes sensor)
-			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
-			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
-			pause_timer_entity: pick("sensor", "pause_timer_mins") || this._config.pause_timer_entity,
-			aux_entity: pick("switch", "aux_allowed") || pick("switch", "aux") || this._config.aux_entity,
-			// Binary sensor indicating aux presence (aux_present / aux_configured)
-			aux_binary: pick("binary_sensor", "aux_present") || pick("binary_sensor", "aux_configured") || pick("binary_sensor", "aux") || this._config.aux_binary,
-			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
-			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
-			bathing_stop: pick("button", "bath_stop") || this._config.bathing_stop,
-			bathing_until: pick("sensor", "bathing_until") || this._config.bathing_until,
-			bathing_active_binary: pick("binary_sensor", "is_bathing") || this._config.bathing_active_binary,
-			filter_entity: pick("binary_sensor", "filter_active") || this._config.filter_entity,
-			filter_start: pick("button", "filter_30") || pick("button", "filter_60") || this._config.filter_start,
-			filter_stop: pick("button", "filter_stop") || this._config.filter_stop,
-			filter_until: pick("sensor", "filter_until") || this._config.filter_until,
-			next_filter_in: pick("sensor", "next_filter_mins") || this._config.next_filter_in,
-			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
-			chlorine_start: pick("button", "chlorine_5") || pick("button", "quick_chlor") || this._config.chlorine_start,
-			chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,
-			chlorine_until: pick("sensor", "quick_chlorine_until") || this._config.chlorine_until,
-			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
-			pause_entity: pick("binary_sensor", "is_paused") || this._config.pause_entity,
-			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
-			pause_stop: pick("button", "pause_stop") || this._config.pause_stop,
-			pause_until: pick("sensor", "pause_until") || this._config.pause_until,
-			pause_active_entity: pick("binary_sensor", "is_paused") || this._config.pause_active_entity,
-			frost_entity: pick("binary_sensor", "frost_danger") || this._config.frost_entity,
-			quiet_entity: pick("binary_sensor", "in_quiet") || this._config.quiet_entity,
-			main_power_entity: pick("sensor", "main_power") || this._config.main_power_entity,
-			aux_power_entity: pick("sensor", "aux_power") || this._config.aux_power_entity,
-			pv_entity: pick("binary_sensor", "pv_allows") || this._config.pv_entity,
-			pv_power_entity: pick("sensor", "pv_power") || this._config.pv_power_entity,
-			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
-			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
-			salt_entity: pick("sensor", "salt_val") || this._config.salt_entity,
-			salt_add_entity: pick("sensor", "salt_add_g") || this._config.salt_add_entity,
-			tds_entity: pick("sensor", "tds_effective") || pick("sensor", "tds_val") || this._config.tds_entity,
-			tds_assessment_entity: pick("sensor", "tds_status") || this._config.tds_assessment_entity,
-			water_change_liters_entity: pick("sensor", "tds_water_change_liters") || this._config.water_change_liters_entity,
-			water_change_percent_entity: pick("sensor", "tds_water_change_percent") || this._config.water_change_percent_entity,
-			ph_plus_entity: pick("sensor", "ph_plus_g") || this._config.ph_plus_entity,
-			ph_minus_entity: pick("sensor", "ph_minus_g") || this._config.ph_minus_entity,
-			chlor_dose_entity: pick("sensor", "chlor_spoons") || this._config.chlor_dose_entity,
-			next_start_entity: pick("sensor", "next_start_mins") || this._config.next_start_entity,
-			next_event_entity: pick("sensor", "next_event") || this._config.next_event_entity,
-			next_event_end_entity: pick("sensor", "next_event_end") || this._config.next_event_end_entity,
-			next_event_summary_entity: pick("sensor", "next_event_summary") || this._config.next_event_summary_entity,
-		};
-		this._updateConfig(cfg);
-		// Refresh editor UI to show derived picks
-		try { this._render(); } catch (_e) {}
-	}
-
 	async _getEntityRegistry() {
 		if (!this._registry) {
 			this._registry = await this._hass.callWS({ type: "config/entity_registry/list" });
@@ -2653,7 +2582,14 @@ class PoolControllerCardEditor extends HTMLElement {
 	}
 
 	_updateConfig(patch, renderOnly = false) {
-		this._config = { ...DEFAULTS, ...this._config, ...patch };
+		const merged = { ...DEFAULTS, ...this._config, ...patch };
+		const next = { content: merged.content ?? DEFAULTS.content };
+		if (merged.device_id) {
+			next.device_id = merged.device_id;
+		} else if (merged.climate_entity) {
+			next.climate_entity = merged.climate_entity;
+		}
+		this._config = next;
 		if (!renderOnly) {
 			this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
 		}
