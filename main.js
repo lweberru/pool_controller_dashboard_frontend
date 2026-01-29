@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.0.23";
+const VERSION = "2.2.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -18,6 +18,7 @@ const I18N = {
 			waterquality_title: "Wasserqualität",
 			maintenance_title: "Wartungsarbeiten",
 			select_content: "Angezeigter Inhalt",
+			now_short: "jetzt",
 			maintenance_mode_title: "Wartungsmodus aktiv",
 			maintenance_mode_text: "Automatik ist deaktiviert. Schalte Wartung aus, um Automatik wieder zu erlauben.",
 			maintenance: "Wartung",
@@ -30,6 +31,10 @@ const I18N = {
 			chlorine: "Chlor (mV)",
 			salt: "Salz",
 			tds: "TDS",
+			credit_label: "Gutschrift",
+			credit_filter_label: "Filter-Gutschrift",
+			credit_frost_label: "Frost-Gutschrift",
+			credit_shift_label: "Frost verschoben",
 			add_ph_plus: "pH+ hinzufügen",
 			add_ph_minus: "pH- hinzufügen",
 			add_salt: "Salz hinzufügen",
@@ -49,6 +54,7 @@ const I18N = {
 			pv: "PV",
 			frost: "Frostschutz",
 			quiet: "Ruhezeit",
+			event_rain_blocked: "Event entfällt wegen Regen ({pct}%)",
 			additional_heater: "Zusatzheizung",
 			sanitizer: "Desinfektion",
 			in_short: "in",
@@ -83,7 +89,8 @@ const I18N = {
 			filter: { active: "Filter — verbleibend: {mins} min — Klick beendet", inactive: "Filtern für {mins} Minuten starten" },
 			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
 			pause: { active: "Pause — verbleibend: {mins} min — Klick beendet", inactive: "Pause für {mins} Minuten starten" },
-			aux: { active: "Zusatzheizung erlauben an", inactive: "Zusatzheizung erlauben aus" }
+			aux: { active: "Zusatzheizung erlauben an", inactive: "Zusatzheizung erlauben aus" },
+			rain: "Regenwahrscheinlichkeit: {pct}%"
 		},
 		dial: {
 			bathing_left: "Baden — verbleibend: {mins} min",
@@ -101,6 +108,11 @@ const I18N = {
 			filter: "Filtern",
 			heating: "Heizbetrieb",
 			off: "Aus"
+		},
+		errors: {
+			required_controller: "Bitte Device oder Climate-Entity angeben",
+			entity_not_found: "Entity nicht gefunden: {entity}",
+			device_not_found: "Device nicht gefunden: {device}"
 		}
 	},
 	en: {
@@ -110,6 +122,7 @@ const I18N = {
 			waterquality_title: "Water quality",
 			maintenance_title: "Maintenance",
 			select_content: "Displayed content",
+			now_short: "now",
 			maintenance_mode_title: "Maintenance mode active",
 			maintenance_mode_text: "Automation is disabled. Turn off maintenance to resume automation.",
 			maintenance: "Maintenance",
@@ -122,6 +135,10 @@ const I18N = {
 			chlorine: "Chlorine (mV)",
 			salt: "Salt",
 			tds: "TDS",
+			credit_label: "Credit",
+			credit_filter_label: "Filter credit",
+			credit_frost_label: "Frost credit",
+			credit_shift_label: "Frost shifted",
 			add_ph_plus: "Add pH+",
 			add_ph_minus: "Add pH-",
 			add_salt: "Add salt",
@@ -141,6 +158,7 @@ const I18N = {
 			pv: "PV",
 			frost: "Frost protection",
 			quiet: "Quiet hours",
+			event_rain_blocked: "Event canceled due to rain ({pct}%)",
 			additional_heater: "Auxiliary heater",
 			in_short: "in",
 			days_short: "d",
@@ -174,7 +192,8 @@ const I18N = {
 			filter: { active: "Filter — left: {mins} min — click to stop", inactive: "Start filter for {mins} minutes" },
 			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
 			pause: { active: "Pause — left: {mins} min — click to stop", inactive: "Start pause for {mins} minutes" },
-			aux: { active: "Allow auxiliary heater on", inactive: "Allow auxiliary heater off" }
+			aux: { active: "Allow auxiliary heater on", inactive: "Allow auxiliary heater off" },
+			rain: "Rain probability: {pct}%"
 		},
 		dial: {
 			bathing_left: "Bathing — left: {mins} min",
@@ -192,6 +211,11 @@ const I18N = {
 			filter: "Filter",
 			heating: "Heating",
 			off: "Off"
+		},
+		errors: {
+			required_controller: "Please provide a device or climate entity",
+			entity_not_found: "Entity not found: {entity}",
+			device_not_found: "Device not found: {device}"
 		}
 	}
 };
@@ -215,14 +239,124 @@ function _t(lang, key, vars) {
 	return res;
 }
 
+/**
+ * Erzeugt ein modales Popup mit einem History-Graph.
+ * @param {HTMLElement} triggerElement - Das Element, auf das geklickt wurde.
+ * @param {Object} hass - Das Home Assistant State Objekt.
+ * @param {Array} entities - Liste der Sensoren.
+ * @param {number} hours - Stunden (default 24).
+ * @param {string} title - Titel des Popups.
+ */
+/**
+ * Erzeugt ein modales Popup mit einem History-Graph.
+ * Fixes: "darkMode" undefined, "get" undefined (localize) und Chart-Rendering.
+ */
+/**
+ * Erzeugt ein modales Popup mit einem History-Graph.
+ * Version: 2026-Stable-Fix
+ */
+async function showHistoryPopup(triggerElement, hass, entities, hours = 24, title = "Power history") {
+  const helpers = await window.loadCardHelpers();
+
+  // --- Overlay ---
+  const overlay = document.createElement("div");
+  Object.assign(overlay.style, {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    backdropFilter: "blur(8px)",
+    zIndex: "10000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0,
+    transition: "opacity 0.3s ease"
+  });
+
+  // --- Dialog ---
+  const dialog = document.createElement("div");
+  Object.assign(dialog.style, {
+    backgroundColor: "var(--card-background-color, #1c1c1c)",
+    color: "var(--primary-text-color, white)",
+    borderRadius: "16px",
+    padding: "24px",
+    width: "95%",
+    maxWidth: "650px",
+    display: "flex",
+    flexDirection: "column",
+    boxShadow: "0px 20px 50px rgba(0,0,0,0.7)",
+    overflow: "hidden"
+  });
+
+  dialog.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;font-family:sans-serif;">${title}</h3>
+      <button id="close-popup"
+              style="background:none;border:none;color:var(--primary-text-color);
+                     cursor:pointer;font-size:32px;line-height:1;">
+        &times;
+      </button>
+    </div>
+    <div id="chart-container" style="height:400px;width:100%;"></div>
+  `;
+
+  // --- Karte erstellen ---
+  const cardConfig = {
+    type: "statistics-graph",
+    entities: entities.map(e => ({ entity: e })),
+    hours_to_show: Number(hours),
+    refresh_interval: 0
+  };
+
+  const cardElement = await helpers.createCardElement(cardConfig);
+
+  // --- DOM anhängen ---
+  document.body.appendChild(overlay);
+  overlay.appendChild(dialog);
+  dialog.querySelector("#chart-container").appendChild(cardElement);
+
+  // --- Hass setzen ---
+  cardElement.hass = hass;
+
+  // --- Fade-in ---
+  requestAnimationFrame(() => {
+    overlay.style.opacity = "1";
+  });
+
+  // --- Close-Logik ---
+  const close = () => {
+    overlay.style.opacity = "0";
+    setTimeout(() => {
+      if (overlay.parentNode) document.body.removeChild(overlay);
+    }, 300);
+  };
+
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) close();
+  });
+  dialog.querySelector("#close-popup").addEventListener("click", close);
+}
+
+
 class PoolControllerCard extends HTMLElement {
 	setConfig(config) {
-		if (!config || !config.climate_entity) {
-			throw new Error(_t("de", "errors.required_climate"));
+		if (!config || (!config.climate_entity && !config.device_id)) {
+			throw new Error(_t("de", "errors.required_controller"));
 		}
-		this._config = { ...DEFAULTS, ...config };
+		// Only store controller + content config (no per-entity overrides)
+		const next = { content: config.content ?? DEFAULTS.content };
+		if (config.device_id) {
+			next.device_id = config.device_id;
+		} else if (config.climate_entity) {
+			next.climate_entity = config.climate_entity;
+		}
+		this._config = next;
 		this._derivedEntities = null;
 		this._derivedForClimate = null;
+		this._derivedForDevice = null;
 		if (!this.shadowRoot) {
 			this.attachShadow({ mode: "open" });
 		}
@@ -256,15 +390,20 @@ class PoolControllerCard extends HTMLElement {
 		const h = this._hass;
 		const c = this._config;
 		const lang = _langFromHass(h);
-		const climate = h.states[c.climate_entity];
-		if (!climate) {
-			this._renderError(_t(lang, "errors.entity_not_found", { entity: c.climate_entity }));
-			return;
-		}
 
 		// Falls optionale Entities nicht im Config sind, leite sie aus der Backend-Instanz ab.
 		await this._ensureDerivedEntities();
 		const effectiveConfig = this._withDerivedConfig(c);
+		const climateEntityId = effectiveConfig.climate_entity || c.climate_entity || null;
+		const climate = climateEntityId ? h.states[climateEntityId] : null;
+		if (!climate) {
+			if (effectiveConfig.device_id) {
+				this._renderError(_t(lang, "errors.device_not_found", { device: effectiveConfig.device_id }));
+			} else {
+				this._renderError(_t(lang, "errors.entity_not_found", { entity: climateEntityId }));
+			}
+			return;
+		}
 
 		// Daten vorbereiten
 		const data = this._prepareData(h, effectiveConfig, climate);
@@ -336,6 +475,19 @@ class PoolControllerCard extends HTMLElement {
 		const runReasonEntityId = c.run_reason_entity || this._derivedEntities?.run_reason_entity || null;
 		const heatReason = heatReasonEntityId ? (h.states[heatReasonEntityId]?.state || null) : null;
 		const runReason = runReasonEntityId ? (h.states[runReasonEntityId]?.state || null) : null;
+		const runCreditSourceEntityId = c.run_credit_source_entity || this._derivedEntities?.run_credit_source_entity || null;
+		const runCreditMinutesEntityId = c.run_credit_minutes_entity || this._derivedEntities?.run_credit_minutes_entity || null;
+		const filterCreditMinutesEntityId = c.filter_credit_minutes_entity || this._derivedEntities?.filter_credit_minutes_entity || null;
+		const filterMissingMinutesEntityId = c.filter_missing_minutes_entity || this._derivedEntities?.filter_missing_minutes_entity || null;
+		const frostCreditMinutesEntityId = c.frost_credit_minutes_entity || this._derivedEntities?.frost_credit_minutes_entity || null;
+		const frostCreditShiftMinutesEntityId = c.frost_credit_shift_minutes_entity || this._derivedEntities?.frost_credit_shift_minutes_entity || null;
+
+		const runCreditSource = runCreditSourceEntityId ? (h.states[runCreditSourceEntityId]?.state || null) : null;
+		const runCreditMinutes = runCreditMinutesEntityId ? this._num(h.states[runCreditMinutesEntityId]?.state) : null;
+		const filterCreditMinutes = filterCreditMinutesEntityId ? this._num(h.states[filterCreditMinutesEntityId]?.state) : null;
+		const filterMissingMinutes = filterMissingMinutesEntityId ? this._num(h.states[filterMissingMinutesEntityId]?.state) : null;
+		const frostCreditMinutes = frostCreditMinutesEntityId ? this._num(h.states[frostCreditMinutesEntityId]?.state) : null;
+		const frostCreditShiftMinutes = frostCreditShiftMinutesEntityId ? this._num(h.states[frostCreditShiftMinutesEntityId]?.state) : null;
 
 		// Physical switch states (mirrored by backend as binary_sensors)
 		const mainSwitchOnEntityId = c.main_switch_on_entity || this._derivedEntities?.main_switch_on_entity || null;
@@ -513,6 +665,10 @@ class PoolControllerCard extends HTMLElement {
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
+		const eventRainProbabilityEntityId = c.event_rain_probability_entity || this._derivedEntities?.event_rain_probability_entity || null;
+		const eventRainBlockedEntityId = c.event_rain_blocked_entity || this._derivedEntities?.event_rain_blocked_entity || null;
+		const eventRainProbability = eventRainProbabilityEntityId ? this._num(h.states[eventRainProbabilityEntityId]?.state) : null;
+		const eventRainBlocked = eventRainBlockedEntityId ? this._isOn(h.states[eventRainBlockedEntityId]) : false;
 
 		const dialAngle = this._calcDial(current ?? tc.min_temp, tc.min_temp, tc.max_temp);
 		const targetAngle = this._calcDial(target ?? current ?? tc.min_temp, tc.min_temp, tc.max_temp);
@@ -540,10 +696,16 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			// Entity IDs (for HA more-info popups)
-			climateEntityId: c.climate_entity,
+			climateEntityId: climate?.entity_id || c.climate_entity,
 			maintenanceEntityId: maintenanceEntityId,
 			heatReasonEntityId: heatReasonEntityId,
 			runReasonEntityId: runReasonEntityId,
+			runCreditSourceEntityId,
+			runCreditMinutesEntityId,
+			filterCreditMinutesEntityId,
+			filterMissingMinutesEntityId,
+			frostCreditMinutesEntityId,
+			frostCreditShiftMinutesEntityId,
 			sanitizerModeEntityId,
 			mainSwitchOnEntityId,
 			pumpSwitchOnEntityId,
@@ -561,6 +723,8 @@ class PoolControllerCard extends HTMLElement {
 			nextFrostMinsEntityId,
 			mainPowerEntityId: mainPowerEntityId,
 			auxPowerEntityId: auxPowerEntityId,
+			eventRainProbabilityEntityId,
+			eventRainBlockedEntityId,
 			shouldMainOnEntityId,
 			shouldPumpOnEntityId,
 			shouldAuxOnEntityId,
@@ -570,6 +734,12 @@ class PoolControllerCard extends HTMLElement {
 			maintenanceActive,
 			heatReason,
 			runReason,
+			runCreditSource,
+			runCreditMinutes,
+			filterCreditMinutes,
+			filterMissingMinutes,
+			frostCreditMinutes,
+			frostCreditShiftMinutes,
 			mainSwitchOn,
 			pumpSwitchOn,
 			auxHeatingSwitchOn,
@@ -589,6 +759,7 @@ class PoolControllerCard extends HTMLElement {
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
+			eventRainProbability, eventRainBlocked,
 			nextStartMinsEntityId: c.next_start_entity || null,
 			nextFilterMinsEntityId: c.next_filter_in || null,
 			nextEventEntityId: c.next_event_entity || null,
@@ -606,7 +777,8 @@ class PoolControllerCard extends HTMLElement {
 
 	_effectiveTempConfig() {
 		const c = this._config || DEFAULTS;
-		const climate = this._hass?.states?.[c.climate_entity];
+		const climateEntityId = this._renderData?.climateEntityId || c.climate_entity || this._derivedEntities?.climate_entity;
+		const climate = climateEntityId ? this._hass?.states?.[climateEntityId] : null;
 		const a = climate?.attributes || {};
 		const min_temp = this._num(a.min_temp) ?? Number(c.min_temp);
 		const max_temp = this._num(a.max_temp) ?? Number(c.max_temp);
@@ -627,18 +799,23 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_getStyles() {
 		return `<style>
-			:host { display: block; }
+			:host {
+				display: block;
+				--pc-surface: var(--ha-card-background, var(--card-background-color, #fff));
+				--pc-border: var(--divider-color, #d0d7de);
+				--pc-muted: var(--secondary-text-color, #666);
+			}
 			[data-more-info] { cursor: pointer; }
-			ha-card { padding: 16px; background: linear-gradient(180deg, #fdfbfb 0%, #f2f5f8 100%); color: var(--primary-text-color); container-type: inline-size; }
+			ha-card { padding: 16px; background: var(--pc-surface); color: var(--primary-text-color); container-type: inline-size; }
 			* { box-sizing: border-box; }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
 			.header-actions { display: flex; align-items: center; gap: 10px; }
 			.header-actions .action-btn { padding: 8px 10px; font-size: 12px; }
 			.title { font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
-			.maintenance-mode { border: 1px solid #f3c2a2; border-radius: 12px; padding: 12px 14px; background: #fff9f5; margin: 0 0 12px 0; }
+			.maintenance-mode { border: 1px solid #f3c2a2; border-radius: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--pc-surface) 90%, #f3c2a2 10%); margin: 0 0 12px 0; }
 			.maintenance-mode-title { font-weight: 700; color: #c0392b; }
 			.maintenance-mode-text { margin-top: 4px; color: #8a3b32; font-weight: 500; }
-			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f4f6f8; color: #333; }
+			.pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); color: var(--primary-text-color); }
 			.pill.on { background: #d0f0d0; color: #0f6b2f; }
 			.pill.warn { background: #ffe5d5; color: #b44; }
 			.pill.active { background: #8a3b32; color: #fff; }
@@ -661,27 +838,28 @@ class PoolControllerCard extends HTMLElement {
 			
 			/* SVG Ring */
 			.ring-svg { position: absolute; width: 100%; height: 100%; }
-			.ring-track { fill: none; stroke: #e6e9ed; stroke-width: 8; stroke-linecap: round; }
+			.ring-track { fill: none; stroke: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); stroke-width: 8; stroke-linecap: round; }
 			.ring-progress { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 8; stroke-linecap: round; }
 			.ring-target { fill: none; stroke: var(--target-accent, rgba(138,59,50,0.3)); stroke-width: 8; stroke-linecap: round; }
 			.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 10; stroke-linecap: round; opacity: 0.4; }
 			.ring-dot-current { fill: var(--accent, #8a3b32); }
-			.ring-dot-target { fill: #fff; stroke: #d0d7de; stroke-width: 2; }
+			.ring-dot-target { fill: var(--pc-surface); stroke: var(--pc-border); stroke-width: 2; }
 			
-			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, #fff 68%, transparent 69%); }
+			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, var(--pc-surface) 68%, transparent 69%); }
 			
 			/* Power badge: keep inside ring (avoid overlapping arc on small screens) */
 			.power-top { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); z-index: 2; }
-			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.94); border: 1px solid #e0e6ed; color: #4a5568; }
+			.power-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--pc-surface) 92%, transparent 8%); border: 1px solid var(--pc-border); color: var(--primary-text-color); }
 			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
-			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.35; transition: all 200ms ease; }
+			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); display: grid; place-items: center; border: 2px solid var(--pc-border); opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
+			.status-icon.rain.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
 			.dial-core { position: absolute; top: 57.5%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
 			.temp-current { font-size: 42px; font-weight: 700; line-height: 1; }
-			.divider { width: 80px; height: 2px; background: #d0d7de; margin: 4px 0; }
+			.divider { width: 80px; height: 2px; background: var(--pc-border); margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
 			.temp-target-left { justify-self: start; }
 			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
@@ -690,51 +868,57 @@ class PoolControllerCard extends HTMLElement {
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 
 			.switch-icons-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 6px; }
-			.switch-icon { width: 26px; height: 26px; border-radius: 50%; background: #f4f6f8; display: grid; place-items: center; border: 2px solid #d0d7de; opacity: 0.45; transition: all 200ms ease; }
+			.switch-icon { width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); display: grid; place-items: center; border: 2px solid var(--pc-border); opacity: 0.45; transition: all 200ms ease; }
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
 			.dial-timer { position: relative; margin: 12px auto 0; left: auto; bottom: auto; transform: none; width: 60%; max-width: 320px; z-index: 1; }
-			.timer-bar { height: 4px; background: #e6e9ed; border-radius: 999px; overflow: hidden; position: relative; }
+			.timer-bar { height: 4px; background: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
-			.timer-text { font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; text-align: center; }
+			.timer-text { font-size: 11px; color: var(--pc-muted); margin-top: 4px; text-align: center; }
+			.credit-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+			.credit-pill { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--primary-text-color); background: color-mix(in srgb, var(--pc-surface) 92%, var(--pc-border) 8%); border: 1px solid var(--pc-border); }
 
 			/* right-column styles removed (no dedicated right column in markup) */
 			
 			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
-			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid #d0d7de; background: #fff; cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid var(--pc-border); background: var(--pc-surface); cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
 			.action-btn.maintenance.active { background: #c0392b; border-color: #c0392b; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
 			.action-btn.chlorine.active { background: #27ae60; border-color: #27ae60; }
-			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: #d0d7de; }
-			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: #d0d7de; }
+			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
+			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
 			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
-			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid #d0d7de; background: #fff; font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
+			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid var(--pc-border); background: var(--pc-surface); font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
 			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
-			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: #d0d7de; }
-			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: #d0d7de; }
+			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
+			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			
-			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid #d0d7de; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
+			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid var(--pc-border); border-radius: 10px; background: var(--pc-surface); display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
 			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 			.aux-switch.active { background: #27ae60; color: #fff; border-color: #27ae60; }
 			.aux-switch.disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 			.aux-switch.disabled:hover { box-shadow: none; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
 			.aux-switch-label ha-icon { --mdc-icon-size: 20px; }
-			.toggle { width: 44px; height: 24px; background: #d0d7de; border-radius: 999px; position: relative; transition: background 200ms ease; }
+			.toggle { width: 44px; height: 24px; background: var(--pc-border); border-radius: 999px; position: relative; transition: background 200ms ease; }
 			.toggle::after { content: ""; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 200ms ease; }
 			.aux-switch.active .toggle { background: #fff; }
 			.aux-switch.active .toggle::after { left: 23px; background: #27ae60; }
 			
-			.quality { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 20px; }
-			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: #4a5568; margin-bottom: 8px; }
+			.quality { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 20px; }
+			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pc-muted); margin-bottom: 8px; }
 			
 			.scale-container { position: relative; }
+			.scale-title-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+			.scale-title { font-weight: 600; }
+			.scale-value { font-weight: 700; color: var(--primary-text-color); }
 			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
+			.scale-marker-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #0b132b; transform: translateX(-50%); z-index: 1; }
 			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 7%, #fbb13c 14%, #f6d32b 21%, #8bd448 35%, #27ae60 50%, #1abc9c 65%, #1c9ed8 78%, #2a7fdb 85%, #5c4ac7 100%); }
 			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
 			.salt-bar { background: linear-gradient(90deg, #e6f7ff 0%, #7fd1ff 50%, #0a84ff 100%); }
@@ -743,9 +927,9 @@ class PoolControllerCard extends HTMLElement {
 			.scale-tick.major { height: 70%; background: rgba(255,255,255,0.6); width: 3px; }
 			.scale-tick.minor { height: 30%; background: rgba(255,255,255,0.3); width: 1px; }
 			
-			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			.scale-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--pc-muted); font-weight: 600; }
 			/* Absolute-positioned labels (used for pH 0-14 to avoid 2-digit misalignment) */
-			.scale-labels-abs { position: relative; height: 14px; margin-top: 6px; font-size: 11px; color: #666; font-weight: 600; }
+			.scale-labels-abs { position: relative; height: 14px; margin-top: 6px; font-size: 11px; color: var(--pc-muted); font-weight: 600; }
 			.scale-label-abs { position: absolute; bottom: 0; transform: translateX(-50%); white-space: nowrap; }
 			.scale-label-abs.first { transform: translateX(0); }
 			.scale-label-abs.last { transform: translateX(-100%); }
@@ -767,23 +951,23 @@ class PoolControllerCard extends HTMLElement {
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
 			}
-			.info-badge { padding: 8px 12px; border-radius: 10px; background: #f4f6f8; font-size: 13px; border: 1px solid #e0e6ed; font-weight: 500; }
+			.info-badge { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); font-size: 13px; border: 1px solid var(--pc-border); font-weight: 500; }
 			
-			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: #fff9f5; margin-top: 16px; }
+			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: color-mix(in srgb, var(--pc-surface) 90%, #f3c2a2 10%); margin-top: 16px; }
 			.maintenance .section-title { color: #c0392b; }
 			.maintenance-items { display: grid; gap: 12px; margin-top: 12px; }
-			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #f3c2a2; }
+			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: var(--pc-surface); border: 1px solid #f3c2a2; }
 			.maintenance-item ha-icon { --mdc-icon-size: 24px; color: #c0392b; }
 			.maintenance-text { flex: 1; }
 			.maintenance-label { font-weight: 600; color: #8a3b32; }
 			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
 			
-			.calendar { border: 1px solid #d0d7de; border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 10px; margin-top: 16px; }
-			.event { padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e5e9f0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+			.calendar { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 10px; margin-top: 16px; }
+			.event { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 92%, var(--pc-border) 8%); border: 1px solid var(--pc-border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 			.event-title { font-weight: 500; }
-			.event-time { color: #555; font-size: 13px; }
+			.event-time { color: var(--pc-muted); font-size: 13px; }
 			
-			.next-start { background: #e8f5e9; border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
+			.next-start { background: color-mix(in srgb, var(--pc-surface) 90%, #b8e3b8 10%); border: 1px solid #b8e3b8; padding: 12px; border-radius: 10px; margin-top: 16px; display: flex; justify-content: space-between; align-items: center; }
 			.next-start-label { font-weight: 600; color: #0f6b2f; }
 			.next-start-time { color: #0f6b2f; font-size: 14px; }
 
@@ -883,6 +1067,9 @@ class PoolControllerCard extends HTMLElement {
 		const finalFilterDur = Number.isFinite(Number(cfgFilter)) ? cfgFilter : filterDur;
 		const finalChlorDur = Number.isFinite(Number(cfgChlor)) ? cfgChlor : chlorDur;
 		const finalBathDur = Number.isFinite(Number(cfgBath)) ? cfgBath : bathingDur;
+		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
+		const rainTooltip = _t(lang, "tooltips.rain", { pct: rainPct });
+		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
 		const RING_CX = 50;
 		const RING_CY = 50;
 		const RING_R = 44;
@@ -896,7 +1083,7 @@ class PoolControllerCard extends HTMLElement {
 		return `<div class="dial-container">
 				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
-						<div class="power-top" ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''} ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
+						<div class="power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
 							${d.displayPower !== null ? `<span class="power-pill">${d.displayPower}W</span>` : ""}
 						</div>
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
@@ -926,6 +1113,9 @@ class PoolControllerCard extends HTMLElement {
 							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
+								<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
+									<ha-icon icon="mdi:weather-rainy"></ha-icon>
+								</div>
 						</div>
 					</div>
 					<div class="dial-core">
@@ -987,6 +1177,11 @@ class PoolControllerCard extends HTMLElement {
 				: `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
 
+		const phValueText = d.ph != null ? `${d.ph.toFixed(2)}` : "–";
+		const chlorValueText = d.chlor != null ? `${d.chlor.toFixed(0)} mV` : "–";
+		const saltValueText = d.salt != null ? `${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)` : "–";
+		const tdsValueText = d.tds != null ? `${d.tds.toFixed(0)} ppm` : "–";
+
 		const chlorOkMin = Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min;
 		const chlorLow = (d.chlor != null) && (chlorOkMin != null) && (Number(d.chlor) < Number(chlorOkMin));
 		const isSaltwater = d.sanitizerMode === "saltwater";
@@ -998,12 +1193,14 @@ class PoolControllerCard extends HTMLElement {
 		// Safety: never show manual chlorine dosing recommendation in pure saltwater mode.
 		const showChlorDose = (d.chlorDoseNum != null && d.chlorDoseNum > 0) && !isSaltwater;
 		return `<div class="quality">
-				<div class="section-title">${_t(lang, "ui.water_quality")}</div>
 				${d.sanitizerModeLabel ? `<div class="info-badge" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.ph")}</div>
-					<div style="position: relative;">
-						${d.ph != null ? `<div class="scale-marker" style="left: ${this._pct(d.ph, 0, 14)}%"><div class="marker-value">${d.ph.toFixed(2)}</div></div>` : ""}
+					<div class="scale-title-row" title="${phValueText}">
+						<div class="scale-title">${_t(lang, "ui.ph")}</div>
+						<div class="scale-value">${phValueText}</div>
+					</div>
+					<div style="position: relative;" title="${phValueText}">
+						${d.ph != null ? `<div class="scale-marker-line" style="left: ${this._pct(d.ph, 0, 14)}%"></div>` : ""}
 						<div class="scale-bar ph-bar">
 							${Array.from({length: 15}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 14) * 100}%"></div>`).join("")}
 							${Array.from({length: 14}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("")}
@@ -1018,9 +1215,12 @@ class PoolControllerCard extends HTMLElement {
 				</div>
 				
 				<div class="scale-container" ${d.chlorEntityId ? `data-more-info="${d.chlorEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.chlorine")}</div>
-					<div style="position: relative;">
-						${d.chlor != null ? `<div class="scale-marker" style="left: ${this._pct(d.chlor, 0, 1200)}%"><div class="marker-value">${d.chlor.toFixed(0)} mV</div></div>` : ""}
+					<div class="scale-title-row" title="${chlorValueText}">
+						<div class="scale-title">${_t(lang, "ui.chlorine")}</div>
+						<div class="scale-value">${chlorValueText}</div>
+					</div>
+					<div style="position: relative;" title="${chlorValueText}">
+						${d.chlor != null ? `<div class="scale-marker-line" style="left: ${this._pct(d.chlor, 0, 1200)}%"></div>` : ""}
 						<div class="scale-bar chlor-bar">
 							${[0, 300, 600, 900, 1200].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 							${[1, 2, 3].map(i => `<div class="scale-tick minor" style="left: ${((i - 0.5) / 4) * 100}%"></div>`).join("")}
@@ -1033,9 +1233,12 @@ class PoolControllerCard extends HTMLElement {
 				
 				${(d.salt != null) ? `
 				<div class="scale-container" ${d.saltEntityId ? `data-more-info="${d.saltEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.salt")}</div>
-					<div style="position: relative;">
-						<div class="scale-marker" style="left: ${this._pct(d.salt, 0, 10)}%"><div class="marker-value">${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)</div></div>
+					<div class="scale-title-row" title="${saltValueText}">
+						<div class="scale-title">${_t(lang, "ui.salt")}</div>
+						<div class="scale-value">${saltValueText}</div>
+					</div>
+					<div style="position: relative;" title="${saltValueText}">
+						<div class="scale-marker-line" style="left: ${this._pct(d.salt, 0, 10)}%"></div>
 						<div class="scale-bar salt-bar">
 							${[0,2.5,5,7.5,10].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
@@ -1050,9 +1253,12 @@ class PoolControllerCard extends HTMLElement {
 
 				${(d.tds != null) ? `
 				<div class="scale-container" ${d.tdsEntityId ? `data-more-info="${d.tdsEntityId}"` : ''}>
-					<div style="font-weight: 600; margin-bottom: 8px;">${_t(lang, "ui.tds")}</div>
-					<div style="position: relative;">
-						<div class="scale-marker" style="left: ${this._pct(d.tds, 0, 2000)}%"><div class="marker-value">${d.tds.toFixed(0)} ppm</div></div>
+					<div class="scale-title-row" title="${tdsValueText}">
+						<div class="scale-title">${_t(lang, "ui.tds")}</div>
+						<div class="scale-value">${tdsValueText}</div>
+					</div>
+					<div style="position: relative;" title="${tdsValueText}">
+						<div class="scale-marker-line" style="left: ${this._pct(d.tds, 0, 2000)}%"></div>
 						<div class="scale-bar tds-bar">
 							${[0,500,1000,1500,2000].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
@@ -1068,17 +1274,97 @@ class PoolControllerCard extends HTMLElement {
         const lang = _langFromHass(this._hass);
 		const nextStart = d.nextStartMins;
 		const nextFilter = d.nextFilterMins;
-		const nextEventSummary = d.nextEventSummary || _t(lang, "ui.scheduled_start");
- 		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
- 		// Tooltip titles: use the absolute datetime strings when available
- 		const nextEventTitle = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : '';
- 		const nextStartInfo = nextStart != null ? this._formatCountdown(lang, nextStart) : null;
- 		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
- 		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
+		const nextFrost = d.nextFrostMins;
+		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
+		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
+		const nextEventSummaryBase = d.nextEventSummary || _t(lang, "ui.scheduled_start");
+		const nextEventSummary = d.eventRainBlocked ? `${nextEventSummaryBase} — ${rainInfo}` : nextEventSummaryBase;
+		const nextEvent = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : null;
+		// Tooltip titles: use the absolute datetime strings when available
+		const nextEventTitle = d.nextEventStart ? this._formatEventTime(d.nextEventStart, d.nextEventEnd) : '';
+		const nextStartInfo = nextStart != null ? this._formatCountdown(lang, nextStart) : null;
+		const nextStartText = nextStartInfo ? nextStartInfo.text : '–';
+		const nextStartTitle = nextStartInfo ? nextStartInfo.title : '';
+		const showNextFrost = !!d.frost && nextFrost != null && Number(nextFrost) > 0;
+		const creditLines = [];
+		const creditSourceLabel = d.runCreditSource ? this._creditSourceLabel(d.runCreditSource) : null;
+		if (Number.isFinite(Number(d.runCreditMinutes)) && d.runCreditMinutes > 0 && creditSourceLabel) {
+			creditLines.push({
+				label: `${_t(lang, "ui.credit_label")}: ${creditSourceLabel}`,
+				value: `+${d.runCreditMinutes} min`,
+				entityId: d.runCreditMinutesEntityId,
+			});
+		}
+		if (Number.isFinite(Number(d.filterCreditMinutes)) && d.filterCreditMinutes > 0) {
+			creditLines.push({
+				label: _t(lang, "ui.credit_filter_label"),
+				value: `${d.filterCreditMinutes} min`,
+				entityId: d.filterCreditMinutesEntityId,
+			});
+		}
+		if (Number.isFinite(Number(d.frostCreditMinutes)) && d.frostCreditMinutes > 0) {
+			creditLines.push({
+				label: _t(lang, "ui.credit_frost_label"),
+				value: `${d.frostCreditMinutes} min`,
+				entityId: d.frostCreditMinutesEntityId,
+			});
+		}
+		if (Number.isFinite(Number(d.frostCreditShiftMinutes)) && d.frostCreditShiftMinutes > 0) {
+			creditLines.push({
+				label: _t(lang, "ui.credit_shift_label"),
+				value: `${d.frostCreditShiftMinutes} min`,
+				entityId: d.frostCreditShiftMinutesEntityId,
+			});
+		}
+		const nextFrostInfo = showNextFrost ? this._formatCountdown(lang, nextFrost) : null;
+		const nextFrostText = nextFrostInfo ? nextFrostInfo.text : '–';
+		const nextFrostTitle = nextFrostInfo ? nextFrostInfo.title : '';
+
+		const rows = [];
+		if (nextEvent) {
+			rows.push({
+				label: nextEventSummary,
+				value: nextEvent,
+				title: nextEventTitle,
+			});
+		}
+		rows.push({
+			label: _t(lang, "ui.next_event"),
+			value: nextStartText,
+			title: nextStartTitle,
+		});
+		if (nextFilter != null) {
+			const nf = this._formatCountdown(lang, nextFilter);
+			rows.push({
+				label: _t(lang, "ui.next_filter_cycle"),
+				value: nf.text,
+				title: nf.title,
+			});
+		}
+		if (showNextFrost) {
+			rows.push({
+				label: _t(lang, "ui.next_frost_cycle"),
+				value: nextFrostText,
+				title: nextFrostTitle,
+			});
+		}
+		creditLines.forEach((line) => rows.push({
+			label: line.label,
+			value: line.value,
+			title: "",
+			entityId: line.entityId,
+		}));
+
+		const rowsHtml = rows.length
+			? `<div class="next-rows" style="margin-top:8px;">
+				${rows
+					.map((row) => `<div class="next-row" ${row.entityId ? `data-more-info="${row.entityId}"` : ''} ${row.title ? `title=\"${row.title}\"` : ''}><div class="next-row-title">${row.label}</div><div class="next-row-value">${row.value}</div></div>`)
+					.join("")}
+			</div>`
+			: '';
 		return `<div class="calendar-block">
 			<div class="section-title">${_t(lang, "ui.calendar_title")}</div>
-			<div style="margin-top:8px">${nextEvent ? `<div><strong>${nextEventSummary}</strong><div class="event-time" title="${nextEventTitle}">${nextEvent}</div><div style="margin-top:6px" title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div></div>` : `<div title="${nextStartTitle}">${_t(lang, "ui.next_event")} : ${nextStartText}</div>`}</div>
-			${nextFilter != null ? `<div style="margin-top:8px" title="${this._formatCountdown(lang, nextFilter).title}">${_t(lang, "ui.next_filter_cycle")}: ${this._formatCountdown(lang, nextFilter).text}</div>` : ''}
+			${rowsHtml}
 		</div>`;
 	}
 
@@ -1106,6 +1392,24 @@ class PoolControllerCard extends HTMLElement {
 		</div>`;
 	}
 
+	/**
+	 * Baut das Target-Objekt für Service-Calls, unterstützt sowohl entity_id als auch device_id.
+	 */
+	_buildTargetObject() {
+		// device_id kann im Config oder Derived Entities liegen
+		const deviceId = this._config?.device_id || this._derivedEntities?.device_id || null;
+		const entityId = this._config?.climate_entity || this._derivedEntities?.climate_entity || null;
+		if (deviceId) {
+			return { target: { device_id: deviceId } };
+		}
+		if (entityId) {
+			return { target: { entity_id: entityId } };
+		}
+		// Fallback: leeres Objekt, damit der Service nicht crasht
+		return { target: {} };
+	}
+
+
 	// ========================================
 	// Event Handlers
 	// ========================================
@@ -1116,20 +1420,6 @@ class PoolControllerCard extends HTMLElement {
 		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
 			const entityId = el.getAttribute("data-more-info");
 			if (!entityId) return;
-			// If this element is the power-top pill, skip the generic more-info
-			// click handler; the power pill has a special click behavior that
-			// opens a combined history graph. Adding both handlers causes two
-			// listeners to be registered and the normal more-info modal to
-			// preempt the history graph. See issue where listeners show up at
-			// main.js:1121 and main.js:1135 in DevTools.
-			try {
-				if (el.classList && el.classList.contains('power-top')) {
-					console.debug('[pool_controller_dashboard_frontend] _attachHandlers: skipping generic more-info listener for power-top');
-					return;
-				}
-			} catch (_e) {
-				// ignore
-			}
 			// Prevent dial drag when clicking on inner elements (icons, numbers)
 			el.addEventListener("pointerdown", (ev) => ev.stopPropagation());
 			el.addEventListener("click", (ev) => {
@@ -1138,35 +1428,42 @@ class PoolControllerCard extends HTMLElement {
 			});
 		});
 
-		// Special handler: clicking the power pill should open a history-graph modal
-		// showing both main and aux heater power if available. Falls back to more-info.
-		try {
-			const powerEl = this.shadowRoot.querySelector('.power-top');
-			if (powerEl) {
-				if (powerEl.__pc_power_listener_attached) {
-					console.warn('[pool_controller_dashboard_frontend] _attachHandlers: power-top already has click listener attached');
-				} else {
-					powerEl.addEventListener('click', (ev) => {
-						ev.stopPropagation();
-						if (!this._hass) return;
-						const d = this._renderData || {};
-						const main = d.mainPowerEntityId;
-						const aux = d.auxPowerEntityId;
-						// If we have at least one sensor, open the reusable history-graph dialog
-						if (main || aux) {
-							const entities = [main, aux].filter(Boolean);
-							this._openHistoryGraph(entities, 'Power history', 24);
-							return;
-						}
-						// No combined sensors available: fallback to single-entity more-info
-						if (d.powerMoreInfoEntityId) this._openMoreInfo(d.powerMoreInfoEntityId);
-					});
-					try { powerEl.__pc_power_listener_attached = true; } catch (_e) {}
-				}
-			}
-		} catch (e) {
-			console.error('[pool_controller_dashboard_frontend] _attachHandlers: power pill handler registration failed', e);
-		}
+
+		// const powerTopDiv = this.shadowRoot.querySelector('.power-top');
+
+		// if (powerTopDiv) {
+		// 	// 1. Cursor setzen
+		// 	powerTopDiv.style.cursor = "pointer";
+
+		// 	// 2. Bestehenden Listener entfernen (verhindert doppelte Trigger, falls die Methode mehrfach läuft)
+		// 	powerTopDiv.onclick = null; 
+
+		// 	// 3. Den Click-Listener hinzufügen
+		// 	powerTopDiv.onclick = (event) => {
+		// 		event.stopPropagation();
+				
+		// 		// Daten sicher extrahieren
+		// 		const d = this._renderData || {};
+		// 		// const entities = [d.mainPowerEntityId, d.auxPowerEntityId].filter(Boolean);
+		// 		// Sicherstellen, dass wir nur echte Strings in der Liste haben
+		// 		const entities = [d.mainPowerEntityId, d.auxPowerEntityId]
+		// 			.filter(id => id && typeof id === 'string');
+
+		// 		if (entities.length === 0) {
+		// 			console.warn("Keine Entitäten für das Power-History-Popup gefunden.");
+		// 			return;
+		// 		}
+
+		// 		// 4. Die Popup-Funktion aufrufen
+		// 		showHistoryPopup(
+		// 			powerTopDiv, 
+		// 			this._hass, 
+		// 			entities,
+		// 			24, 
+		// 			'Power history'
+		// 		);
+		// 	};
+		// }
 
 		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
 		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
@@ -1176,11 +1473,13 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass) return;
 				const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
 				if (this._hasService("pool_controller", svc)) {
-					this._hass.callService("pool_controller", svc, { climate_entity: this._config?.climate_entity });
+					const targetObj = this._buildTargetObject();
+					this._hass.callService("pool_controller", svc, targetObj);
 					return;
 				}
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
 				this._hass.callService("climate", "set_hvac_mode", {
-					entity_id: this._config?.climate_entity,
+					entity_id: climateEntityId,
 					hvac_mode: maintenanceActive ? "heat" : "off",
 				});
 			});
@@ -1194,7 +1493,8 @@ class PoolControllerCard extends HTMLElement {
 				if (!this._hass) return;
 				const tc = this._effectiveTempConfig();
 				const step = Number(tc.step || 0.5);
-				const climate = this._hass.states[this._config.climate_entity];
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+				const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
 				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
 				const next = action === "inc" ? currentTarget + step : currentTarget - step;
 				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
@@ -1203,13 +1503,13 @@ class PoolControllerCard extends HTMLElement {
 				if (climate) {
 					const optimisticState = { ...climate };
 					optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-					this._hass.states[this._config.climate_entity] = optimisticState;
+					this._hass.states[climateEntityId] = optimisticState;
 					this._render();
 				}
 				
 				// Service call im Hintergrund
 				this._hass.callService("climate", "set_temperature", { 
-					entity_id: this._config.climate_entity, 
+					entity_id: climateEntityId, 
 					temperature: newTemp 
 				});
 			});
@@ -1259,17 +1559,18 @@ class PoolControllerCard extends HTMLElement {
 				const stop = btn.dataset.stop;
 
 				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
-					if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
+				if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
 					const svc = active ? `stop_${mode}` : `start_${mode}`;
+					const targetObj = this._buildTargetObject();
 					const data = active
-						? { climate_entity: this._config?.climate_entity }
-						: { climate_entity: this._config?.climate_entity, duration_minutes: Number.isFinite(duration) ? duration : undefined };
+						? targetObj
+						: { ...targetObj, duration_minutes: Number.isFinite(duration) ? duration : undefined };
 					this._hass.callService("pool_controller", svc, data);
-						// backend services will trigger coordinator refresh; still request entity update as fallback
-						try {
-							this._requestBackendEntityRefresh(eff);
-						} catch (e) {}
-						return;
+					// backend services will trigger coordinator refresh; still request entity update as fallback
+					try {
+						this._requestBackendEntityRefresh(eff);
+					} catch (e) {}
+					return;
 				}
 
 				if (active && stop) {
@@ -1279,7 +1580,8 @@ class PoolControllerCard extends HTMLElement {
 					this._triggerEntity(start, true);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
-					this._hass.callService("pool_controller", `stop_${mode}`, { climate_entity: this._config?.climate_entity });
+					const targetObj = this._buildTargetObject();
+					this._hass.callService("pool_controller", `stop_${mode}`, targetObj);
 					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
 				}
 			});
@@ -1332,62 +1634,6 @@ class PoolControllerCard extends HTMLElement {
 			}
 		} catch (_e) {
 			// ignore
-		}
-	}
-
-	_openHistoryGraph(entities, title = 'History', hours = 24) {
-		if (!entities || !entities.length) return;
-		// Normalize
-		const ents = Array.isArray(entities) ? entities.filter(Boolean) : [entities];
-		if (!ents.length) return;
-		try {
-			customElements.whenDefined('hui-history-graph-card').then(() => {
-				try {
-					const card = document.createElement('hui-history-graph-card');
-					// Some Lovelace cards expect `hass` to be present before setConfig.
-					// Set `hass` first to avoid initialization errors, then set the config
-					// including the explicit `type` so the card initializes correctly.
-					try {
-						card.hass = this._hass;
-					} catch (err_hass) {
-						try { console.warn('[pool_controller_dashboard_frontend] _openHistoryGraph: setting card.hass failed', err_hass); } catch (_e) {}
-					}
-					card.setConfig({ type: 'history-graph', entities: ents, hours_to_show: hours, title });
-					if (customElements.get('ha-dialog')) {
-						const dialog = document.createElement('ha-dialog');
-						dialog.appendChild(card);
-						document.body.appendChild(dialog);
-						dialog.opened = true;
-						dialog.addEventListener('closed', () => { try { dialog.remove(); } catch (e) {} });
-					} else {
-						// Fallback: append the card and remove later
-						document.body.appendChild(card);
-						setTimeout(() => { try { card.remove(); } catch (e) {} }, 30 * 1000);
-					}
-				} catch (err) {
-					// Log error to browser console for diagnostics and fallback
-					try {
-						console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: failed to create history card/dialog', err, { entities: ents, title, hours });
-					} catch (_logErr) {}
-					// Fallback to more-info for first entity
-					try {
-						console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
-						this._openMoreInfo(ents[0]);
-					} catch (e) {
-						try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', e); } catch (_e) {}
-					}
-				}
-			});
-		} catch (e) {
-			try {
-				console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: unexpected error', e, { entities: ents, title, hours });
-			} catch (_logErr) {}
-			try { 
-				console.info('[pool_controller_dashboard_frontend] _openHistoryGraph: falling back to more-info for', ents[0]);
-				this._openMoreInfo(ents[0]); 
-			} catch (err) {
-				try { console.error('[pool_controller_dashboard_frontend] _openHistoryGraph: fallback more-info also failed', err); } catch (_e) {}
-			}
 		}
 	}
 
@@ -1556,6 +1802,13 @@ class PoolControllerCard extends HTMLElement {
 			},
 		};
 		return labels?.[lang]?.[r] || r || null;
+	}
+
+	_creditSourceLabel(source) {
+		const s = String(source || "").toLowerCase();
+		if (!s) return null;
+		if (s === "thermostat") return this._heatReasonLabel("thermostat");
+		return this._runReasonLabel(s) || this._heatReasonLabel(s) || s;
 	}
 
 	_renderStatusMidIcon(d) {
@@ -1758,6 +2011,12 @@ class PoolControllerCard extends HTMLElement {
 			this._config.maintenance_entity,
 			this._config.heat_reason_entity,
 			this._config.run_reason_entity,
+			this._config.run_credit_source_entity,
+			this._config.run_credit_minutes_entity,
+			this._config.filter_credit_minutes_entity,
+			this._config.filter_missing_minutes_entity,
+			this._config.frost_credit_minutes_entity,
+			this._config.frost_credit_shift_minutes_entity,
 			this._config.sanitizer_mode_entity,
 			this._config.aux_entity,
 			this._config.manual_timer_entity,
@@ -1805,6 +2064,8 @@ class PoolControllerCard extends HTMLElement {
 			this._config.next_event_entity,
 			this._config.next_event_end_entity,
 			this._config.next_event_summary_entity,
+			this._config.event_rain_probability_entity,
+			this._config.event_rain_blocked_entity,
 		].filter(Boolean);
 
 		const derived = this._derivedEntities ? Object.values(this._derivedEntities).filter(Boolean) : [];
@@ -1860,15 +2121,16 @@ class PoolControllerCard extends HTMLElement {
 		if (this._dialDragTemp == null) return;
 		const newTemp = this._dialDragTemp;
 		this._dialDragTemp = null;
-		const climate = this._hass.states[this._config.climate_entity];
+		const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+		const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
 		if (climate) {
 			const optimisticState = { ...climate };
 			optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-			this._hass.states[this._config.climate_entity] = optimisticState;
+			this._hass.states[climateEntityId] = optimisticState;
 			this._render();
 		}
 		this._hass.callService("climate", "set_temperature", {
-			entity_id: this._config.climate_entity,
+			entity_id: climateEntityId,
 			temperature: newTemp,
 		});
 	}
@@ -1945,6 +2207,8 @@ class PoolControllerCard extends HTMLElement {
 
 		return {
 			...c,
+			climate_entity: prefer('climate_entity'),
+			device_id: prefer('device_id'),
 			outdoor_temp_entity: prefer('outdoor_temp_entity'),
 			next_frost_mins_entity: prefer('next_frost_mins_entity'),
 			sanitizer_mode_entity: prefer('sanitizer_mode_entity'),
@@ -1957,6 +2221,12 @@ class PoolControllerCard extends HTMLElement {
 			maintenance_entity: prefer('maintenance_entity'),
 			heat_reason_entity: prefer('heat_reason_entity'),
 			run_reason_entity: prefer('run_reason_entity'),
+			run_credit_source_entity: prefer('run_credit_source_entity'),
+			run_credit_minutes_entity: prefer('run_credit_minutes_entity'),
+			filter_credit_minutes_entity: prefer('filter_credit_minutes_entity'),
+			filter_missing_minutes_entity: prefer('filter_missing_minutes_entity'),
+			frost_credit_minutes_entity: prefer('frost_credit_minutes_entity'),
+			frost_credit_shift_minutes_entity: prefer('frost_credit_shift_minutes_entity'),
 			manual_timer_entity: prefer('manual_timer_entity'),
 			auto_filter_timer_entity: prefer('auto_filter_timer_entity'),
 			pause_timer_entity: prefer('pause_timer_entity'),
@@ -2008,6 +2278,8 @@ class PoolControllerCard extends HTMLElement {
 			next_event_entity: prefer('next_event_entity'),
 			next_event_end_entity: prefer('next_event_end_entity'),
 			next_event_summary_entity: prefer('next_event_summary_entity'),
+			event_rain_probability_entity: prefer('event_rain_probability_entity'),
+			event_rain_blocked_entity: prefer('event_rain_blocked_entity'),
 		};
 	}
 
@@ -2033,8 +2305,14 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	async _ensureDerivedEntities() {
-		if (!this._hass || !this._config?.climate_entity) return;
-		if (this._derivedEntities && this._derivedForClimate === this._config.climate_entity) return;
+		if (!this._hass || (!this._config?.climate_entity && !this._config?.device_id)) return;
+		if (
+			this._derivedEntities
+			&& this._derivedForClimate === this._config?.climate_entity
+			&& this._derivedForDevice === this._config?.device_id
+		) {
+			return;
+		}
 
 		let reg = [];
 		try {
@@ -2042,12 +2320,21 @@ class PoolControllerCard extends HTMLElement {
 		} catch (e) {
 			return;
 		}
-		const selected = reg.find((r) => r.entity_id === this._config.climate_entity);
+		let selected = reg.find((r) => r.entity_id === this._config?.climate_entity);
+		if (!selected && this._config?.device_id) {
+			selected = reg.find(
+				(r) =>
+					r.device_id === this._config.device_id
+					&& r.platform === "pool_controller"
+					&& r.entity_id?.startsWith("climate.")
+			);
+		}
 		if (!selected?.config_entry_id) return;
 		const ceid = selected.config_entry_id;
 		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
 
 		this._derivedEntities = {
+			device_id: selected.device_id || this._config?.device_id || null,
 			outdoor_temp_entity: this._pickEntity(entries, "sensor", ["outdoor_temp"]) || null,
 			next_frost_mins_entity: this._pickEntity(entries, "sensor", ["next_frost_mins"]) || null,
 			sanitizer_mode_entity: this._pickEntity(entries, "sensor", ["sanitizer_mode"]) || null,
@@ -2067,6 +2354,12 @@ class PoolControllerCard extends HTMLElement {
 			// Transparency
 			heat_reason_entity: this._pickEntity(entries, "sensor", ["heat_reason"]) || null,
 			run_reason_entity: this._pickEntity(entries, "sensor", ["run_reason"]) || null,
+			run_credit_source_entity: this._pickEntity(entries, "sensor", ["run_credit_source"]) || null,
+			run_credit_minutes_entity: this._pickEntity(entries, "sensor", ["run_credit_minutes"]) || null,
+			filter_credit_minutes_entity: this._pickEntity(entries, "sensor", ["filter_credit_minutes"]) || null,
+			filter_missing_minutes_entity: this._pickEntity(entries, "sensor", ["filter_missing_minutes"]) || null,
+			frost_credit_minutes_entity: this._pickEntity(entries, "sensor", ["frost_credit_minutes"]) || null,
+			frost_credit_shift_minutes_entity: this._pickEntity(entries, "sensor", ["frost_credit_shift_minutes"]) || null,
 
 			// New v2 timers (minutes sensor)
 			manual_timer_entity: this._pickEntity(entries, "sensor", ["manual_timer_mins"]) || null,
@@ -2077,7 +2370,7 @@ class PoolControllerCard extends HTMLElement {
 
 			// Core / controls
 			climate_entity: this._pickEntity(entries, "climate", ["climate"]) || null,
-			aux_entity: this._pickEntity(entries, "switch", ["aux"]) || null,
+			aux_entity: this._pickEntity(entries, "switch", ["aux_allowed", "aux"]) || null,
 			// Binary sensor indicating an aux heater is configured (picked by unique_id suffix)
 			aux_binary: this._pickEntity(entries, "binary_sensor", ["aux_present", "aux_configured", "aux"]) || null,
 			bathing_entity: this._pickEntity(entries, "switch", ["bathing"]) || null,
@@ -2129,13 +2422,16 @@ class PoolControllerCard extends HTMLElement {
 			next_event_entity: this._pickEntity(entries, "sensor", ["next_event"]) || null,
 			next_event_end_entity: this._pickEntity(entries, "sensor", ["next_event_end"]) || null,
 			next_event_summary_entity: this._pickEntity(entries, "sensor", ["next_event_summary"]) || null,
+			event_rain_probability_entity: this._pickEntity(entries, "sensor", ["event_rain_probability"]) || null,
+			event_rain_blocked_entity: this._pickEntity(entries, "binary_sensor", ["event_rain_blocked"]) || null,
 
 			// Config value sensors (configured durations)
 			filter_duration_entity: this._pickEntity(entries, "sensor", ["config_filter_minutes", "filter_minutes_config", "filter_minutes"]) || null,
 			chlorine_duration_entity: this._pickEntity(entries, "sensor", ["config_chlorine_minutes", "chlorine_duration", "chlorine_minutes"]) || null,
 			bathing_duration_entity: this._pickEntity(entries, "sensor", ["config_bathing_minutes", "bathing_minutes"]) || null,
 		};
-		this._derivedForClimate = this._config.climate_entity;
+		this._derivedForClimate = selected.entity_id || this._config?.climate_entity;
+		this._derivedForDevice = selected.device_id || this._config?.device_id;
 	}
 
 	_renderError(msg) {
@@ -2162,16 +2458,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		this._config = { ...DEFAULTS, ...config };
 		this._initialized = false;
 		this._render();
-		// If a controller_entity is already present in the config (editing an existing card),
-		// immediately derive its related entities so the editor shows the mapped fields
-		// without requiring the user to delete & recreate the card.
-		try {
-			if (this._config && this._config.controller_entity) {
-				setTimeout(() => this._deriveFromController(), 100);
-			}
-		} catch (_e) {
-			// best-effort: ignore errors during editor boot
-		}
 	}
 
 	get value() {
@@ -2182,23 +2468,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!this.shadowRoot) this.attachShadow({ mode: "open" });
 		const c = this._config || DEFAULTS;
 		const lang = this._lang || _langFromHass(this._hass);
-		// Only show temperature bounds/step when the editor's content is 'controller'
-		const showTempControls = (String(c.content || '').trim() === 'controller');
-		const tempControlsHtml = showTempControls ? `
-			<div class="grid2">
-				<div class="row">
-					<label>${_t(lang, "editor.temp_min")}</label>
-					<input id="min_temp" type="number" step="0.5" value="${c.min_temp}">
-				</div>
-				<div class="row">
-					<label>${_t(lang, "editor.temp_max")}</label>
-					<input id="max_temp" type="number" step="0.5" value="${c.max_temp}">
-				</div>
-				<div class="row">
-					<label>${_t(lang, "editor.step")}</label>
-					<input id="step" type="number" step="0.1" value="${c.step || 0.5}">
-				</div>
-			</div>` : '';
 		this.shadowRoot.innerHTML = `
 		<style>
 			:host { display:block; }
@@ -2207,15 +2476,9 @@ class PoolControllerCardEditor extends HTMLElement {
 			label { font-weight:600; }
 			.grid2 { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; }
 			.box { border:1px solid #d0d7de; border-radius:10px; padding:10px; background:#fff; }
-			.badge { display:inline-block; padding:4px 8px; border-radius:8px; background:#f4f6f8; border:1px solid #e0e6ed; margin:2px 4px 0 0; font-size:12px; }
 			button { border:1px solid #d0d7de; border-radius:8px; padding:8px 10px; cursor:pointer; background:#fff; font-weight:600; }
 		</style>
 		<div class="wrapper">
-			<div class="row" id="derived-box" style="display:none;">
-				<label>Abgeleitete Entities</label>
-				<div id="derived-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-			</div>
-
 			<div class="row">
 				<label>${_t(lang, "editor.select_controller")}</label>
 				<select id="controller-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
@@ -2231,44 +2494,12 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="maintenance">${_t(lang, "editor.content_options.maintenance")}</option>
 				</select>
 			</div>
-			${tempControlsHtml}
 		</div>`;
 
 		this._populateControllerSelect();
 
-		this.shadowRoot.querySelectorAll("input").forEach((inp) => {
-			inp.addEventListener("change", () => {
-				const id = inp.id;
-				const num = Number(inp.value);
-				this._updateConfig({ [id]: Number.isFinite(num) ? num : inp.value });
-			});
-		});
+		// No extra inputs to bind (device + content only)
 
-		// Populate derived list if we have derived keys
-		setTimeout(() => {
-			const derivedBox = this.shadowRoot?.querySelector('#derived-box');
-			const list = this.shadowRoot?.querySelector('#derived-list');
-			if (!derivedBox || !list) return;
-			list.innerHTML = '';
-			const keys = ['filter_duration_entity','chlorine_duration_entity','bathing_duration_entity'];
-			let any = false;
-			for (const k of keys) {
-				const v = this._config?.[k];
-				if (v) {
-					any = true;
-					const span = document.createElement('span');
-					span.className = 'badge';
-					span.textContent = `${k}: ${v}`;
-					span.title = 'Klicken für more-info';
-					span.style.cursor = 'pointer';
-					span.addEventListener('click', () => {
-						this._openMoreInfo(v);
-					});
-					list.appendChild(span);
-				}
-			}
-			derivedBox.style.display = any ? 'block' : 'none';
-		}, 150);
 	}
 
 	async _populateControllerSelect() {
@@ -2284,32 +2515,37 @@ class PoolControllerCardEditor extends HTMLElement {
 		);
 
 		select.innerHTML = `<option value="">${_t(lang, "editor.please_choose")}</option>`;
+		let selectedEntityId = this._config?.climate_entity || null;
+		if (!selectedEntityId && this._config?.device_id) {
+			const match = poolControllers.find((entity) => entity.device_id === this._config.device_id);
+			selectedEntityId = match?.entity_id || null;
+		}
 		poolControllers.forEach((entity) => {
 			const state = this._hass.states[entity.entity_id];
 			const name = state?.attributes?.friendly_name || entity.entity_id;
 			const option = document.createElement("option");
 			option.value = entity.entity_id;
 			option.textContent = name;
-			if (entity.entity_id === this._config?.controller_entity) {
+			if (entity.entity_id === selectedEntityId) {
 				option.selected = true;
 			}
 			select.appendChild(option);
 		});
 
-		if (poolControllers.length === 1 && !this._config?.controller_entity) {
-			const firstController = poolControllers[0].entity_id;
-			select.value = firstController;
-			this._updateConfig({ controller_entity: firstController, climate_entity: firstController });
-			setTimeout(() => this._deriveFromController(), 100);
+		if (poolControllers.length === 1 && !this._config?.climate_entity && !this._config?.device_id) {
+			const first = poolControllers[0];
+			select.value = first.entity_id;
+			const patch = first.device_id ? { device_id: first.device_id } : { climate_entity: first.entity_id };
+			this._updateConfig(patch);
 		}
 
 		// Use `onchange` to avoid stacking multiple anonymous listeners across re-renders.
 		select.onchange = (ev) => {
 			const val = ev.target.value;
 			if (val) {
-				this._updateConfig({ controller_entity: val, climate_entity: val });
-				// Automatisch alle Entities vom ausgewählten Controller ableiten
-				setTimeout(() => this._deriveFromController(), 100);
+				const entry = poolControllers.find((entity) => entity.entity_id === val);
+				const patch = entry?.device_id ? { device_id: entry.device_id } : { climate_entity: val };
+				this._updateConfig(patch);
 			}
 		};
 
@@ -2338,84 +2574,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		// will call `setConfig()` when config changes. Avoid redundant re-renders.
 	}
 
-	async _deriveFromController() {
-		if (!this._hass || !this._config?.controller_entity) return;
-		const reg = await this._getEntityRegistry();
-		const selected = reg.find((r) => r.entity_id === this._config.controller_entity);
-		if (!selected || !selected.config_entry_id) return;
-		const ceid = selected.config_entry_id;
-		const entries = reg.filter((r) => r.config_entry_id === ceid && r.platform === "pool_controller");
-		
-		const pick = (domain, suffix) => {
-			const hit = entries.find((e) => e.entity_id.startsWith(`${domain}.`) && (suffix ? e.unique_id?.endsWith(`_${suffix}`) : true));
-			return hit?.entity_id;
-		};
-			const cfg = {
-			controller_entity: this._config.controller_entity,
-			climate_entity: pick("climate", "climate") || this._config.climate_entity,
-			outdoor_temp_entity: pick("sensor", "outdoor_temp") || this._config.outdoor_temp_entity,
-			next_frost_mins_entity: pick("sensor", "next_frost_mins") || this._config.next_frost_mins_entity,
-			sanitizer_mode_entity: pick("sensor", "sanitizer_mode") || this._config.sanitizer_mode_entity,
-			main_switch_on_entity: pick("binary_sensor", "main_switch_on") || this._config.main_switch_on_entity,
-			pump_switch_on_entity: pick("binary_sensor", "pump_switch_on") || this._config.pump_switch_on_entity,
-			aux_heating_switch_on_entity: pick("binary_sensor", "aux_heating_switch_on") || this._config.aux_heating_switch_on_entity,
-			maintenance_entity: pick("binary_sensor", "maintenance_active") || this._config.maintenance_entity,
-			heat_reason_entity: pick("sensor", "heat_reason") || this._config.heat_reason_entity,
-			run_reason_entity: pick("sensor", "run_reason") || this._config.run_reason_entity,
-			// New v2 timers (minutes sensor)
-			manual_timer_entity: pick("sensor", "manual_timer_mins") || this._config.manual_timer_entity,
-			auto_filter_timer_entity: pick("sensor", "auto_filter_timer_mins") || this._config.auto_filter_timer_entity,
-			pause_timer_entity: pick("sensor", "pause_timer_mins") || this._config.pause_timer_entity,
-			aux_entity: pick("switch", "aux") || this._config.aux_entity,
-			// Binary sensor indicating aux presence (aux_present / aux_configured)
-			aux_binary: pick("binary_sensor", "aux_present") || pick("binary_sensor", "aux_configured") || pick("binary_sensor", "aux") || this._config.aux_binary,
-			bathing_entity: pick("switch", "bathing") || this._config.bathing_entity,
-			bathing_start: pick("button", "bath_60") || pick("button", "bath_30") || this._config.bathing_start,
-			bathing_stop: pick("button", "bath_stop") || this._config.bathing_stop,
-			bathing_until: pick("sensor", "bathing_until") || this._config.bathing_until,
-			bathing_active_binary: pick("binary_sensor", "is_bathing") || this._config.bathing_active_binary,
-			filter_entity: pick("binary_sensor", "filter_active") || this._config.filter_entity,
-			filter_start: pick("button", "filter_30") || pick("button", "filter_60") || this._config.filter_start,
-			filter_stop: pick("button", "filter_stop") || this._config.filter_stop,
-			filter_until: pick("sensor", "filter_until") || this._config.filter_until,
-			next_filter_in: pick("sensor", "next_filter_mins") || this._config.next_filter_in,
-			chlorine_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_entity,
-			chlorine_start: pick("button", "chlorine_5") || pick("button", "quick_chlor") || this._config.chlorine_start,
-			chlorine_stop: pick("button", "quick_chlor_stop") || this._config.chlorine_stop,
-			chlorine_until: pick("sensor", "quick_chlorine_until") || this._config.chlorine_until,
-			chlorine_active_entity: pick("binary_sensor", "is_quick_chlor") || this._config.chlorine_active_entity,
-			pause_entity: pick("binary_sensor", "is_paused") || this._config.pause_entity,
-			pause_start: pick("button", "pause_60") || pick("button", "pause_30") || this._config.pause_start,
-			pause_stop: pick("button", "pause_stop") || this._config.pause_stop,
-			pause_until: pick("sensor", "pause_until") || this._config.pause_until,
-			pause_active_entity: pick("binary_sensor", "is_paused") || this._config.pause_active_entity,
-			frost_entity: pick("binary_sensor", "frost_danger") || this._config.frost_entity,
-			quiet_entity: pick("binary_sensor", "in_quiet") || this._config.quiet_entity,
-			main_power_entity: pick("sensor", "main_power") || this._config.main_power_entity,
-			aux_power_entity: pick("sensor", "aux_power") || this._config.aux_power_entity,
-			pv_entity: pick("binary_sensor", "pv_allows") || this._config.pv_entity,
-			pv_power_entity: pick("sensor", "pv_power") || this._config.pv_power_entity,
-			ph_entity: pick("sensor", "ph_val") || this._config.ph_entity,
-			chlorine_value_entity: pick("sensor", "chlor_val") || this._config.chlorine_value_entity,
-			salt_entity: pick("sensor", "salt_val") || this._config.salt_entity,
-			salt_add_entity: pick("sensor", "salt_add_g") || this._config.salt_add_entity,
-			tds_entity: pick("sensor", "tds_effective") || pick("sensor", "tds_val") || this._config.tds_entity,
-			tds_assessment_entity: pick("sensor", "tds_status") || this._config.tds_assessment_entity,
-			water_change_liters_entity: pick("sensor", "tds_water_change_liters") || this._config.water_change_liters_entity,
-			water_change_percent_entity: pick("sensor", "tds_water_change_percent") || this._config.water_change_percent_entity,
-			ph_plus_entity: pick("sensor", "ph_plus_g") || this._config.ph_plus_entity,
-			ph_minus_entity: pick("sensor", "ph_minus_g") || this._config.ph_minus_entity,
-			chlor_dose_entity: pick("sensor", "chlor_spoons") || this._config.chlor_dose_entity,
-			next_start_entity: pick("sensor", "next_start_mins") || this._config.next_start_entity,
-			next_event_entity: pick("sensor", "next_event") || this._config.next_event_entity,
-			next_event_end_entity: pick("sensor", "next_event_end") || this._config.next_event_end_entity,
-			next_event_summary_entity: pick("sensor", "next_event_summary") || this._config.next_event_summary_entity,
-		};
-		this._updateConfig(cfg);
-		// Refresh editor UI to show derived picks
-		try { this._render(); } catch (_e) {}
-	}
-
 	async _getEntityRegistry() {
 		if (!this._registry) {
 			this._registry = await this._hass.callWS({ type: "config/entity_registry/list" });
@@ -2424,7 +2582,14 @@ class PoolControllerCardEditor extends HTMLElement {
 	}
 
 	_updateConfig(patch, renderOnly = false) {
-		this._config = { ...DEFAULTS, ...this._config, ...patch };
+		const merged = { ...DEFAULTS, ...this._config, ...patch };
+		const next = { content: merged.content ?? DEFAULTS.content };
+		if (merged.device_id) {
+			next.device_id = merged.device_id;
+		} else if (merged.climate_entity) {
+			next.climate_entity = merged.climate_entity;
+		}
+		this._config = next;
 		if (!renderOnly) {
 			this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
 		}

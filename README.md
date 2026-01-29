@@ -8,7 +8,8 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 
 ## Screenshot
 
-![Card example](card_example_1.png)
+![Card example 1](card_example_1.png)
+![Card example 2](card_example_2.png)
 
 ## Features (high level)
 
@@ -17,13 +18,13 @@ Lovelace custom card (frontend UI) for the Home Assistant integration **pool_con
 - Quick actions: **Bathing**, **Filtering**, **Chlorine**, **Pause**
 - Optional AUX heater toggle
 - Status indicators: Frost protection, Quiet hours, PV surplus
-- Outdoor temperature display (when provided by the backend)
-- Next frost protection run countdown (when provided by the backend)
+- Outdoor temperature display
+- Next frost protection run countdown
 - Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and outdoor temp)
 - Physical switch state row: shows if main/pump/aux switches are actually ON
 - Maintenance mode warning banner (disables automation incl. frost protection)
-- Sanitizer mode badge (chlorine / saltwater / mixed) when provided by the backend
-- Water quality: pH, ORP/Chlorine (mV), optional Salt (g/L + %) and TDS (ppm)
+- Sanitizer mode badge (chlorine / saltwater / mixed)
+- Water quality: pH, ORP/Chlorine (mV), Salt (g/L + %) and TDS (ppm)
 - Maintenance hints (dosing + salt + water change recommendation for high TDS)
 - Runtime auto-discovery from the entity registry (YAML-friendly)
 
@@ -44,28 +45,70 @@ Note: HACS usually adds the resource automatically.
 
 ## Add the card (UI editor)
 
-Recommended path (because it auto-maps most entities):
+Recommended path:
 
 1. Open your dashboard → **Edit dashboard**
 2. **Add card** → search for “Pool Controller” (custom card)
 3. In the card editor select your Pool Controller instance (the `climate.*` entity from `pool_controller`)
-4. The editor will auto-fill related entities (buttons/sensors/binary_sensors) from the same config entry
+4. The card stores only the selected **device** (or climate entity) and the chosen **content**
 
 ## Add the card (YAML)
 
 ```yaml
 type: custom:pc-pool-controller
-climate_entity: climate.my_pool
+device_id: 0123456789abcdef0123456789abcdef
+# optional alternative:
+# climate_entity: climate.my_pool
+content: controller
 ```
 
 ### Does auto-discovery work without using the UI editor?
 
-Yes (with one requirement):
+Yes. The card always derives all related entities from the entity registry at runtime. YAML-only with `type` + `device_id` (or `climate_entity`) is enough to get the full UI.
 
-- If `climate_entity` belongs to a `pool_controller` config entry, the card derives the related entities from the entity registry at runtime.
-- This means YAML-only with `type` + `climate_entity` is typically enough to get the full UI (actions, timers, water quality, maintenance).
+## Kartenvarianten (content)
 
-If entity registry access is blocked/unavailable, only explicitly configured entities will work.
+Die Karte hat vier feste Varianten. Stelle sie über den Parameter `content` ein:
+
+### 1) Controller-Karte
+
+```
+content: controller
+```
+
+Zeigt den Temperatur‑Dial, Aktionen (Baden/Filtern/Chloren/Pause), Status‑Icons, Schalter‑Status und die Heiz‑/Lauf‑Gründe.
+
+![Controller card](pool_controller.png)
+
+### 2) Kalender-Karte
+
+```
+content: calendar
+```
+
+Zeigt die nächste Kalender‑Session inkl. Start/Ende, Countdown bis zum Start, nächsten Filterlauf, nächsten Frostlauf sowie Gutschriften.
+
+![Calendar card](pool_calendar.png)
+
+### 3) Wasserqualität-Karte
+
+```
+content: waterquality
+```
+
+Zeigt pH, ORP/Chlor (mV), Salz (g/L + %) und TDS (ppm) inklusive Status‑Bewertung.
+
+![Water quality card](pool_quality.png)
+
+### 4) Wartung-Karte
+
+```
+content: maintenance
+```
+
+Zeigt konkrete Wartungs‑Hinweise (z. B. pH+/pH‑, Salz‑Nachfüllung, Wasserwechsel, Chlor‑Dosis).
+
+![Maintenance card](pool_maintenance.png)
 
 ## How to use / meaning of elements
 
@@ -79,7 +122,7 @@ If entity registry access is blocked/unavailable, only explicitly configured ent
 	- Click/drag on the ring sets the target temperature (calls `climate.set_temperature` on release)
 - `+` / `−` buttons: change target temperature (calls `climate.set_temperature`)
 
-Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `target_temp_step`, the card uses those values automatically. The config keys `min_temp`, `max_temp` and `step` remain as a fallback.
+Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `target_temp_step`, the card uses those values automatically.
 
 ### Status icons (inside the dial)
 
@@ -99,7 +142,7 @@ Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `targ
 
 ### Maintenance mode
 
-If the backend exposes `binary_sensor.*_maintenance_active` and it is `on`, the card shows a prominent warning banner.
+When `binary_sensor.*_maintenance_active` is `on`, the card shows a prominent warning banner.
 
 Important: maintenance mode is a hard lockout in the backend and disables automation, including frost protection.
 
@@ -110,7 +153,7 @@ Important: maintenance mode is a hard lockout in the backend and disables automa
 - **Chlorine**: start/stop quick chlorine
 - **Pause**: pause automation
 
-The card prefers calling the `pool_controller` services (`start_*` / `stop_*`) and includes `climate_entity` in the payload so multi-instance setups are routed correctly. If the services are not available (older backend), it falls back to entity triggers (`button.press`, `switch.turn_on/off`, `input_boolean.turn_on/off`).
+The card calls the `pool_controller` services (`start_*` / `stop_*`) and includes `climate_entity` in the payload so multi-instance setups are routed correctly.
 
 ### AUX heater
 
@@ -118,7 +161,7 @@ The card prefers calling the `pool_controller` services (`start_*` / `stop_*`) a
 
 ### Upcoming
 
-An optional “Next event” block is shown when the backend provides the corresponding sensors:
+The “Next event” block shows:
 
 - Next calendar event (start/end/summary)
 - Next filter cycle (“Next filter cycle in …”)
@@ -126,15 +169,15 @@ An optional “Next event” block is shown when the backend provides the corres
 
 ## Water quality (right)
 
-If available, the card shows a small “Sanitizer” badge (derived from `sensor.*_sanitizer_mode`).
-For saltwater/mixed systems the backend may also provide `tds_effective` (effective/non-salt TDS); the card will prefer that value when auto-discovered.
+The card shows a small “Sanitizer” badge (derived from `sensor.*_sanitizer_mode`).
+For saltwater/mixed systems the backend provides `tds_effective` (effective/non-salt TDS); the card prefers that value.
 
 - **pH**: scale 0–14
 - **Chlorine/ORP**: shown in mV (scale 0–1200)
 - **Salt** (optional): shown as g/L plus percent (g/L × 0.1 = %)
 - **TDS** (optional): shown in ppm
 
-Salt and TDS bars are rendered when the values are available as sensors (including a value of 0).
+Salt and TDS bars are rendered whenever the sensors are available (including a value of 0).
 
 ## Maintenance
 
@@ -145,36 +188,22 @@ The “Maintenance” section appears when the backend recommends an action, e.g
 - Add salt (saltwater/mixed mode): based on `sensor.*_salt_add_g` (grams of salt to add)
 - Water change (when TDS is high; based on backend recommendation: percent and optionally liters)
 
-## Configuration (key overview)
+## Configuration
 
-Required:
+Required (one of):
 
+- `device_id` (recommended)
 - `climate_entity`
 
-Common optional keys (usually filled by the UI editor auto-mapping):
+Optional:
 
-- `aux_entity`
-- `maintenance_entity` (recommended; usually derived automatically)
-- `heat_reason_entity`, `run_reason_entity` (recommended; usually derived automatically)
-- `sanitizer_mode_entity` (optional; usually derived automatically)
-- `main_switch_on_entity`, `pump_switch_on_entity`, `aux_heating_switch_on_entity` (physical switch mirrors; usually derived automatically)
-- `manual_timer_entity` (shared manual timer; attributes: `active`, `duration_minutes`, `type`)
-- `auto_filter_timer_entity`
-- `pause_timer_entity`
-- `ph_entity`, `chlorine_value_entity`, `salt_entity`, `tds_entity`
-- `tds_assessment_entity`, `water_change_percent_entity`, `water_change_liters_entity`
+- `content`: one of `controller`, `calendar`, `waterquality`, `maintenance` (default: `controller`)
 
-Legacy (older backend, still supported as fallback):
-
-- `bathing_start`, `bathing_stop`, `bathing_until`, `bathing_active_binary`
-- `filter_start`, `filter_stop`, `filter_until`, `next_filter_in`
-- `chlorine_start`, `chlorine_stop`, `chlorine_until`, `chlorine_active_entity`
-- `pause_start`, `pause_stop`, `pause_until`, `pause_active_entity`
+All other entities are derived automatically from the entity registry at runtime.
 
 ## Troubleshooting
 
 - After updates: hard reload the browser (Ctrl+F5) and/or clear the HA frontend cache.
-- If auto-discovery does not work: verify `climate_entity` is the `pool_controller` climate entity and that the frontend can access the entity registry.
 
 ## Contributing
 
