@@ -66,47 +66,47 @@ content: controller
 
 Yes. The card always derives all related entities from the entity registry at runtime. YAML-only with `type` + `device_id` (or `climate_entity`) is enough to get the full UI.
 
-## Kartenvarianten (content)
+## Card variants (content)
 
-Die Karte hat vier feste Varianten. Stelle sie über den Parameter `content` ein:
+The card has four fixed variants. Select them via the `content` parameter:
 
-### 1) Controller-Karte
+### 1) Controller card
 
 ```
 content: controller
 ```
 
-Zeigt den Temperatur‑Dial, Aktionen (Baden/Filtern/Chloren/Pause), Status‑Icons, Schalter‑Status und die Heiz‑/Lauf‑Gründe.
+Shows the temperature dial, actions (Bathing/Filtering/Chlorine/Pause), status icons, switch states, and the heat/run reasons.
 
 ![Controller card](pool_controller.png)
 
-### 2) Kalender-Karte
+### 2) Calendar card
 
 ```
 content: calendar
 ```
 
-Zeigt die nächste Kalender‑Session inkl. Start/Ende, Countdown bis zum Start, nächsten Filterlauf, nächsten Frostlauf sowie Gutschriften.
+Shows the next calendar session with start/end, countdown to start, next filter run, next frost run, and credits.
 
 ![Calendar card](pool_calendar.png)
 
-### 3) Wasserqualität-Karte
+### 3) Water quality card
 
 ```
 content: waterquality
 ```
 
-Zeigt pH, ORP/Chlor (mV), Salz (g/L + %) und TDS (ppm) inklusive Status‑Bewertung.
+Shows pH, ORP/Chlorine (mV), Salt (g/L + %) and TDS (ppm) including status assessment.
 
 ![Water quality card](pool_quality.png)
 
-### 4) Wartung-Karte
+### 4) Maintenance card
 
 ```
 content: maintenance
 ```
 
-Zeigt konkrete Wartungs‑Hinweise (z. B. pH+/pH‑, Salz‑Nachfüllung, Wasserwechsel, Chlor‑Dosis).
+Shows concrete maintenance hints (e.g., pH+/pH‑ dosing, salt refill, water change, chlorine dose).
 
 ![Maintenance card](pool_maintenance.png)
 
