@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.2";
+const VERSION = "2.3.3";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -446,7 +446,13 @@ class PoolControllerCard extends HTMLElement {
 			maintenance: _t(lang, "ui.maintenance_title"),
 			cost: _t(lang, "ui.cost_title"),
 		};
-		const headerTitle = c.title || ((titles[content] || "Pool Controller") + (poolName ? ` — ${poolName}` : ""));
+		let headerBase = titles[content] || "Pool Controller";
+		if (content === "cost") {
+			const viewKey = `ui.cost_view_${(c.cost_view || DEFAULTS.cost_view || "day").toString().trim()}`;
+			const viewLabel = _t(lang, viewKey);
+			headerBase = `${_t(lang, "ui.cost_title")} — ${viewLabel}`;
+		}
+		const headerTitle = c.title || (headerBase + (poolName ? ` — ${poolName}` : ""));
 
 		let blockHtml = "";
 		switch (content) {
@@ -1687,7 +1693,7 @@ class PoolControllerCard extends HTMLElement {
 				chart_type: "bar",
 				days_to_show: daysToShow,
 				stat_period: statPeriod,
-				stat_types: ["sum"],
+				stat_types: ["max"],
 				entities,
 			};
 		}
@@ -2222,7 +2228,7 @@ class PoolControllerCard extends HTMLElement {
 		const yearlyNet = c.cost_net_entity_yearly || d.energy_cost_net_yearly_entity || null;
 
 		if (view === "year") {
-			return { cost: dailyCost || monthlyCost || yearlyCost, net: dailyNet || monthlyNet || yearlyNet };
+			return { cost: monthlyCost || dailyCost || yearlyCost, net: monthlyNet || dailyNet || yearlyNet };
 		}
 		if (view === "month") {
 			return { cost: dailyCost || monthlyCost, net: dailyNet || monthlyNet };
