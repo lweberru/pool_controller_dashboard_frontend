@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.0";
+const VERSION = "2.3.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2786,7 +2786,11 @@ class PoolControllerCardWrapper extends HTMLElement {
 	}
 	
 	static getStubConfig() {
-		return {};
+		return {
+			type: `custom:${CARD_TYPE}`,
+			content: DEFAULTS.content,
+			cost_view: DEFAULTS.cost_view,
+		};
 	}
 }
 
