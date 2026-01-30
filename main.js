@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.1";
+const VERSION = "2.3.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -369,7 +369,11 @@ class PoolControllerCard extends HTMLElement {
 			throw new Error(_t("de", "errors.required_controller"));
 		}
 		// Only store controller + content config (no per-entity overrides)
-		const next = { content: config.content ?? DEFAULTS.content, cost_view: config.cost_view ?? DEFAULTS.cost_view };
+		const next = {
+			type: config.type || `custom:${CARD_TYPE}`,
+			content: config.content ?? DEFAULTS.content,
+			cost_view: config.cost_view ?? DEFAULTS.cost_view,
+		};
 		if (config.device_id) {
 			next.device_id = config.device_id;
 		} else if (config.climate_entity) {
@@ -2744,7 +2748,11 @@ class PoolControllerCardEditor extends HTMLElement {
 
 	_updateConfig(patch, renderOnly = false) {
 		const merged = { ...DEFAULTS, ...this._config, ...patch };
-		const next = { content: merged.content ?? DEFAULTS.content, cost_view: merged.cost_view ?? DEFAULTS.cost_view };
+		const next = {
+			type: merged.type || `custom:${CARD_TYPE}`,
+			content: merged.content ?? DEFAULTS.content,
+			cost_view: merged.cost_view ?? DEFAULTS.cost_view,
+		};
 		if (merged.device_id) {
 			next.device_id = merged.device_id;
 		} else if (merged.climate_entity) {
