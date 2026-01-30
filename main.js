@@ -4,11 +4,11 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.2.0";
+const VERSION = "2.3.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
-const DEFAULTS = { content: "controller" };
+const DEFAULTS = { content: "controller", cost_view: "day" };
 
 const I18N = {
 	de: {
@@ -17,7 +17,16 @@ const I18N = {
 			calendar_title: "Kalender",
 			waterquality_title: "Wasserqualität",
 			maintenance_title: "Wartungsarbeiten",
+			cost_title: "Kosten",
 			select_content: "Angezeigter Inhalt",
+			cost_view: "Zeitraum",
+			cost_view_day: "Tag",
+			cost_view_week: "Woche",
+			cost_view_month: "Monat",
+			cost_view_year: "Jahr",
+			cost_variant_net: "Netto (ohne PV)",
+			cost_variant_gross: "Brutto (inkl. PV)",
+			cost_missing: "Kosten-Sensoren nicht gefunden",
 			now_short: "jetzt",
 			maintenance_mode_title: "Wartungsmodus aktiv",
 			maintenance_mode_text: "Automatik ist deaktiviert. Schalte Wartung aus, um Automatik wieder zu erlauben.",
@@ -70,11 +79,13 @@ const I18N = {
 			step: "Schrittweite",
 			controller_placeholder: "Wähle eine Integration/Instanz",
 			content: "Angezeigter Inhalt",
+			cost_view: "Kosten-Zeitraum",
 			content_options: {
 				controller: "Steuerung",
 				calendar: "Kalender",
 				waterquality: "Wasserqualität",
-				maintenance: "Wartung"
+				maintenance: "Wartung",
+				cost: "Kosten"
 			}
 		},
 		actions: {
@@ -121,7 +132,16 @@ const I18N = {
 			calendar_title: "Calendar",
 			waterquality_title: "Water quality",
 			maintenance_title: "Maintenance",
+			cost_title: "Costs",
 			select_content: "Displayed content",
+			cost_view: "Period",
+			cost_view_day: "Day",
+			cost_view_week: "Week",
+			cost_view_month: "Month",
+			cost_view_year: "Year",
+			cost_variant_net: "Net (excl. PV)",
+			cost_variant_gross: "Gross (incl. PV)",
+			cost_missing: "Cost sensors not found",
 			now_short: "now",
 			maintenance_mode_title: "Maintenance mode active",
 			maintenance_mode_text: "Automation is disabled. Turn off maintenance to resume automation.",
@@ -173,11 +193,13 @@ const I18N = {
 			step: "Step",
 			controller_placeholder: "Select an integration/instance",
 			content: "Displayed content",
+			cost_view: "Cost period",
 			content_options: {
 				controller: "Controller",
 				calendar: "Calendar",
 				waterquality: "Water quality",
-				maintenance: "Maintenance"
+				maintenance: "Maintenance",
+				cost: "Costs"
 			}
 		},
 		actions: {
@@ -347,7 +369,7 @@ class PoolControllerCard extends HTMLElement {
 			throw new Error(_t("de", "errors.required_controller"));
 		}
 		// Only store controller + content config (no per-entity overrides)
-		const next = { content: config.content ?? DEFAULTS.content };
+		const next = { content: config.content ?? DEFAULTS.content, cost_view: config.cost_view ?? DEFAULTS.cost_view };
 		if (config.device_id) {
 			next.device_id = config.device_id;
 		} else if (config.climate_entity) {
@@ -418,6 +440,7 @@ class PoolControllerCard extends HTMLElement {
 			calendar: _t(lang, "ui.calendar_title"),
 			waterquality: _t(lang, "ui.waterquality_title"),
 			maintenance: _t(lang, "ui.maintenance_title"),
+			cost: _t(lang, "ui.cost_title"),
 		};
 		const headerTitle = c.title || ((titles[content] || "Pool Controller") + (poolName ? ` — ${poolName}` : ""));
 
@@ -432,6 +455,9 @@ class PoolControllerCard extends HTMLElement {
 			case "maintenance":
 				blockHtml = this._renderMaintenanceBlock(data, effectiveConfig);
 				break;
+				case "cost":
+					blockHtml = this._renderCostBlock(data, effectiveConfig);
+					break;
 			case "controller":
 			default:
 				blockHtml = this._renderControllerBlock(data, effectiveConfig);
@@ -454,6 +480,7 @@ class PoolControllerCard extends HTMLElement {
 		</ha-card>`;
 
 		this._attachHandlers();
+		this._attachCostGraph();
 	}
 
 	// ========================================
@@ -1392,6 +1419,24 @@ class PoolControllerCard extends HTMLElement {
 		</div>`;
 	}
 
+	_renderCostBlock(d, c) {
+		const lang = _langFromHass(this._hass);
+		const view = (c.cost_view || DEFAULTS.cost_view || "day").toString().trim();
+		const costEntities = this._getCostEntities(view);
+		const hasAny = !!(costEntities.cost || costEntities.net);
+		if (!hasAny) {
+			return `<div class="info-badge">${_t(lang, "ui.cost_missing")}</div>`;
+		}
+		return `<div class="cost-block">
+			<div class="section-title">${_t(lang, "ui.cost_title")}</div>
+			<div class="cost-graph"
+				data-cost-graph
+				data-view="${view}"
+				data-cost-entity="${costEntities.cost || ""}"
+				data-net-entity="${costEntities.net || ""}"></div>
+		</div>`;
+	}
+
 	/**
 	 * Baut das Target-Objekt für Service-Calls, unterstützt sowohl entity_id als auch device_id.
 	 */
@@ -1597,6 +1642,58 @@ class PoolControllerCard extends HTMLElement {
 					this._triggerEntity(entity, !isOn);
 				}
 			});
+		}
+	}
+
+	async _attachCostGraph() {
+		const host = this.shadowRoot?.querySelector("[data-cost-graph]");
+		if (!host) return;
+		const view = host.getAttribute("data-view") || "day";
+		const costEntity = host.getAttribute("data-cost-entity") || "";
+		const netEntity = host.getAttribute("data-net-entity") || "";
+		if (!costEntity && !netEntity) return;
+		const key = `${view}|${costEntity}|${netEntity}`;
+		if (host.getAttribute("data-rendered-key") === key) return;
+		host.setAttribute("data-rendered-key", key);
+		host.innerHTML = "";
+
+		let helpers;
+		try {
+			helpers = await window.loadCardHelpers();
+		} catch (_e) {
+			return;
+		}
+		const lang = _langFromHass(this._hass);
+		const entities = [];
+		if (netEntity) entities.push({ entity: netEntity, name: _t(lang, "ui.cost_variant_net") });
+		if (costEntity) entities.push({ entity: costEntity, name: _t(lang, "ui.cost_variant_gross") });
+
+		let cardConfig;
+		if (view === "day") {
+			cardConfig = {
+				type: "history-graph",
+				hours_to_show: 24,
+				entities,
+			};
+		} else {
+			const statPeriod = view === "year" ? "month" : "day";
+			const daysToShow = view === "week" ? 7 : view === "month" ? 30 : 365;
+			cardConfig = {
+				type: "statistics-graph",
+				chart_type: "bar",
+				days_to_show: daysToShow,
+				stat_period: statPeriod,
+				stat_types: ["sum"],
+				entities,
+			};
+		}
+
+		try {
+			const cardElement = await helpers.createCardElement(cardConfig);
+			cardElement.hass = this._hass;
+			host.appendChild(cardElement);
+		} catch (_e) {
+			// ignore
 		}
 	}
 
@@ -2066,6 +2163,13 @@ class PoolControllerCard extends HTMLElement {
 			this._config.next_event_summary_entity,
 			this._config.event_rain_probability_entity,
 			this._config.event_rain_blocked_entity,
+			// Costs (derived sensors)
+			this._config.cost_entity_daily,
+			this._config.cost_net_entity_daily,
+			this._config.cost_entity_monthly,
+			this._config.cost_net_entity_monthly,
+			this._config.cost_entity_yearly,
+			this._config.cost_net_entity_yearly,
 		].filter(Boolean);
 
 		const derived = this._derivedEntities ? Object.values(this._derivedEntities).filter(Boolean) : [];
@@ -2101,6 +2205,28 @@ class PoolControllerCard extends HTMLElement {
 			sig.a = { friendly_name: a.friendly_name };
 		}
 		return JSON.stringify(sig);
+	}
+
+	_getCostEntities(view) {
+		const d = this._derivedEntities || {};
+		const c = this._config || {};
+		const dailyCost = c.cost_entity_daily || d.energy_cost_daily_entity || d.energy_cost_entity || null;
+		const dailyNet = c.cost_net_entity_daily || d.energy_cost_net_daily_entity || d.energy_cost_net_entity || null;
+		const monthlyCost = c.cost_entity_monthly || d.energy_cost_monthly_entity || null;
+		const monthlyNet = c.cost_net_entity_monthly || d.energy_cost_net_monthly_entity || null;
+		const yearlyCost = c.cost_entity_yearly || d.energy_cost_yearly_entity || null;
+		const yearlyNet = c.cost_net_entity_yearly || d.energy_cost_net_yearly_entity || null;
+
+		if (view === "year") {
+			return { cost: dailyCost || monthlyCost || yearlyCost, net: dailyNet || monthlyNet || yearlyNet };
+		}
+		if (view === "month") {
+			return { cost: dailyCost || monthlyCost, net: dailyNet || monthlyNet };
+		}
+		if (view === "week") {
+			return { cost: dailyCost || monthlyCost, net: dailyNet || monthlyNet };
+		}
+		return { cost: dailyCost || monthlyCost, net: dailyNet || monthlyNet };
 	}
 
 	_updateDialPreviewFromPointer(ev) {
@@ -2425,6 +2551,16 @@ class PoolControllerCard extends HTMLElement {
 			event_rain_probability_entity: this._pickEntity(entries, "sensor", ["event_rain_probability"]) || null,
 			event_rain_blocked_entity: this._pickEntity(entries, "binary_sensor", ["event_rain_blocked"]) || null,
 
+			// Costs (daily/monthly/yearly, net + gross)
+			energy_cost_entity: this._pickEntity(entries, "sensor", ["energy_cost"]) || null,
+			energy_cost_net_entity: this._pickEntity(entries, "sensor", ["energy_cost_net"]) || null,
+			energy_cost_daily_entity: this._pickEntity(entries, "sensor", ["energy_cost_daily"]) || null,
+			energy_cost_net_daily_entity: this._pickEntity(entries, "sensor", ["energy_cost_net_daily"]) || null,
+			energy_cost_monthly_entity: this._pickEntity(entries, "sensor", ["energy_cost_monthly"]) || null,
+			energy_cost_net_monthly_entity: this._pickEntity(entries, "sensor", ["energy_cost_net_monthly"]) || null,
+			energy_cost_yearly_entity: this._pickEntity(entries, "sensor", ["energy_cost_yearly"]) || null,
+			energy_cost_net_yearly_entity: this._pickEntity(entries, "sensor", ["energy_cost_net_yearly"]) || null,
+
 			// Config value sensors (configured durations)
 			filter_duration_entity: this._pickEntity(entries, "sensor", ["config_filter_minutes", "filter_minutes_config", "filter_minutes"]) || null,
 			chlorine_duration_entity: this._pickEntity(entries, "sensor", ["config_chlorine_minutes", "chlorine_duration", "chlorine_minutes"]) || null,
@@ -2492,6 +2628,16 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="calendar">${_t(lang, "editor.content_options.calendar")}</option>
 					<option value="waterquality">${_t(lang, "editor.content_options.waterquality")}</option>
 					<option value="maintenance">${_t(lang, "editor.content_options.maintenance")}</option>
+					<option value="cost">${_t(lang, "editor.content_options.cost")}</option>
+				</select>
+			</div>
+			<div class="row" id="cost-view-row" style="display:none;">
+				<label>${_t(lang, "editor.cost_view")}</label>
+				<select id="cost-view-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
+					<option value="day">${_t(lang, "ui.cost_view_day")}</option>
+					<option value="week">${_t(lang, "ui.cost_view_week")}</option>
+					<option value="month">${_t(lang, "ui.cost_view_month")}</option>
+					<option value="year">${_t(lang, "ui.cost_view_year")}</option>
 				</select>
 			</div>
 		</div>`;
@@ -2558,8 +2704,23 @@ class PoolControllerCardEditor extends HTMLElement {
 				const opts = (I18N[lang] && I18N[lang].editor && I18N[lang].editor.content_options) || (I18N.de && I18N.de.editor && I18N.de.editor.content_options) || {};
 				// ensure current value
 				if (this._config && this._config.content) contentSelect.value = this._config.content;
+				const costRow = this.shadowRoot.querySelector('#cost-view-row');
+				const costSelect = this.shadowRoot.querySelector('#cost-view-select');
+				if (costSelect && this._config && this._config.cost_view) costSelect.value = this._config.cost_view;
+				const toggleCostRow = (val) => {
+					if (!costRow) return;
+					costRow.style.display = (val === 'cost') ? 'grid' : 'none';
+				};
+				toggleCostRow(this._config?.content || 'controller');
 				// Assign onchange to avoid duplicate listeners when re-rendering the editor
-				contentSelect.onchange = (e) => { this._updateConfig({ content: e.target.value }); };
+				contentSelect.onchange = (e) => {
+					const val = e.target.value;
+					toggleCostRow(val);
+					this._updateConfig({ content: val });
+				};
+				if (costSelect) {
+					costSelect.onchange = (e) => { this._updateConfig({ cost_view: e.target.value }); };
+				}
 				// update option labels if localized map available
 				for (const key of ['controller','calendar','waterquality','maintenance']) {
 					const opt = contentSelect.querySelector(`option[value="${key}"]`);
@@ -2583,7 +2744,7 @@ class PoolControllerCardEditor extends HTMLElement {
 
 	_updateConfig(patch, renderOnly = false) {
 		const merged = { ...DEFAULTS, ...this._config, ...patch };
-		const next = { content: merged.content ?? DEFAULTS.content };
+		const next = { content: merged.content ?? DEFAULTS.content, cost_view: merged.cost_view ?? DEFAULTS.cost_view };
 		if (merged.device_id) {
 			next.device_id = merged.device_id;
 		} else if (merged.climate_entity) {
