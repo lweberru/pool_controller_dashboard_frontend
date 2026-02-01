@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.4";
+const VERSION = "2.3.10";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2221,8 +2221,8 @@ class PoolControllerCard extends HTMLElement {
 	_getCostEntities(view) {
 		const d = this._derivedEntities || {};
 		const c = this._config || {};
-		const dailyCost = c.cost_entity_daily || d.energy_cost_daily_entity || d.energy_cost_entity || null;
-		const dailyNet = c.cost_net_entity_daily || d.energy_cost_net_daily_entity || d.energy_cost_net_entity || null;
+		const dailyCost = c.cost_entity_daily || d.energy_cost_daily_entity || null;
+		const dailyNet = c.cost_net_entity_daily || d.energy_cost_net_daily_entity || null;
 		const monthlyCost = c.cost_entity_monthly || d.energy_cost_monthly_entity || null;
 		const monthlyNet = c.cost_net_entity_monthly || d.energy_cost_net_monthly_entity || null;
 		const yearlyCost = c.cost_entity_yearly || d.energy_cost_yearly_entity || null;
@@ -2563,8 +2563,6 @@ class PoolControllerCard extends HTMLElement {
 			event_rain_blocked_entity: this._pickEntity(entries, "binary_sensor", ["event_rain_blocked"]) || null,
 
 			// Costs (daily/monthly/yearly, net + gross)
-			energy_cost_entity: this._pickEntity(entries, "sensor", ["energy_cost"]) || null,
-			energy_cost_net_entity: this._pickEntity(entries, "sensor", ["energy_cost_net"]) || null,
 			energy_cost_daily_entity: this._pickEntity(entries, "sensor", ["energy_cost_daily"]) || null,
 			energy_cost_net_daily_entity: this._pickEntity(entries, "sensor", ["energy_cost_net_daily"]) || null,
 			energy_cost_monthly_entity: this._pickEntity(entries, "sensor", ["energy_cost_monthly"]) || null,
