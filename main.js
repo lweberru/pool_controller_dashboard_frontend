@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.20";
+const VERSION = "2.3.21";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -414,8 +414,20 @@ class PoolControllerCard extends HTMLElement {
 				this._render();
 				return;
 			}
-			// Only cost sensor changes: keep layout, just update embedded cards.
-			this._attachCostGraph();
+			// Only cost sensor changes: update embedded cards when cost values actually change.
+			const costIds = [costEntities.cost, costEntities.net].filter(Boolean);
+			if (costIds.length) {
+				const costChanged = costIds.some((entityId) => {
+					const oldState = oldHass.states[entityId];
+					const newState = hass.states[entityId];
+					if (!oldState && !newState) return false;
+					if (!oldState || !newState) return true;
+					return this._stateSig(entityId, oldState) !== this._stateSig(entityId, newState);
+				});
+				if (costChanged) {
+					this._attachCostGraph();
+				}
+			}
 			return;
 		}
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
