@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.13";
+const VERSION = "2.3.14";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -396,6 +396,14 @@ class PoolControllerCard extends HTMLElement {
 		this._hass = hass;
 		// Während Dial-Drag: UI nicht neu aufbauen (würde Pointer-Interaktion / Hover stören)
 		if (this._isDraggingDial) return;
+		// Dynamic cost view needs frequent re-render so energy_date_selection updates the chart
+		const dynamicCost = this._config
+			&& (this._config.content || DEFAULTS.content) === "cost"
+			&& ((this._config.cost_view || DEFAULTS.cost_view || "day").toString().trim() === "dynamic");
+		if (dynamicCost) {
+			this._render();
+			return;
+		}
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
 			this._render();
@@ -1676,7 +1684,19 @@ class PoolControllerCard extends HTMLElement {
 		const netEntity = host.getAttribute("data-net-entity") || "";
 		if (!costEntity && !netEntity) return;
 		const key = `${view}|${costEntity}|${netEntity}`;
-		if (host.getAttribute("data-rendered-key") === key) return;
+		if (host.getAttribute("data-rendered-key") === key) {
+			// Keep nested cards in sync with current hass state.
+			const existingCard = host.querySelector(":scope > *");
+			if (existingCard) {
+				try { existingCard.hass = this._hass; } catch (_e) {}
+			}
+			const pickerHost = this.shadowRoot?.querySelector("[data-cost-picker]");
+			const existingPicker = pickerHost?.querySelector(":scope > *");
+			if (existingPicker) {
+				try { existingPicker.hass = this._hass; } catch (_e) {}
+			}
+			return;
+		}
 		host.setAttribute("data-rendered-key", key);
 		host.innerHTML = "";
 
@@ -1704,6 +1724,18 @@ class PoolControllerCard extends HTMLElement {
 						collection_key: "energy_date_selection",
 					});
 					picker.hass = this._hass;
+					// If the picker changes selection, force a graph refresh.
+					const refreshGraph = () => {
+						try {
+							const graphHost = this.shadowRoot?.querySelector("[data-cost-graph]");
+							if (graphHost) graphHost.removeAttribute("data-rendered-key");
+						} catch (_e) {}
+						// Defer so the picker can commit its selection first.
+						setTimeout(() => this._attachCostGraph(), 0);
+					};
+					picker.addEventListener("value-changed", refreshGraph);
+					picker.addEventListener("energy-date-selection-changed", refreshGraph);
+					picker.addEventListener("change", refreshGraph);
 					pickerHost.appendChild(picker);
 				} catch (_e) {
 					// ignore
