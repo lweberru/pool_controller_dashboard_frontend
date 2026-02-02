@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.22";
+const VERSION = "2.3.23";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -25,8 +25,8 @@ const I18N = {
 			cost_view_month: "Monat",
 			cost_view_year: "Jahr",
 			cost_view_dynamic: "Dynamisch",
-			cost_variant_net: "Netto (ohne PV)",
-			cost_variant_gross: "Brutto (inkl. PV)",
+			cost_variant_net: "Netto (mit PV-Abzug)",
+			cost_variant_gross: "Brutto (ohne PV-Abzug)",
 			cost_missing: "Kosten-Sensoren nicht gefunden",
 			now_short: "jetzt",
 			maintenance_mode_title: "Wartungsmodus aktiv",
@@ -142,8 +142,8 @@ const I18N = {
 			cost_view_month: "Month",
 			cost_view_year: "Year",
 			cost_view_dynamic: "Dynamic",
-			cost_variant_net: "Net (excl. PV)",
-			cost_variant_gross: "Gross (incl. PV)",
+			cost_variant_net: "Net (PV deducted)",
+			cost_variant_gross: "Gross (no PV credit)",
 			cost_missing: "Cost sensors not found",
 			now_short: "now",
 			maintenance_mode_title: "Maintenance mode active",
