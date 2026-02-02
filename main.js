@@ -4,11 +4,11 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.10";
+const VERSION = "2.3.12";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
-const DEFAULTS = { content: "controller", cost_view: "day" };
+const DEFAULTS = { content: "controller", cost_view: "dynamic" };
 
 const I18N = {
 	de: {
@@ -24,6 +24,7 @@ const I18N = {
 			cost_view_week: "Woche",
 			cost_view_month: "Monat",
 			cost_view_year: "Jahr",
+			cost_view_dynamic: "Dynamisch",
 			cost_variant_net: "Netto (ohne PV)",
 			cost_variant_gross: "Brutto (inkl. PV)",
 			cost_missing: "Kosten-Sensoren nicht gefunden",
@@ -139,6 +140,7 @@ const I18N = {
 			cost_view_week: "Week",
 			cost_view_month: "Month",
 			cost_view_year: "Year",
+			cost_view_dynamic: "Dynamic",
 			cost_variant_net: "Net (excl. PV)",
 			cost_variant_gross: "Gross (incl. PV)",
 			cost_missing: "Cost sensors not found",
@@ -465,9 +467,9 @@ class PoolControllerCard extends HTMLElement {
 			case "maintenance":
 				blockHtml = this._renderMaintenanceBlock(data, effectiveConfig);
 				break;
-				case "cost":
-					blockHtml = this._renderCostBlock(data, effectiveConfig);
-					break;
+			case "cost":
+				blockHtml = this._renderCostBlock(data, effectiveConfig);
+				break;
 			case "controller":
 			default:
 				blockHtml = this._renderControllerBlock(data, effectiveConfig);
@@ -1437,6 +1439,17 @@ class PoolControllerCard extends HTMLElement {
 		if (!hasAny) {
 			return `<div class="info-badge">${_t(lang, "ui.cost_missing")}</div>`;
 		}
+		if (view === "dynamic") {
+			return `<div class="cost-block">
+				<div class="section-title">${_t(lang, "ui.cost_title")}</div>
+				<div class="cost-dynamic-picker" data-cost-picker></div>
+				<div class="cost-graph"
+					data-cost-graph
+					data-view="${view}"
+					data-cost-entity="${costEntities.cost || ""}"
+					data-net-entity="${costEntities.net || ""}"></div>
+			</div>`;
+		}
 		return `<div class="cost-block">
 			<div class="section-title">${_t(lang, "ui.cost_title")}</div>
 			<div class="cost-graph"
@@ -1679,7 +1692,34 @@ class PoolControllerCard extends HTMLElement {
 		if (costEntity) entities.push({ entity: costEntity, name: _t(lang, "ui.cost_variant_gross") });
 
 		let cardConfig;
-		if (view === "day") {
+		if (view === "dynamic") {
+			// Render the energy date picker above the graph
+			const pickerHost = this.shadowRoot?.querySelector("[data-cost-picker]");
+			if (pickerHost && pickerHost.getAttribute("data-rendered-key") !== key) {
+				pickerHost.setAttribute("data-rendered-key", key);
+				pickerHost.innerHTML = "";
+				try {
+					const picker = await helpers.createCardElement({
+						type: "energy-date-selection",
+						collection_key: "energy_date_selection",
+					});
+					picker.hass = this._hass;
+					pickerHost.appendChild(picker);
+				} catch (_e) {
+					// ignore
+				}
+			}
+
+			cardConfig = {
+				type: "statistics-graph",
+				chart_type: "bar",
+				collection_key: "energy_date_selection",
+				period: "day",
+				stat_period: "day",
+				stat_types: ["max"],
+				entities,
+			};
+		} else if (view === "day") {
 			cardConfig = {
 				type: "history-graph",
 				hours_to_show: 24,
@@ -2228,6 +2268,9 @@ class PoolControllerCard extends HTMLElement {
 		const yearlyCost = c.cost_entity_yearly || d.energy_cost_yearly_entity || null;
 		const yearlyNet = c.cost_net_entity_yearly || d.energy_cost_net_yearly_entity || null;
 
+		if (view === "dynamic") {
+			return { cost: dailyCost, net: dailyNet };
+		}
 		if (view === "year") {
 			return { cost: monthlyCost || dailyCost || yearlyCost, net: monthlyNet || dailyNet || yearlyNet };
 		}
@@ -2643,6 +2686,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			<div class="row" id="cost-view-row" style="display:none;">
 				<label>${_t(lang, "editor.cost_view")}</label>
 				<select id="cost-view-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
+					<option value="dynamic">${_t(lang, "ui.cost_view_dynamic")}</option>
 					<option value="day">${_t(lang, "ui.cost_view_day")}</option>
 					<option value="week">${_t(lang, "ui.cost_view_week")}</option>
 					<option value="month">${_t(lang, "ui.cost_view_month")}</option>
