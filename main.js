@@ -4,11 +4,11 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.15";
+const VERSION = "2.3.16";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
-const DEFAULTS = { content: "controller", cost_view: "dynamic" };
+const DEFAULTS = { content: "controller", cost_view: "dynamic", debug_cost: false };
 
 const I18N = {
 	de: {
@@ -81,6 +81,7 @@ const I18N = {
 			controller_placeholder: "Wähle eine Integration/Instanz",
 			content: "Angezeigter Inhalt",
 			cost_view: "Kosten-Zeitraum",
+			cost_debug: "Kosten-Debug anzeigen",
 			content_options: {
 				controller: "Steuerung",
 				calendar: "Kalender",
@@ -196,6 +197,7 @@ const I18N = {
 			controller_placeholder: "Select an integration/instance",
 			content: "Displayed content",
 			cost_view: "Cost period",
+			cost_debug: "Show cost debug",
 			content_options: {
 				controller: "Controller",
 				calendar: "Calendar",
@@ -375,6 +377,7 @@ class PoolControllerCard extends HTMLElement {
 			type: config.type || `custom:${CARD_TYPE}`,
 			content: config.content ?? DEFAULTS.content,
 			cost_view: config.cost_view ?? DEFAULTS.cost_view,
+			debug_cost: config.debug_cost ?? DEFAULTS.debug_cost,
 		};
 		if (config.device_id) {
 			next.device_id = config.device_id;
@@ -1439,6 +1442,23 @@ class PoolControllerCard extends HTMLElement {
 		if (!hasAny) {
 			return `<div class="info-badge">${_t(lang, "ui.cost_missing")}</div>`;
 		}
+		const debugEnabled = !!c.debug_cost;
+		const debug = this._costDebugState || {};
+		const debugBlock = debugEnabled ? `
+			<div class="info-badge" style="margin-top:10px;font-family:monospace;white-space:pre-wrap;line-height:1.35;">
+				<strong>cost-debug</strong>\n
+				view=${view}\n
+				cost=${costEntities.cost || "-"}\n
+				net=${costEntities.net || "-"}\n
+				key=${debug.key || "-"}\n
+				lastPickerEvent=${debug.lastPickerEvent || "-"}\n
+				lastPickerAt=${debug.lastPickerAt || "-"}\n
+				lastGraphRefresh=${debug.lastGraphRefresh || "-"}
+			</div>
+			<div style="margin-top:8px;display:flex;gap:8px;">
+				<button class="action-btn" data-action="cost-debug-refresh">Debug: Graph neu zeichnen</button>
+			</div>
+		` : "";
 		if (view === "dynamic") {
 			return `<div class="cost-block">
 				<div class="section-title">${_t(lang, "ui.cost_title")}</div>
@@ -1448,6 +1468,7 @@ class PoolControllerCard extends HTMLElement {
 					data-view="${view}"
 					data-cost-entity="${costEntities.cost || ""}"
 					data-net-entity="${costEntities.net || ""}"></div>
+				${debugBlock}
 			</div>`;
 		}
 		return `<div class="cost-block">
@@ -1457,6 +1478,7 @@ class PoolControllerCard extends HTMLElement {
 				data-view="${view}"
 				data-cost-entity="${costEntities.cost || ""}"
 				data-net-entity="${costEntities.net || ""}"></div>
+			${debugBlock}
 		</div>`;
 	}
 
@@ -1483,6 +1505,18 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_attachHandlers() {
 		const maintenanceActive = !!this._renderData?.maintenanceActive;
+
+		const costDebugRefresh = this.shadowRoot.querySelector('[data-action="cost-debug-refresh"]');
+		if (costDebugRefresh) {
+			costDebugRefresh.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				try {
+					const graphHost = this.shadowRoot?.querySelector("[data-cost-graph]");
+					if (graphHost) graphHost.removeAttribute("data-rendered-key");
+				} catch (_e) {}
+				setTimeout(() => this._attachCostGraph(), 0);
+			});
+		}
 
 		// More-info popups (Home Assistant entity details)
 		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
@@ -2715,6 +2749,13 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="year">${_t(lang, "ui.cost_view_year")}</option>
 				</select>
 			</div>
+			<div class="row" id="cost-debug-row" style="display:none;">
+				<label>${_t(lang, "editor.cost_debug")}</label>
+				<label style="display:flex;align-items:center;gap:8px;">
+					<input id="cost-debug-toggle" type="checkbox" />
+					<span>${_t(lang, "editor.cost_debug")}</span>
+				</label>
+			</div>
 		</div>`;
 
 		this._populateControllerSelect();
@@ -2780,12 +2821,28 @@ class PoolControllerCardEditor extends HTMLElement {
 				// ensure current value
 				if (this._config && this._config.content) contentSelect.value = this._config.content;
 				const costRow = this.shadowRoot.querySelector('#cost-view-row');
+				const costDebugRow = this.shadowRoot.querySelector('#cost-debug-row');
 				const costSelect = this.shadowRoot.querySelector('#cost-view-select');
+				const costDebugToggle = this.shadowRoot.querySelector('#cost-debug-toggle');
 				if (costSelect && this._config && this._config.cost_view) costSelect.value = this._config.cost_view;
+				if (costDebugToggle) costDebugToggle.checked = !!this._config?.debug_cost;
 				const toggleCostRow = (val) => {
 					if (!costRow) return;
 					costRow.style.display = (val === 'cost') ? 'grid' : 'none';
+					if (costDebugRow) costDebugRow.style.display = (val === 'cost') ? 'grid' : 'none';
 				};
+			try {
+				this._costLastGraphRefresh = new Date().toISOString();
+				this._costDebugState = {
+					view,
+					cost: costEntity,
+					net: netEntity,
+					key,
+					lastPickerEvent: this._costLastPickerEvent,
+					lastPickerAt: this._costLastPickerAt,
+					lastGraphRefresh: this._costLastGraphRefresh,
+				};
+			} catch (_e) {}
 				toggleCostRow(this._config?.content || 'controller');
 				// Assign onchange to avoid duplicate listeners when re-rendering the editor
 				contentSelect.onchange = (e) => {
@@ -2795,6 +2852,9 @@ class PoolControllerCardEditor extends HTMLElement {
 				};
 				if (costSelect) {
 					costSelect.onchange = (e) => { this._updateConfig({ cost_view: e.target.value }); };
+				}
+				if (costDebugToggle) {
+					costDebugToggle.onchange = (e) => { this._updateConfig({ debug_cost: !!e.target.checked }); };
 				}
 				// update option labels if localized map available
 				for (const key of ['controller','calendar','waterquality','maintenance']) {
@@ -2823,6 +2883,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			type: merged.type || `custom:${CARD_TYPE}`,
 			content: merged.content ?? DEFAULTS.content,
 			cost_view: merged.cost_view ?? DEFAULTS.cost_view,
+			debug_cost: merged.debug_cost ?? DEFAULTS.debug_cost,
 		};
 		if (merged.device_id) {
 			next.device_id = merged.device_id;
