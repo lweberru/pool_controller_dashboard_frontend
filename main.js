@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.14";
+const VERSION = "2.3.15";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -396,14 +396,6 @@ class PoolControllerCard extends HTMLElement {
 		this._hass = hass;
 		// Während Dial-Drag: UI nicht neu aufbauen (würde Pointer-Interaktion / Hover stören)
 		if (this._isDraggingDial) return;
-		// Dynamic cost view needs frequent re-render so energy_date_selection updates the chart
-		const dynamicCost = this._config
-			&& (this._config.content || DEFAULTS.content) === "cost"
-			&& ((this._config.cost_view || DEFAULTS.cost_view || "day").toString().trim() === "dynamic");
-		if (dynamicCost) {
-			this._render();
-			return;
-		}
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
 			this._render();
