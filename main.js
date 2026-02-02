@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.19";
+const VERSION = "2.3.20";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -399,6 +399,25 @@ class PoolControllerCard extends HTMLElement {
 		this._hass = hass;
 		// Während Dial-Drag: UI nicht neu aufbauen (würde Pointer-Interaktion / Hover stören)
 		if (this._isDraggingDial) return;
+		const content = (this._config?.content || DEFAULTS.content || "controller").toString().trim();
+		if (content === "cost") {
+			const view = (this._config?.cost_view || DEFAULTS.cost_view || "day").toString().trim();
+			const costEntities = this._getCostEntities(view);
+			const exclude = new Set([costEntities.cost, costEntities.net].filter(Boolean));
+			const host = this.shadowRoot?.querySelector("[data-cost-graph]");
+			if (!oldHass || !host) {
+				this._render();
+				return;
+			}
+			const nonCostChanged = this._hasRelevantChanges(oldHass, hass, exclude);
+			if (nonCostChanged) {
+				this._render();
+				return;
+			}
+			// Only cost sensor changes: keep layout, just update embedded cards.
+			this._attachCostGraph();
+			return;
+		}
 		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
 		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
 			this._render();
@@ -2279,8 +2298,11 @@ class PoolControllerCard extends HTMLElement {
 		return this._clamp(((val - min) / (max - min)) * 100, 0, 100);
 	}
 
-	_hasRelevantChanges(oldHass, newHass) {
+	_hasRelevantChanges(oldHass, newHass, excludeEntityIds = null) {
 		if (!this._config) return true;
+		const exclude = excludeEntityIds instanceof Set
+			? excludeEntityIds
+			: new Set(Array.isArray(excludeEntityIds) ? excludeEntityIds : []);
 		
 		const relevantEntities = [
 			this._config.climate_entity,
@@ -2351,9 +2373,9 @@ class PoolControllerCard extends HTMLElement {
 			this._config.cost_net_entity_monthly,
 			this._config.cost_entity_yearly,
 			this._config.cost_net_entity_yearly,
-		].filter(Boolean);
+		].filter(Boolean).filter((id) => !exclude.has(id));
 
-		const derived = this._derivedEntities ? Object.values(this._derivedEntities).filter(Boolean) : [];
+		const derived = this._derivedEntities ? Object.values(this._derivedEntities).filter(Boolean).filter((id) => !exclude.has(id)) : [];
 		const allRelevant = relevantEntities.concat(derived);
 		
 		return allRelevant.some(entityId => {
