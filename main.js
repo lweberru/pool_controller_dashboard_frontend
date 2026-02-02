@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.21";
+const VERSION = "2.3.22";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -403,14 +403,8 @@ class PoolControllerCard extends HTMLElement {
 		if (content === "cost") {
 			const view = (this._config?.cost_view || DEFAULTS.cost_view || "day").toString().trim();
 			const costEntities = this._getCostEntities(view);
-			const exclude = new Set([costEntities.cost, costEntities.net].filter(Boolean));
 			const host = this.shadowRoot?.querySelector("[data-cost-graph]");
 			if (!oldHass || !host) {
-				this._render();
-				return;
-			}
-			const nonCostChanged = this._hasRelevantChanges(oldHass, hass, exclude);
-			if (nonCostChanged) {
 				this._render();
 				return;
 			}
