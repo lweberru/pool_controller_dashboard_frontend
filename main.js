@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.12";
+const VERSION = "2.3.13";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1714,8 +1714,6 @@ class PoolControllerCard extends HTMLElement {
 				type: "statistics-graph",
 				chart_type: "bar",
 				collection_key: "energy_date_selection",
-				period: "day",
-				stat_period: "day",
 				stat_types: ["max"],
 				entities,
 			};
