@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.17";
+const VERSION = "2.3.18";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1717,7 +1717,6 @@ class PoolControllerCard extends HTMLElement {
 			this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
 		} catch (_e) {}
 		if (host.getAttribute("data-rendered-key") === key) {
-			// Keep nested cards in sync with current hass state.
 			const existingCard = host.querySelector(":scope > *");
 			if (existingCard) {
 				try { existingCard.hass = this._hass; } catch (_e) {}
@@ -1753,7 +1752,6 @@ class PoolControllerCard extends HTMLElement {
 
 		let cardConfig;
 		if (view === "dynamic") {
-			// Render the energy date picker above the graph
 			const pickerHost = this.shadowRoot?.querySelector("[data-cost-picker]");
 			if (pickerHost && pickerHost.getAttribute("data-rendered-key") !== key) {
 				pickerHost.setAttribute("data-rendered-key", key);
@@ -1764,13 +1762,21 @@ class PoolControllerCard extends HTMLElement {
 						collection_key: "energy_date_selection",
 					});
 					picker.hass = this._hass;
-					// If the picker changes selection, force a graph refresh.
-					const refreshGraph = () => {
+					try {
+						this._costDebugState = { ...this._costDebugState, pickerCreated: true, phase: "picker" };
+						this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
+					} catch (_e) {}
+					const refreshGraph = (ev) => {
+						try {
+							this._costLastPickerEvent = ev?.type || "picker-change";
+							this._costLastPickerAt = new Date().toISOString();
+							this._costDebugState = { ...this._costDebugState, lastPickerEvent: this._costLastPickerEvent, lastPickerAt: this._costLastPickerAt };
+							this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
+						} catch (_e) {}
 						try {
 							const graphHost = this.shadowRoot?.querySelector("[data-cost-graph]");
 							if (graphHost) graphHost.removeAttribute("data-rendered-key");
 						} catch (_e) {}
-						// Defer so the picker can commit its selection first.
 						setTimeout(() => this._attachCostGraph(), 0);
 					};
 					picker.addEventListener("value-changed", refreshGraph);
@@ -1778,7 +1784,10 @@ class PoolControllerCard extends HTMLElement {
 					picker.addEventListener("change", refreshGraph);
 					pickerHost.appendChild(picker);
 				} catch (_e) {
-					// ignore
+					try {
+						this._costDebugState = { ...this._costDebugState, pickerCreated: false, phase: "picker_failed", lastError: "create picker" };
+						this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
+					} catch (_e2) {}
 				}
 			}
 
@@ -1801,17 +1810,11 @@ class PoolControllerCard extends HTMLElement {
 			cardConfig = {
 				type: "statistics-graph",
 				chart_type: "bar",
-					try {
-						this._costDebugState = { ...this._costDebugState, pickerCreated: true, phase: "picker" };
-						this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
-					} catch (_e) {}
 				days_to_show: daysToShow,
 				stat_period: statPeriod,
 				period: statPeriod,
 				stat_types: ["max"],
 				entities,
-							this._costDebugState = { ...this._costDebugState, lastPickerEvent: this._costLastPickerEvent, lastPickerAt: this._costLastPickerAt };
-							this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
 			};
 		}
 
@@ -1819,16 +1822,30 @@ class PoolControllerCard extends HTMLElement {
 			const cardElement = await helpers.createCardElement(cardConfig);
 			cardElement.hass = this._hass;
 			host.appendChild(cardElement);
+			try {
+				this._costLastGraphRefresh = new Date().toISOString();
+				this._costDebugState = {
+					view,
+					cost: costEntity,
+					net: netEntity,
+					key,
+					phase: "graph",
+					graphCreated: true,
+					lastPickerEvent: this._costLastPickerEvent,
+					lastPickerAt: this._costLastPickerAt,
+					lastGraphRefresh: this._costLastGraphRefresh,
+				};
+				this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
+			} catch (_e) {}
 		} catch (_e) {
-			// ignore
+			try {
+				this._costDebugState = { ...this._costDebugState, graphCreated: false, phase: "graph_failed", lastError: "create graph" };
+				this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
+			} catch (_e2) {}
 		}
 	}
 
 	_openMoreInfo(entityId) {
-					try {
-						this._costDebugState = { ...this._costDebugState, pickerCreated: false, phase: "picker_failed", lastError: "create picker" };
-						this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
-					} catch (_e2) {}
 		if (!entityId) return;
 		const ev = new CustomEvent("hass-more-info", {
 			detail: { entityId },
@@ -1881,54 +1898,47 @@ class PoolControllerCard extends HTMLElement {
 			return;
 		}
 		this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
-						phase: "graph",
-						graphCreated: true,
 	}
 
 	_hasService(domain, service) {
 		const services = this._hass?.services;
-					this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
 		return !!(services && services[domain] && services[domain][service]);
 	}
-				try {
-					this._costDebugState = { ...this._costDebugState, graphCreated: false, phase: "graph_failed", lastError: "create graph" };
-					this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
-				} catch (_e2) {}
+
+	_formatCostDebug(view, costEntities) {
+		const d = this._costDebugState || {};
+		const cost = costEntities?.cost || d.cost || "-";
+		const net = costEntities?.net || d.net || "-";
+		return [
+			"cost-debug",
+			`view=${view || d.view || "-"}`,
+			`cost=${cost}`,
+			`net=${net}`,
+			`key=${d.key || "-"}`,
+			`renderedKey=${d.renderedKey || "-"}`,
+			`phase=${d.phase || "-"}`,
+			`helpersOk=${d.helpersOk === undefined ? "-" : String(!!d.helpersOk)}`,
+			`pickerCreated=${d.pickerCreated === undefined ? "-" : String(!!d.pickerCreated)}`,
+			`graphCreated=${d.graphCreated === undefined ? "-" : String(!!d.graphCreated)}`,
+			`lastPickerEvent=${d.lastPickerEvent || "-"}`,
+			`lastPickerAt=${d.lastPickerAt || "-"}`,
+			`lastGraphRefresh=${d.lastGraphRefresh || "-"}`,
+			`lastError=${d.lastError || "-"}`,
+		].join("\n");
+	}
+
+	_updateCostDebugPanel(view, costEntities) {
+		try {
+			const el = this.shadowRoot?.querySelector("[data-cost-debug]");
+			if (!el) return;
+			el.textContent = this._formatCostDebug(view, costEntities);
+		} catch (_e) {
+			// ignore
+		}
+	}
 
 	_requestBackendEntityRefresh(eff) {
 		if (!this._hass || !eff) return;
-
-		_formatCostDebug(view, costEntities) {
-			const d = this._costDebugState || {};
-			const cost = costEntities?.cost || d.cost || "-";
-			const net = costEntities?.net || d.net || "-";
-			return [
-				"cost-debug",
-				`view=${view || d.view || "-"}`,
-				`cost=${cost}`,
-				`net=${net}`,
-				`key=${d.key || "-"}`,
-				`renderedKey=${d.renderedKey || "-"}`,
-				`phase=${d.phase || "-"}`,
-				`helpersOk=${d.helpersOk === undefined ? "-" : String(!!d.helpersOk)}`,
-				`pickerCreated=${d.pickerCreated === undefined ? "-" : String(!!d.pickerCreated)}`,
-				`graphCreated=${d.graphCreated === undefined ? "-" : String(!!d.graphCreated)}`,
-				`lastPickerEvent=${d.lastPickerEvent || "-"}`,
-				`lastPickerAt=${d.lastPickerAt || "-"}`,
-				`lastGraphRefresh=${d.lastGraphRefresh || "-"}`,
-				`lastError=${d.lastError || "-"}`,
-			].join("\n");
-		}
-
-		_updateCostDebugPanel(view, costEntities) {
-			try {
-				const el = this.shadowRoot?.querySelector("[data-cost-debug]");
-				if (!el) return;
-				el.textContent = this._formatCostDebug(view, costEntities);
-			} catch (_e) {
-				// ignore
-			}
-		}
 		const ids = [
 			eff.climate_entity,
 			eff.main_switch_on_entity,
