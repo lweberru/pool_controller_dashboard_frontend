@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.23";
+const VERSION = "2.3.24";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -424,8 +424,24 @@ class PoolControllerCard extends HTMLElement {
 			}
 			return;
 		}
-		// Nur rendern wenn sich relevante States geändert haben (wie native HA Components)
-		if (!oldHass || this._hasRelevantChanges(oldHass, hass)) {
+		if (!oldHass) {
+			this._render();
+			return;
+		}
+		const effectiveConfig = this._withDerivedConfig(this._config || {});
+		const ids = this._getEntityIdsForContent(content, effectiveConfig);
+		if (!ids.length) {
+			this._render();
+			return;
+		}
+		const changed = ids.some((entityId) => {
+			const oldState = oldHass.states[entityId];
+			const newState = hass.states[entityId];
+			if (!oldState && !newState) return false;
+			if (!oldState || !newState) return true;
+			return this._stateSig(entityId, oldState) !== this._stateSig(entityId, newState);
+		});
+		if (changed) {
 			this._render();
 		}
 	}
@@ -2302,6 +2318,126 @@ class PoolControllerCard extends HTMLElement {
 
 	_pct(val, min, max) {
 		return this._clamp(((val - min) / (max - min)) * 100, 0, 100);
+	}
+
+	_getEntityIdsForContent(content, c) {
+		const ids = [];
+		const push = (...vals) => {
+			vals.filter(Boolean).forEach((v) => ids.push(v));
+		};
+		const view = (c?.cost_view || DEFAULTS.cost_view || "day").toString().trim();
+		switch (content) {
+			case "controller":
+				push(
+					c?.climate_entity,
+					c?.outdoor_temp_entity,
+					c?.maintenance_entity,
+					c?.heat_reason_entity,
+					c?.run_reason_entity,
+					c?.run_credit_source_entity,
+					c?.run_credit_minutes_entity,
+					c?.filter_credit_minutes_entity,
+					c?.filter_missing_minutes_entity,
+					c?.frost_credit_minutes_entity,
+					c?.frost_credit_shift_minutes_entity,
+					c?.sanitizer_mode_entity,
+					c?.main_switch_on_entity,
+					c?.pump_switch_on_entity,
+					c?.aux_heating_switch_on_entity,
+					c?.should_main_on_entity,
+					c?.should_pump_on_entity,
+					c?.should_aux_on_entity,
+					c?.manual_timer_entity,
+					c?.auto_filter_timer_entity,
+					c?.pause_timer_entity,
+					c?.frost_timer_entity,
+					c?.bathing_entity,
+					c?.bathing_until,
+					c?.bathing_active_binary,
+					c?.filter_entity,
+					c?.filter_until,
+					c?.next_filter_in,
+					c?.chlorine_entity,
+					c?.chlorine_until,
+					c?.chlorine_active_entity,
+					c?.pause_entity,
+					c?.pause_until,
+					c?.pause_active_entity,
+					c?.frost_entity,
+					c?.quiet_entity,
+					c?.pv_entity,
+					c?.pv_power_entity,
+					c?.main_power_entity,
+					c?.aux_power_entity,
+					c?.power_entity,
+					c?.event_rain_probability_entity,
+					c?.event_rain_blocked_entity,
+					c?.next_start_entity,
+					c?.next_event_entity,
+					c?.next_event_end_entity,
+					c?.next_event_summary_entity,
+				);
+				break;
+			case "calendar":
+				push(
+					c?.next_start_entity,
+					c?.next_event_entity,
+					c?.next_event_end_entity,
+					c?.next_event_summary_entity,
+					c?.next_filter_in,
+					c?.next_frost_mins_entity,
+					c?.run_credit_source_entity,
+					c?.run_credit_minutes_entity,
+					c?.filter_credit_minutes_entity,
+					c?.frost_credit_minutes_entity,
+					c?.frost_credit_shift_minutes_entity,
+					c?.event_rain_probability_entity,
+					c?.event_rain_blocked_entity,
+					c?.frost_entity,
+				);
+				break;
+			case "waterquality":
+				push(
+					c?.sanitizer_mode_entity,
+					c?.ph_entity,
+					c?.chlorine_value_entity,
+					c?.salt_entity,
+					c?.salt_add_entity,
+					c?.tds_entity,
+					c?.tds_assessment_entity,
+					c?.water_change_percent_entity,
+					c?.water_change_liters_entity,
+					c?.ph_plus_entity,
+					c?.ph_minus_entity,
+					c?.chlor_dose_entity,
+				);
+				break;
+			case "maintenance":
+				push(
+					c?.maintenance_entity,
+					c?.sanitizer_mode_entity,
+					c?.ph_entity,
+					c?.chlorine_value_entity,
+					c?.salt_entity,
+					c?.salt_add_entity,
+					c?.tds_entity,
+					c?.tds_assessment_entity,
+					c?.water_change_percent_entity,
+					c?.water_change_liters_entity,
+					c?.ph_plus_entity,
+					c?.ph_minus_entity,
+					c?.chlor_dose_entity,
+				);
+				break;
+			case "cost": {
+				const costEntities = this._getCostEntities(view);
+				push(costEntities.cost, costEntities.net);
+				break;
+			}
+			default:
+				break;
+		}
+		return Array.from(new Set(ids));
 	}
 
 	_hasRelevantChanges(oldHass, newHass, excludeEntityIds = null) {
