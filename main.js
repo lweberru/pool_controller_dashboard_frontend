@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.27";
+const VERSION = "2.3.28";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -505,7 +505,7 @@ class PoolControllerCard extends HTMLElement {
 			headerBase = `${_t(lang, "ui.cost_title")} — ${viewLabel}`;
 		}
 		const headerTitle = c.title || (headerBase + (poolName ? ` — ${poolName}` : ""));
-		const showAwayButton = !!(
+		const showAwayButton = (content === "controller") && !!(
 			data.awayEntityId ||
 			data.awayStartButtonEntityId ||
 			data.awayStopButtonEntityId ||
