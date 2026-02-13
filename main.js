@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.25";
+const VERSION = "2.3.26";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -92,12 +92,14 @@ const I18N = {
 		},
 		actions: {
 			maintenance: "Wartung",
+			away: "Abwesend",
 			bathing: "Baden",
 			filter: "Filtern",
 			chlorine: "Chloren",
 			pause: "Pause"
 		},
 		tooltips: {
+			away: { active: "Abwesend — Klick beendet", inactive: "Abwesend-Modus aktivieren" },
 			bathing: { active: "Bade-Modus — verbleibend: {mins} min — Klick beendet", inactive: "Baden für {mins} Minuten starten" },
 			filter: { active: "Filter — verbleibend: {mins} min — Klick beendet", inactive: "Filtern für {mins} Minuten starten" },
 			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
@@ -115,6 +117,7 @@ const I18N = {
 		},
 		status: {
 			maintenance: "Wartung",
+			away: "Abwesend",
 			pause: "Pause",
 			bathing: "Baden",
 			chlorine: "Chloren",
@@ -208,12 +211,14 @@ const I18N = {
 		},
 		actions: {
 			maintenance: "Maintenance",
+			away: "Away",
 			bathing: "Bathing",
 			filter: "Filter",
 			chlorine: "Chlorine",
 			pause: "Pause"
 		},
 		tooltips: {
+			away: { active: "Away — click to stop", inactive: "Enable away mode" },
 			bathing: { active: "Bathing — left: {mins} min — click to stop", inactive: "Start bathing for {mins} minutes" },
 			filter: { active: "Filter — left: {mins} min — click to stop", inactive: "Start filter for {mins} minutes" },
 			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
@@ -231,6 +236,7 @@ const I18N = {
 		},
 		status: {
 			maintenance: "Maintenance",
+			away: "Away",
 			pause: "Pause",
 			bathing: "Bathing",
 			chlorine: "Chlorine",
@@ -499,6 +505,18 @@ class PoolControllerCard extends HTMLElement {
 			headerBase = `${_t(lang, "ui.cost_title")} — ${viewLabel}`;
 		}
 		const headerTitle = c.title || (headerBase + (poolName ? ` — ${poolName}` : ""));
+		const showAwayButton = !!(
+			data.awayEntityId ||
+			data.awayStartButtonEntityId ||
+			data.awayStopButtonEntityId ||
+			this._hasService("pool_controller", "start_away") ||
+			this._hasService("pool_controller", "stop_away")
+		);
+		const awayButton = showAwayButton ? `
+			<button class="action-btn away ${data.awayActive ? "active" : ""}" data-action="away-toggle" title="${data.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}">
+				<ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span>
+			</button>
+		` : "";
 
 		let blockHtml = "";
 		switch (content) {
@@ -524,7 +542,7 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${headerTitle}</div>
-				<div class="header-actions"></div>
+				<div class="header-actions">${awayButton}</div>
 			</div>
 			${data.maintenanceActive ? `
 			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
@@ -553,6 +571,11 @@ class PoolControllerCard extends HTMLElement {
 
 		const maintenanceEntityId = c.maintenance_entity || this._derivedEntities?.maintenance_entity || null;
 		const maintenanceActive = maintenanceEntityId ? this._isOn(h.states[maintenanceEntityId]) : false;
+
+		const awayEntityId = c.away_entity || this._derivedEntities?.away_entity || null;
+		const awayActive = awayEntityId ? this._isOn(h.states[awayEntityId]) : false;
+		const awayStartButtonEntityId = c.away_start_button || this._derivedEntities?.away_start_button || null;
+		const awayStopButtonEntityId = c.away_stop_button || this._derivedEntities?.away_stop_button || null;
 
 		const heatReasonEntityId = c.heat_reason_entity || this._derivedEntities?.heat_reason_entity || null;
 		const runReasonEntityId = c.run_reason_entity || this._derivedEntities?.run_reason_entity || null;
@@ -781,6 +804,9 @@ class PoolControllerCard extends HTMLElement {
 			// Entity IDs (for HA more-info popups)
 			climateEntityId: climate?.entity_id || c.climate_entity,
 			maintenanceEntityId: maintenanceEntityId,
+			awayEntityId: awayEntityId,
+			awayStartButtonEntityId,
+			awayStopButtonEntityId,
 			heatReasonEntityId: heatReasonEntityId,
 			runReasonEntityId: runReasonEntityId,
 			runCreditSourceEntityId,
@@ -815,6 +841,7 @@ class PoolControllerCard extends HTMLElement {
 			powerMoreInfoEntityId,
 
 			maintenanceActive,
+			awayActive,
 			heatReason,
 			runReason,
 			runCreditSource,
@@ -969,6 +996,7 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
 			.action-btn.maintenance.active { background: #c0392b; border-color: #c0392b; }
+			.action-btn.away.active { background: #6c5ce7; border-color: #6c5ce7; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
 			.action-btn.chlorine.active { background: #27ae60; border-color: #27ae60; }
 			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
@@ -1538,6 +1566,7 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_attachHandlers() {
 		const maintenanceActive = !!this._renderData?.maintenanceActive;
+		const eff = this._withDerivedConfig(this._config || {});
 
 		const costDebugRefresh = this.shadowRoot.querySelector('[data-action="cost-debug-refresh"]');
 		if (costDebugRefresh) {
@@ -1620,6 +1649,35 @@ class PoolControllerCard extends HTMLElement {
 			});
 		}
 
+		// Away toggle: prefer pool_controller services, fallback to button or climate preset
+		const awayBtn = this.shadowRoot.querySelector('[data-action="away-toggle"]');
+		if (awayBtn) {
+			awayBtn.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				if (!this._hass) return;
+				const isAway = !!this._renderData?.awayActive;
+				const svc = isAway ? "stop_away" : "start_away";
+				if (this._hasService("pool_controller", svc)) {
+					const targetObj = this._buildTargetObject();
+					this._hass.callService("pool_controller", svc, targetObj);
+					return;
+				}
+				if (isAway && eff.away_stop_button) {
+					this._triggerEntity(eff.away_stop_button, true);
+					return;
+				}
+				if (!isAway && eff.away_start_button) {
+					this._triggerEntity(eff.away_start_button, true);
+					return;
+				}
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+				this._hass.callService("climate", "set_preset_mode", {
+					entity_id: climateEntityId,
+					preset_mode: isAway ? "Auto" : "Abwesend",
+				});
+			});
+		}
+
 		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
 		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
@@ -1685,7 +1743,7 @@ class PoolControllerCard extends HTMLElement {
 		actionButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
 				const eff = this._withDerivedConfig(this._config || {});
-				if (btn.dataset.action === "maintenance-toggle") return;
+				if (btn.dataset.action === "maintenance-toggle" || btn.dataset.action === "away-toggle") return;
 				if (maintenanceActive) return;
 				const mode = btn.dataset.mode;
 				const duration = Number(btn.dataset.duration);
@@ -1983,6 +2041,7 @@ class PoolControllerCard extends HTMLElement {
 		if (!this._hass || !eff) return;
 		const ids = [
 			eff.climate_entity,
+			eff.away_entity,
 			eff.main_switch_on_entity,
 			eff.pump_switch_on_entity,
 			eff.aux_heating_switch_on_entity,
@@ -2005,6 +2064,7 @@ class PoolControllerCard extends HTMLElement {
 	_getStatusText(hvac, hvacAction, maintenance, bathing, filtering, chlorinating, paused) {
 		const lang = _langFromHass(this._hass);
 		if (maintenance) return _t(lang, "status.maintenance");
+		if (this._renderData?.awayActive) return _t(lang, "status.away");
 		if (paused) return _t(lang, "status.pause");
 		if (bathing) return _t(lang, "status.bathing");
 		if (chlorinating) return _t(lang, "status.chlorine");
@@ -2330,6 +2390,7 @@ class PoolControllerCard extends HTMLElement {
 			case "controller":
 				push(
 					c?.climate_entity,
+						c?.away_entity,
 					c?.outdoor_temp_entity,
 					c?.maintenance_entity,
 					c?.heat_reason_entity,
@@ -2448,6 +2509,7 @@ class PoolControllerCard extends HTMLElement {
 		
 		const relevantEntities = [
 			this._config.climate_entity,
+			this._config.away_entity,
 			this._config.outdoor_temp_entity,
 			this._config.next_frost_mins_entity,
 			this._config.maintenance_entity,
@@ -2683,6 +2745,9 @@ class PoolControllerCard extends HTMLElement {
 			...c,
 			climate_entity: prefer('climate_entity'),
 			device_id: prefer('device_id'),
+			away_entity: prefer('away_entity'),
+			away_start_button: prefer('away_start_button'),
+			away_stop_button: prefer('away_stop_button'),
 			outdoor_temp_entity: prefer('outdoor_temp_entity'),
 			next_frost_mins_entity: prefer('next_frost_mins_entity'),
 			sanitizer_mode_entity: prefer('sanitizer_mode_entity'),
@@ -2812,6 +2877,7 @@ class PoolControllerCard extends HTMLElement {
 			outdoor_temp_entity: this._pickEntity(entries, "sensor", ["outdoor_temp"]) || null,
 			next_frost_mins_entity: this._pickEntity(entries, "sensor", ["next_frost_mins"]) || null,
 			sanitizer_mode_entity: this._pickEntity(entries, "sensor", ["sanitizer_mode"]) || null,
+			away_entity: this._pickEntity(entries, "binary_sensor", ["away_active"]) || null,
 			// Physical switch states (mirrors)
 			main_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["main_switch_on"]) || null,
 			pump_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["pump_switch_on"]) || null,
@@ -2824,6 +2890,8 @@ class PoolControllerCard extends HTMLElement {
 
 			// Maintenance (hard lockout)
 			maintenance_entity: this._pickEntity(entries, "binary_sensor", ["maintenance_active"]) || null,
+			away_start_button: this._pickEntity(entries, "button", ["away_start"]) || null,
+			away_stop_button: this._pickEntity(entries, "button", ["away_stop"]) || null,
 
 			// Transparency
 			heat_reason_entity: this._pickEntity(entries, "sensor", ["heat_reason"]) || null,
