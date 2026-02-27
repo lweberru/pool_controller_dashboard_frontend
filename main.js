@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.29";
+const VERSION = "2.3.30";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -62,6 +62,9 @@ const I18N = {
 			pump_switch: "Umwälzpumpe",
 			aux_heater_switch: "Zusatzheizung",
 			pv: "PV",
+			pv_off: "Aus",
+			pv_stage1: "Stufe 1 (Pumpe)",
+			pv_stage2: "Stufe 2 (Zusatzheizung)",
 			frost: "Frostschutz",
 			quiet: "Ruhezeit",
 			event_rain_blocked: "Event entfällt wegen Regen ({pct}%)",
@@ -185,6 +188,9 @@ const I18N = {
 			pump_switch: "Pump",
 			aux_heater_switch: "Aux heater",
 			pv: "PV",
+			pv_off: "Off",
+			pv_stage1: "Stage 1 (Pump)",
+			pv_stage2: "Stage 2 (Aux heater)",
 			frost: "Frost protection",
 			quiet: "Quiet hours",
 			event_rain_blocked: "Event canceled due to rain ({pct}%)",
@@ -616,6 +622,8 @@ class PoolControllerCard extends HTMLElement {
 		const filterMissingMinutes = filterMissingMinutesEntityId ? this._num(h.states[filterMissingMinutesEntityId]?.state) : null;
 		const frostCreditMinutes = frostCreditMinutesEntityId ? this._num(h.states[frostCreditMinutesEntityId]?.state) : null;
 		const frostCreditShiftMinutes = frostCreditShiftMinutesEntityId ? this._num(h.states[frostCreditShiftMinutesEntityId]?.state) : null;
+		const runReasonNorm = String(runReason || "").toLowerCase();
+		const heatReasonNorm = String(heatReason || "").toLowerCase();
 
 		// Physical switch states (mirrored by backend as binary_sensors)
 		const mainSwitchOnEntityId = c.main_switch_on_entity || this._derivedEntities?.main_switch_on_entity || null;
@@ -632,6 +640,14 @@ class PoolControllerCard extends HTMLElement {
 		const shouldMainOn = shouldMainOnEntityId ? this._isOn(h.states[shouldMainOnEntityId]) : null;
 		const shouldPumpOn = shouldPumpOnEntityId ? this._isOn(h.states[shouldPumpOnEntityId]) : null;
 		const shouldAuxOn = shouldAuxOnEntityId ? this._isOn(h.states[shouldAuxOnEntityId]) : null;
+		let powerSavingStage = 0;
+		if (powerSavingActive) {
+			if (heatReasonNorm === "power_saving" && shouldAuxOn) {
+				powerSavingStage = 2;
+			} else if (runReasonNorm === "power_saving" && shouldPumpOn) {
+				powerSavingStage = 1;
+			}
+		}
 
 		// Timer-States: bevorzugt neue Minuten-Sensoren (v2 Timer-Refactor), mit Fallback auf alte *_until Sensoren.
 		const manualTimerEntity = c.manual_timer_entity;
@@ -868,6 +884,7 @@ class PoolControllerCard extends HTMLElement {
 			awayActive,
 			powerSavingActive,
 			powerSavingAvailable,
+			powerSavingStage,
 			heatReason,
 			runReason,
 			runCreditSource,
@@ -989,6 +1006,8 @@ class PoolControllerCard extends HTMLElement {
 			.status-icons { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; z-index: 1; }
 			.status-icon { width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); display: grid; place-items: center; border: 2px solid var(--pc-border); opacity: 0.35; transition: all 200ms ease; }
 			.status-icon.active { background: #8a3b32; color: #fff; border-color: #8a3b32; opacity: 1; box-shadow: 0 2px 8px rgba(138,59,50,0.3); }
+			.status-icon.stage1.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
+			.status-icon.stage2.active { background: #27ae60; border-color: #27ae60; box-shadow: 0 2px 8px rgba(39,174,96,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon.rain.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
@@ -1211,6 +1230,17 @@ class PoolControllerCard extends HTMLElement {
 		const RING_CY = 50;
 		const RING_R = 44;
 		const DOT_R = RING_R;
+		const pvStageLabel = d.powerSavingActive
+			? (d.powerSavingStage === 2
+				? _t(lang, "ui.pv_stage2")
+				: d.powerSavingStage === 1
+					? _t(lang, "ui.pv_stage1")
+					: _t(lang, "ui.pv_off"))
+			: null;
+		const pvTitle = d.powerSavingActive ? `${_t(lang, "ui.pv")}: ${pvStageLabel}` : _t(lang, "ui.pv");
+		const pvClass = d.powerSavingActive
+			? (d.powerSavingStage === 2 ? "active stage2" : d.powerSavingStage === 1 ? "active stage1" : "")
+			: (d.pvAllows ? "active" : "");
 		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
 		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
 		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
@@ -1247,7 +1277,7 @@ class PoolControllerCard extends HTMLElement {
 							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
 							</div>
-							<div class="status-icon ${d.pvAllows ? "active" : ""}" title="${_t(lang, "ui.pv")}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
+							<div class="status-icon ${pvClass}" title="${pvTitle}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
 								<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
@@ -2133,6 +2163,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Chloren",
 				filter: "Filtern",
 				preheat: "Vorheizen (Kalender)",
+				power_saving: "Stromsparen",
 				pv: "PV-Überschuss",
 				thermostat: "Thermostat",
 			},
@@ -2143,6 +2174,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Chlorine",
 				filter: "Filter",
 				preheat: "Preheat (calendar)",
+				power_saving: "Power saving",
 				pv: "PV surplus",
 				thermostat: "Thermostat",
 			},
@@ -2153,6 +2185,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Cloro",
 				filter: "Filtrar",
 				preheat: "Precalentar (calendario)",
+				power_saving: "Ahorro energético",
 				pv: "Excedente FV",
 				thermostat: "Termostato",
 			},
@@ -2163,6 +2196,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Chlore",
 				filter: "Filtrer",
 				preheat: "Préchauffage (calendrier)",
+				power_saving: "Économie d'énergie",
 				pv: "Surplus PV",
 				thermostat: "Thermostat",
 			},
@@ -2190,6 +2224,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Chloren",
 				filter: "Filtern",
 				preheat: "Vorheizen (Kalender)",
+				power_saving: "Stromsparen",
 				pv: "PV-Überschuss",
 				frost: "Frostschutz",
 				idle: "Leerlauf",
@@ -2201,6 +2236,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Chlorine",
 				filter: "Filtering",
 				preheat: "Preheat (calendar)",
+				power_saving: "Power saving",
 				pv: "PV surplus",
 				frost: "Frost protection",
 				idle: "Idle",
@@ -2212,6 +2248,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Cloro",
 				filter: "Filtrar",
 				preheat: "Precalentar (calendario)",
+				power_saving: "Ahorro energético",
 				pv: "Excedente FV",
 				frost: "Protección contra heladas",
 				idle: "Inactivo",
@@ -2223,6 +2260,7 @@ class PoolControllerCard extends HTMLElement {
 				chlorine: "Chlore",
 				filter: "Filtration",
 				preheat: "Préchauffage (calendrier)",
+				power_saving: "Économie d'énergie",
 				pv: "Surplus PV",
 				frost: "Protection antigel",
 				idle: "Inactif",
@@ -2280,6 +2318,7 @@ class PoolControllerCard extends HTMLElement {
 
 		if (showKey) {
 			if (showKey === "pv") return `<span ${moreInfo}><ha-icon icon="mdi:solar-power" title="${tip}"></ha-icon></span>`;
+			if (showKey === "power_saving") return `<span ${moreInfo}><ha-icon icon="mdi:leaf" title="${tip}"></ha-icon></span>`;
 			if (showKey === "preheat") return `<span ${moreInfo}><ha-icon icon="mdi:calendar-clock" title="${tip}"></ha-icon></span>`;
 			if (showKey === "bathing") return `<span ${moreInfo}><ha-icon icon="mdi:pool" title="${tip}"></ha-icon></span>`;
 			if (showKey === "chlorine") return `<span ${moreInfo}><ha-icon icon="mdi:fan" title="${tip}"></ha-icon></span>`;
