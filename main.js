@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.28";
+const VERSION = "2.3.29";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -93,6 +93,7 @@ const I18N = {
 		actions: {
 			maintenance: "Wartung",
 			away: "Abwesend",
+			power_saving: "Stromsparen",
 			bathing: "Baden",
 			filter: "Filtern",
 			chlorine: "Chloren",
@@ -100,6 +101,7 @@ const I18N = {
 		},
 		tooltips: {
 			away: { active: "Abwesend — Klick beendet", inactive: "Abwesend-Modus aktivieren" },
+			power_saving: { active: "Stromsparen — Klick beendet", inactive: "Stromsparen aktivieren" },
 			bathing: { active: "Bade-Modus — verbleibend: {mins} min — Klick beendet", inactive: "Baden für {mins} Minuten starten" },
 			filter: { active: "Filter — verbleibend: {mins} min — Klick beendet", inactive: "Filtern für {mins} Minuten starten" },
 			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
@@ -118,6 +120,7 @@ const I18N = {
 		status: {
 			maintenance: "Wartung",
 			away: "Abwesend",
+			power_saving: "Stromsparen",
 			pause: "Pause",
 			bathing: "Baden",
 			chlorine: "Chloren",
@@ -212,6 +215,7 @@ const I18N = {
 		actions: {
 			maintenance: "Maintenance",
 			away: "Away",
+			power_saving: "Power saving",
 			bathing: "Bathing",
 			filter: "Filter",
 			chlorine: "Chlorine",
@@ -219,6 +223,7 @@ const I18N = {
 		},
 		tooltips: {
 			away: { active: "Away — click to stop", inactive: "Enable away mode" },
+			power_saving: { active: "Power saving — click to stop", inactive: "Enable power saving" },
 			bathing: { active: "Bathing — left: {mins} min — click to stop", inactive: "Start bathing for {mins} minutes" },
 			filter: { active: "Filter — left: {mins} min — click to stop", inactive: "Start filter for {mins} minutes" },
 			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
@@ -237,6 +242,7 @@ const I18N = {
 		status: {
 			maintenance: "Maintenance",
 			away: "Away",
+			power_saving: "Power saving",
 			pause: "Pause",
 			bathing: "Bathing",
 			chlorine: "Chlorine",
@@ -512,9 +518,21 @@ class PoolControllerCard extends HTMLElement {
 			this._hasService("pool_controller", "start_away") ||
 			this._hasService("pool_controller", "stop_away")
 		);
+		const showPowerSavingButton = (content === "controller") && !!(
+			data.powerSavingActive || data.powerSavingAvailable
+		) && !!(
+			this._hasService("pool_controller", "start_power_saving") ||
+			this._hasService("pool_controller", "stop_power_saving") ||
+			climateEntityId
+		);
 		const awayButton = showAwayButton ? `
 			<button class="action-btn away ${data.awayActive ? "active" : ""}" data-action="away-toggle" title="${data.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}">
 				<ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span>
+			</button>
+		` : "";
+		const powerSavingButton = showPowerSavingButton ? `
+			<button class="action-btn power-saving ${data.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" title="${data.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}">
+				<ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span>
 			</button>
 		` : "";
 
@@ -542,7 +560,7 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${headerTitle}</div>
-				<div class="header-actions">${awayButton}</div>
+				<div class="header-actions">${powerSavingButton}${awayButton}</div>
 			</div>
 			${data.maintenanceActive ? `
 			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
@@ -576,6 +594,10 @@ class PoolControllerCard extends HTMLElement {
 		const awayActive = awayEntityId ? this._isOn(h.states[awayEntityId]) : false;
 		const awayStartButtonEntityId = c.away_start_button || this._derivedEntities?.away_start_button || null;
 		const awayStopButtonEntityId = c.away_stop_button || this._derivedEntities?.away_stop_button || null;
+		const powerSavingActiveEntityId = c.power_saving_active_entity || this._derivedEntities?.power_saving_active_entity || null;
+		const powerSavingAvailableEntityId = c.power_saving_available_entity || this._derivedEntities?.power_saving_available_entity || null;
+		const powerSavingActive = powerSavingActiveEntityId ? this._isOn(h.states[powerSavingActiveEntityId]) : false;
+		const powerSavingAvailable = powerSavingAvailableEntityId ? this._isOn(h.states[powerSavingAvailableEntityId]) : false;
 
 		const heatReasonEntityId = c.heat_reason_entity || this._derivedEntities?.heat_reason_entity || null;
 		const runReasonEntityId = c.run_reason_entity || this._derivedEntities?.run_reason_entity || null;
@@ -807,6 +829,8 @@ class PoolControllerCard extends HTMLElement {
 			awayEntityId: awayEntityId,
 			awayStartButtonEntityId,
 			awayStopButtonEntityId,
+			powerSavingActiveEntityId,
+			powerSavingAvailableEntityId,
 			heatReasonEntityId: heatReasonEntityId,
 			runReasonEntityId: runReasonEntityId,
 			runCreditSourceEntityId,
@@ -842,6 +866,8 @@ class PoolControllerCard extends HTMLElement {
 
 			maintenanceActive,
 			awayActive,
+			powerSavingActive,
+			powerSavingAvailable,
 			heatReason,
 			runReason,
 			runCreditSource,
@@ -1678,6 +1704,27 @@ class PoolControllerCard extends HTMLElement {
 			});
 		}
 
+		// Power-saving toggle: prefer pool_controller services, fallback to climate preset
+		const powerSavingBtn = this.shadowRoot.querySelector('[data-action="power-saving-toggle"]');
+		if (powerSavingBtn) {
+			powerSavingBtn.addEventListener("click", (ev) => {
+				ev.stopPropagation();
+				if (!this._hass) return;
+				const isActive = !!this._renderData?.powerSavingActive;
+				const svc = isActive ? "stop_power_saving" : "start_power_saving";
+				if (this._hasService("pool_controller", svc)) {
+					const targetObj = this._buildTargetObject();
+					this._hass.callService("pool_controller", svc, targetObj);
+					return;
+				}
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+				this._hass.callService("climate", "set_preset_mode", {
+					entity_id: climateEntityId,
+					preset_mode: isActive ? "Auto" : "Stromsparen",
+				});
+			});
+		}
+
 		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
 		tempButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
@@ -1743,7 +1790,7 @@ class PoolControllerCard extends HTMLElement {
 		actionButtons.forEach((btn) => {
 			btn.addEventListener("click", () => {
 				const eff = this._withDerivedConfig(this._config || {});
-				if (btn.dataset.action === "maintenance-toggle" || btn.dataset.action === "away-toggle") return;
+				if (btn.dataset.action === "maintenance-toggle" || btn.dataset.action === "away-toggle" || btn.dataset.action === "power-saving-toggle") return;
 				if (maintenanceActive) return;
 				const mode = btn.dataset.mode;
 				const duration = Number(btn.dataset.duration);
@@ -2065,6 +2112,7 @@ class PoolControllerCard extends HTMLElement {
 		const lang = _langFromHass(this._hass);
 		if (maintenance) return _t(lang, "status.maintenance");
 		if (this._renderData?.awayActive) return _t(lang, "status.away");
+		if (this._renderData?.powerSavingActive) return _t(lang, "status.power_saving");
 		if (paused) return _t(lang, "status.pause");
 		if (bathing) return _t(lang, "status.bathing");
 		if (chlorinating) return _t(lang, "status.chlorine");
@@ -2391,6 +2439,8 @@ class PoolControllerCard extends HTMLElement {
 				push(
 					c?.climate_entity,
 						c?.away_entity,
+					c?.power_saving_active_entity,
+					c?.power_saving_available_entity,
 					c?.outdoor_temp_entity,
 					c?.maintenance_entity,
 					c?.heat_reason_entity,
@@ -2510,6 +2560,8 @@ class PoolControllerCard extends HTMLElement {
 		const relevantEntities = [
 			this._config.climate_entity,
 			this._config.away_entity,
+			this._config.power_saving_active_entity,
+			this._config.power_saving_available_entity,
 			this._config.outdoor_temp_entity,
 			this._config.next_frost_mins_entity,
 			this._config.maintenance_entity,
@@ -2746,6 +2798,8 @@ class PoolControllerCard extends HTMLElement {
 			climate_entity: prefer('climate_entity'),
 			device_id: prefer('device_id'),
 			away_entity: prefer('away_entity'),
+			power_saving_active_entity: prefer('power_saving_active_entity'),
+			power_saving_available_entity: prefer('power_saving_available_entity'),
 			away_start_button: prefer('away_start_button'),
 			away_stop_button: prefer('away_stop_button'),
 			outdoor_temp_entity: prefer('outdoor_temp_entity'),
@@ -2878,6 +2932,8 @@ class PoolControllerCard extends HTMLElement {
 			next_frost_mins_entity: this._pickEntity(entries, "sensor", ["next_frost_mins"]) || null,
 			sanitizer_mode_entity: this._pickEntity(entries, "sensor", ["sanitizer_mode"]) || null,
 			away_entity: this._pickEntity(entries, "binary_sensor", ["away_active"]) || null,
+			power_saving_active_entity: this._pickEntity(entries, "binary_sensor", ["power_saving_active"]) || null,
+			power_saving_available_entity: this._pickEntity(entries, "binary_sensor", ["power_saving_available"]) || null,
 			// Physical switch states (mirrors)
 			main_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["main_switch_on"]) || null,
 			pump_switch_on_entity: this._pickEntity(entries, "binary_sensor", ["pump_switch_on"]) || null,
