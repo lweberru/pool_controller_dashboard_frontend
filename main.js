@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
  */
 
-const VERSION = "2.3.30";
+const VERSION = "2.3.31";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -517,30 +517,6 @@ class PoolControllerCard extends HTMLElement {
 			headerBase = `${_t(lang, "ui.cost_title")} — ${viewLabel}`;
 		}
 		const headerTitle = c.title || (headerBase + (poolName ? ` — ${poolName}` : ""));
-		const showAwayButton = (content === "controller") && !!(
-			data.awayEntityId ||
-			data.awayStartButtonEntityId ||
-			data.awayStopButtonEntityId ||
-			this._hasService("pool_controller", "start_away") ||
-			this._hasService("pool_controller", "stop_away")
-		);
-		const showPowerSavingButton = (content === "controller") && !!(
-			data.powerSavingActive || data.powerSavingAvailable
-		) && !!(
-			this._hasService("pool_controller", "start_power_saving") ||
-			this._hasService("pool_controller", "stop_power_saving") ||
-			climateEntityId
-		);
-		const awayButton = showAwayButton ? `
-			<button class="action-btn away ${data.awayActive ? "active" : ""}" data-action="away-toggle" title="${data.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}">
-				<ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span>
-			</button>
-		` : "";
-		const powerSavingButton = showPowerSavingButton ? `
-			<button class="action-btn power-saving ${data.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" title="${data.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}">
-				<ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span>
-			</button>
-		` : "";
 
 		let blockHtml = "";
 		switch (content) {
@@ -566,7 +542,7 @@ class PoolControllerCard extends HTMLElement {
 		<ha-card>
 			<div class="header">
 				<div class="title">${headerTitle}</div>
-				<div class="header-actions">${powerSavingButton}${awayButton}</div>
+				<div class="header-actions"></div>
 			</div>
 			${data.maintenanceActive ? `
 			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
@@ -1194,6 +1170,21 @@ class PoolControllerCard extends HTMLElement {
 	_renderControllerBlock(d, c) {
 		const lang = _langFromHass(this._hass);
 		const disabled = !!d.maintenanceActive;
+		const showAwayButton = !!(
+			d.awayEntityId ||
+			d.awayStartButtonEntityId ||
+			d.awayStopButtonEntityId ||
+			this._hasService("pool_controller", "start_away") ||
+			this._hasService("pool_controller", "stop_away")
+		);
+		const showPowerSavingButton = !!(
+			d.powerSavingActive || d.powerSavingAvailable
+		) && !!(
+			this._hasService("pool_controller", "start_power_saving") ||
+			this._hasService("pool_controller", "stop_power_saving") ||
+			d.climateEntityId
+		);
+		const powerSavingReasonText = this._powerSavingReasonText(d);
 		// Compute runtime-visible aux availability:
 		// - If the backend provides a dedicated `aux_binary` sensor (preferred), only
 		//   show the UI when that sensor reports ON (this follows the integration option).
@@ -1307,11 +1298,14 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				${this._renderDialTimer(d)}
+				${powerSavingReasonText ? `<div class="timer-text" style="margin-top:4px; font-weight:600;" ${(d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId) ? `data-more-info="${d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId}"` : ""}>${powerSavingReasonText}</div>` : ""}
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
+					${showPowerSavingButton ? `<button class="action-btn power-saving ${d.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" ${disabled ? "disabled" : ""} title="${d.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}"><ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span></button>` : ""}
+					${showAwayButton ? `<button class="action-btn away ${d.awayActive ? "active" : ""}" data-action="away-toggle" ${disabled ? "disabled" : ""} title="${d.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}"><ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span></button>` : ""}
 					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active', { mins: (d.bathingEta != null ? d.bathingEta : finalBathDur) }) : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
@@ -2150,6 +2144,45 @@ class PoolControllerCard extends HTMLElement {
 		if (hvacAction === "heating" || hvacAction === "heat") return _t(lang, "status.heating");
 		if (hvac === "off") return _t(lang, "status.off");
 		return hvac || "–";
+	}
+
+	_powerSavingReasonText(d) {
+		if (!d?.powerSavingActive) return "";
+		const lang = _langFromHass(this._hass);
+		const labels = {
+			de: {
+				head: "Stromsparen",
+				stage2: "Stufe 2 (Zusatzheizung)",
+				stage1: "Stufe 1 (Pumpe)",
+				sensors_missing: "wartet – Sensorwerte fehlen",
+				quiet: "wartet – Ruhezeit aktiv",
+				away: "wartet – Abwesend aktiv",
+				pause: "wartet – Pause aktiv",
+				maintenance: "wartet – Wartung aktiv",
+				waiting: "wartet – PV unter Schwellwert",
+			},
+			en: {
+				head: "Power saving",
+				stage2: "Stage 2 (Aux heater)",
+				stage1: "Stage 1 (Pump)",
+				sensors_missing: "waiting – missing live sensor values",
+				quiet: "waiting – quiet hours active",
+				away: "waiting – away mode active",
+				pause: "waiting – pause active",
+				maintenance: "waiting – maintenance active",
+				waiting: "waiting – PV below threshold",
+			},
+		};
+		const L = labels[lang] || labels.en;
+		let detail = L.waiting;
+		if (!d.powerSavingAvailable) detail = L.sensors_missing;
+		else if (d.maintenanceActive) detail = L.maintenance;
+		else if (d.pauseState?.active) detail = L.pause;
+		else if (d.awayActive) detail = L.away;
+		else if (d.quiet) detail = L.quiet;
+		else if (d.powerSavingStage === 2) detail = L.stage2;
+		else if (d.powerSavingStage === 1) detail = L.stage1;
+		return `${L.head}: ${detail}`;
 	}
 
 	_heatReasonLabel(reason) {
