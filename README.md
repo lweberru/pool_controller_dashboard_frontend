@@ -68,7 +68,7 @@ Yes. The card always derives all related entities from the entity registry at ru
 
 ## Card variants (content)
 
-The card has four fixed variants. Select them via the `content` parameter:
+The card has five fixed variants. Select them via the `content` parameter:
 
 ### 1) Controller card
 
@@ -109,6 +109,23 @@ content: maintenance
 Shows concrete maintenance hints (e.g., pH+/pH‑ dosing, salt refill, water change, chlorine dose).
 
 ![Maintenance card](pool_maintenance.png)
+
+### 5) PV & Power-Saving chart
+
+```
+content: pv
+```
+
+Renders an embedded `custom:apexcharts-card` automatically for PV/power-saving analysis.
+
+The chart uses the integration's auto-discovered entities and shows, when available:
+- PV smoothed / PV power
+- house load (configured `pv_house_load_sensor` value mirrored by backend)
+- PV surplus available for pool
+- dynamic power-saving thresholds for pump stage and auxiliary-heater stage
+- PV bands (low/mid off/mid on/high)
+
+This view is designed to work in both Auto and Power-saving mode and visualizes the additional stage-2 threshold for the auxiliary heater.
 
 ## How to use / meaning of elements
 

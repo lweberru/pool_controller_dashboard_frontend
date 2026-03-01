@@ -1,10 +1,10 @@
 /**
  * Pool Controller - simplified modular Lovelace card
  * - Single-file HACS frontend plugin
- * - Supports `content` config: controller | calendar | waterquality | maintenance (default: controller)
+ * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.31";
+const VERSION = "2.3.32";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -18,6 +18,7 @@ const I18N = {
 			waterquality_title: "Wasserqualität",
 			maintenance_title: "Wartungsarbeiten",
 			cost_title: "Kosten",
+			pv_chart_title: "PV & Stromsparen",
 			select_content: "Angezeigter Inhalt",
 			cost_view: "Zeitraum",
 			cost_view_day: "Tag",
@@ -90,7 +91,8 @@ const I18N = {
 				calendar: "Kalender",
 				waterquality: "Wasserqualität",
 				maintenance: "Wartung",
-				cost: "Kosten"
+				cost: "Kosten",
+				pv: "PV & Stromsparen"
 			}
 		},
 		actions: {
@@ -144,6 +146,7 @@ const I18N = {
 			waterquality_title: "Water quality",
 			maintenance_title: "Maintenance",
 			cost_title: "Costs",
+			pv_chart_title: "PV & Power saving",
 			select_content: "Displayed content",
 			cost_view: "Period",
 			cost_view_day: "Day",
@@ -215,7 +218,8 @@ const I18N = {
 				calendar: "Calendar",
 				waterquality: "Water quality",
 				maintenance: "Maintenance",
-				cost: "Costs"
+				cost: "Costs",
+				pv: "PV & Power saving"
 			}
 		},
 		actions: {
@@ -442,6 +446,30 @@ class PoolControllerCard extends HTMLElement {
 			}
 			return;
 		}
+		if (content === "pv") {
+			const host = this.shadowRoot?.querySelector("[data-pv-graph]");
+			if (!oldHass || !host) {
+				this._render();
+				return;
+			}
+			const effectiveConfig = this._withDerivedConfig(this._config || {});
+			const pvIds = this._getEntityIdsForContent("pv", effectiveConfig);
+			if (!pvIds.length) {
+				this._render();
+				return;
+			}
+			const pvChanged = pvIds.some((entityId) => {
+				const oldState = oldHass.states[entityId];
+				const newState = hass.states[entityId];
+				if (!oldState && !newState) return false;
+				if (!oldState || !newState) return true;
+				return this._stateSig(entityId, oldState) !== this._stateSig(entityId, newState);
+			});
+			if (pvChanged) {
+				this._attachPvGraph();
+			}
+			return;
+		}
 		if (!oldHass) {
 			this._render();
 			return;
@@ -509,6 +537,7 @@ class PoolControllerCard extends HTMLElement {
 			waterquality: _t(lang, "ui.waterquality_title"),
 			maintenance: _t(lang, "ui.maintenance_title"),
 			cost: _t(lang, "ui.cost_title"),
+			pv: _t(lang, "ui.pv_chart_title"),
 		};
 		let headerBase = titles[content] || "Pool Controller";
 		if (content === "cost") {
@@ -531,6 +560,9 @@ class PoolControllerCard extends HTMLElement {
 				break;
 			case "cost":
 				blockHtml = this._renderCostBlock(data, effectiveConfig);
+				break;
+			case "pv":
+				blockHtml = this._renderPvBlock(data, effectiveConfig);
 				break;
 			case "controller":
 			default:
@@ -555,6 +587,7 @@ class PoolControllerCard extends HTMLElement {
 
 		this._attachHandlers();
 		this._attachCostGraph();
+		this._attachPvGraph();
 	}
 
 	// ========================================
@@ -1593,6 +1626,40 @@ class PoolControllerCard extends HTMLElement {
 		</div>`;
 	}
 
+	_renderPvBlock(d, c) {
+		const smoothedEntity = c.pv_smoothed_entity || c.pv_power_entity || "";
+		const houseLoadEntity = c.pv_house_load_entity || "";
+		const surplusEntity = c.pv_surplus_for_pool_entity || "";
+		const pumpThresholdEntity = c.power_saving_pump_threshold_entity || "";
+		const auxThresholdEntity = c.power_saving_aux_threshold_entity || "";
+		const bandLowEntity = c.pv_band_low_entity || "";
+		const bandMidOffEntity = c.pv_band_mid_off_entity || "";
+		const bandMidOnEntity = c.pv_band_mid_on_entity || "";
+		const bandHighEntity = c.pv_band_high_entity || "";
+
+		const hasAny = !!(
+			smoothedEntity || houseLoadEntity || surplusEntity || pumpThresholdEntity || auxThresholdEntity
+		);
+		if (!hasAny) {
+			return `<div class="info-badge">PV-/Stromsparen-Sensoren nicht gefunden</div>`;
+		}
+
+		return `<div class="pv-block">
+			<div class="section-title">${_t(_langFromHass(this._hass), "ui.pv_chart_title")}</div>
+			<div class="cost-graph pv-graph"
+				data-pv-graph
+				data-pv-smoothed-entity="${smoothedEntity}"
+				data-pv-house-load-entity="${houseLoadEntity}"
+				data-pv-surplus-entity="${surplusEntity}"
+				data-pump-threshold-entity="${pumpThresholdEntity}"
+				data-aux-threshold-entity="${auxThresholdEntity}"
+				data-pv-band-low-entity="${bandLowEntity}"
+				data-pv-band-mid-off-entity="${bandMidOffEntity}"
+				data-pv-band-mid-on-entity="${bandMidOnEntity}"
+				data-pv-band-high-entity="${bandHighEntity}"></div>
+		</div>`;
+	}
+
 	/**
 	 * Baut das Target-Objekt für Service-Calls, unterstützt sowohl entity_id als auch device_id.
 	 */
@@ -2013,6 +2080,109 @@ class PoolControllerCard extends HTMLElement {
 				this._costDebugState = { ...this._costDebugState, graphCreated: false, phase: "graph_failed", lastError: "create graph" };
 				this._updateCostDebugPanel(view, { cost: costEntity, net: netEntity });
 			} catch (_e2) {}
+		}
+	}
+
+	async _attachPvGraph() {
+		const host = this.shadowRoot?.querySelector("[data-pv-graph]");
+		if (!host) return;
+
+		const smoothedEntity = host.getAttribute("data-pv-smoothed-entity") || "";
+		const houseLoadEntity = host.getAttribute("data-pv-house-load-entity") || "";
+		const surplusEntity = host.getAttribute("data-pv-surplus-entity") || "";
+		const pumpThresholdEntity = host.getAttribute("data-pump-threshold-entity") || "";
+		const auxThresholdEntity = host.getAttribute("data-aux-threshold-entity") || "";
+		const bandLowEntity = host.getAttribute("data-pv-band-low-entity") || "";
+		const bandMidOffEntity = host.getAttribute("data-pv-band-mid-off-entity") || "";
+		const bandMidOnEntity = host.getAttribute("data-pv-band-mid-on-entity") || "";
+		const bandHighEntity = host.getAttribute("data-pv-band-high-entity") || "";
+
+		const key = [
+			smoothedEntity,
+			houseLoadEntity,
+			surplusEntity,
+			pumpThresholdEntity,
+			auxThresholdEntity,
+			bandLowEntity,
+			bandMidOffEntity,
+			bandMidOnEntity,
+			bandHighEntity,
+		].join("|");
+
+		if (!key.replace(/\|/g, "")) return;
+
+		if (host.getAttribute("data-rendered-key") === key) {
+			const existingCard = host.querySelector(":scope > *");
+			if (existingCard) {
+				try { existingCard.hass = this._hass; } catch (_e) {}
+			}
+			return;
+		}
+
+		host.setAttribute("data-rendered-key", key);
+		host.innerHTML = "";
+
+		let helpers;
+		try {
+			helpers = await window.loadCardHelpers();
+		} catch (_e) {
+			host.innerHTML = `<div class="info-badge">ApexCharts-Helfer konnten nicht geladen werden</div>`;
+			return;
+		}
+
+		const series = [];
+		if (smoothedEntity) {
+			series.push({ entity: smoothedEntity, name: "PV", color: "#7b8794", stroke_width: 3, opacity: 0.75 });
+		}
+		if (houseLoadEntity) {
+			series.push({ entity: houseLoadEntity, name: "Hauslast", color: "#1e88e5", stroke_width: 2, opacity: 0.75 });
+		}
+		if (surplusEntity) {
+			series.push({ entity: surplusEntity, name: "PV Überschuss Pool", color: "#26a69a", stroke_width: 2, opacity: 0.65 });
+		}
+		if (bandLowEntity) {
+			series.push({ entity: bandLowEntity, name: "PV low", color: "#e57373", stroke_width: 3, opacity: 0.45 });
+		}
+		if (bandMidOffEntity) {
+			series.push({ entity: bandMidOffEntity, name: "PV mid (off)", color: "#f6b26b", stroke_width: 3, opacity: 0.55 });
+		}
+		if (bandMidOnEntity) {
+			series.push({ entity: bandMidOnEntity, name: "PV mid (on)", color: "#7bc67b", stroke_width: 3, opacity: 0.55 });
+		}
+		if (bandHighEntity) {
+			series.push({ entity: bandHighEntity, name: "PV high", color: "#43a047", stroke_width: 3, opacity: 0.55 });
+		}
+		if (pumpThresholdEntity) {
+			series.push({ entity: pumpThresholdEntity, name: "Stromsparen Schwelle Pumpe", color: "#2e7d32", stroke_width: 2, opacity: 0.9, stroke_dash: 6 });
+		}
+		if (auxThresholdEntity) {
+			series.push({ entity: auxThresholdEntity, name: "Stromsparen Schwelle Zusatzheizung", color: "#6a1b9a", stroke_width: 2, opacity: 0.95, stroke_dash: 6 });
+		}
+
+		if (!series.length) return;
+
+		const cardConfig = {
+			type: "custom:apexcharts-card",
+			graph_span: "12h",
+			cache: false,
+			update_interval: "10min",
+			yaxis: [{ min: 0 }],
+			apex_config: {
+				legend: {
+					position: "bottom",
+					fontSize: "12px",
+					show: false,
+				},
+			},
+			series,
+		};
+
+		try {
+			const cardElement = await helpers.createCardElement(cardConfig);
+			cardElement.hass = this._hass;
+			host.appendChild(cardElement);
+		} catch (_e) {
+			host.innerHTML = `<div class="info-badge">ApexCharts-Karte nicht verfügbar (bitte custom:apexcharts-card installieren)</div>`;
 		}
 	}
 
@@ -2507,6 +2677,20 @@ class PoolControllerCard extends HTMLElement {
 		};
 		const view = (c?.cost_view || DEFAULTS.cost_view || "day").toString().trim();
 		switch (content) {
+			case "pv":
+				push(
+					c?.pv_smoothed_entity,
+					c?.pv_power_entity,
+					c?.pv_house_load_entity,
+					c?.pv_surplus_for_pool_entity,
+					c?.power_saving_pump_threshold_entity,
+					c?.power_saving_aux_threshold_entity,
+					c?.pv_band_low_entity,
+					c?.pv_band_mid_off_entity,
+					c?.pv_band_mid_on_entity,
+					c?.pv_band_high_entity,
+				);
+				break;
 			case "controller":
 				push(
 					c?.climate_entity,
@@ -2671,6 +2855,15 @@ class PoolControllerCard extends HTMLElement {
 			this._config.quiet_entity,
 			this._config.pv_entity,
 			this._config.pv_power_entity,
+			this._config.pv_smoothed_entity,
+			this._config.pv_house_load_entity,
+			this._config.pv_surplus_for_pool_entity,
+			this._config.power_saving_pump_threshold_entity,
+			this._config.power_saving_aux_threshold_entity,
+			this._config.pv_band_low_entity,
+			this._config.pv_band_mid_off_entity,
+			this._config.pv_band_mid_on_entity,
+			this._config.pv_band_high_entity,
 			this._config.should_main_on_entity,
 			this._config.should_pump_on_entity,
 			this._config.should_aux_on_entity,
@@ -2921,6 +3114,15 @@ class PoolControllerCard extends HTMLElement {
 			quiet_entity: prefer('quiet_entity'),
 			pv_entity: prefer('pv_entity'),
 			pv_power_entity: prefer('pv_power_entity'),
+			pv_smoothed_entity: prefer('pv_smoothed_entity'),
+			pv_house_load_entity: prefer('pv_house_load_entity'),
+			pv_surplus_for_pool_entity: prefer('pv_surplus_for_pool_entity'),
+			power_saving_pump_threshold_entity: prefer('power_saving_pump_threshold_entity'),
+			power_saving_aux_threshold_entity: prefer('power_saving_aux_threshold_entity'),
+			pv_band_low_entity: prefer('pv_band_low_entity'),
+			pv_band_mid_off_entity: prefer('pv_band_mid_off_entity'),
+			pv_band_mid_on_entity: prefer('pv_band_mid_on_entity'),
+			pv_band_high_entity: prefer('pv_band_high_entity'),
 			main_power_entity: prefer('main_power_entity'),
 			aux_power_entity: prefer('aux_power_entity'),
 			power_entity: prefer('power_entity'),
@@ -3071,6 +3273,15 @@ class PoolControllerCard extends HTMLElement {
 
 			// Power
 			pv_power_entity: this._pickEntity(entries, "sensor", ["pv_power"]) || null,
+			pv_smoothed_entity: this._pickEntity(entries, "sensor", ["pv_smoothed"]) || null,
+			pv_house_load_entity: this._pickEntity(entries, "sensor", ["pv_house_load"]) || null,
+			pv_surplus_for_pool_entity: this._pickEntity(entries, "sensor", ["pv_surplus_for_pool"]) || null,
+			power_saving_pump_threshold_entity: this._pickEntity(entries, "sensor", ["power_saving_pump_threshold"]) || null,
+			power_saving_aux_threshold_entity: this._pickEntity(entries, "sensor", ["power_saving_aux_threshold"]) || null,
+			pv_band_low_entity: this._pickEntity(entries, "sensor", ["pv_band_low"]) || null,
+			pv_band_mid_off_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_off"]) || null,
+			pv_band_mid_on_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_on"]) || null,
+			pv_band_high_entity: this._pickEntity(entries, "sensor", ["pv_band_high"]) || null,
 			main_power_entity: this._pickEntity(entries, "sensor", ["main_power"]) || null,
 			aux_power_entity: this._pickEntity(entries, "sensor", ["aux_power"]) || null,
 
@@ -3171,6 +3382,7 @@ class PoolControllerCardEditor extends HTMLElement {
 					<option value="waterquality">${_t(lang, "editor.content_options.waterquality")}</option>
 					<option value="maintenance">${_t(lang, "editor.content_options.maintenance")}</option>
 					<option value="cost">${_t(lang, "editor.content_options.cost")}</option>
+					<option value="pv">${_t(lang, "editor.content_options.pv")}</option>
 				</select>
 			</div>
 			<div class="row" id="cost-view-row" style="display:none;">
@@ -3291,7 +3503,7 @@ class PoolControllerCardEditor extends HTMLElement {
 					costDebugToggle.onchange = (e) => { this._updateConfig({ debug_cost: !!e.target.checked }); };
 				}
 				// update option labels if localized map available
-				for (const key of ['controller','calendar','waterquality','maintenance']) {
+				for (const key of ['controller','calendar','waterquality','maintenance','cost','pv']) {
 					const opt = contentSelect.querySelector(`option[value="${key}"]`);
 					if (opt && opts && opts[key]) opt.textContent = opts[key];
 				}
