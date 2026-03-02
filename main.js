@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.36";
+const VERSION = "2.3.37";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -750,9 +750,9 @@ class PoolControllerCard extends HTMLElement {
 		const shouldAuxOn = shouldAuxOnEntityId ? this._isOn(h.states[shouldAuxOnEntityId]) : null;
 		let powerSavingStage = 0;
 		if (powerSavingActive) {
-			if (heatReasonNorm === "power_saving" && shouldAuxOn) {
+			if (shouldAuxOn || auxHeatingSwitchOn) {
 				powerSavingStage = 2;
-			} else if (runReasonNorm === "power_saving" && shouldPumpOn) {
+			} else if ((runReasonNorm === "power_saving" && shouldPumpOn) || shouldPumpOn) {
 				powerSavingStage = 1;
 			}
 		}
