@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.37";
+const VERSION = "2.3.38";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -14,12 +14,14 @@ const DEFAULTS = {
 	debug_cost: false,
 	pv_timerange: "day",
 	pv_show_pv: true,
+	pv_show_pool_load: true,
 	pv_show_house_load: true,
 	pv_show_surplus: true,
-	pv_show_bands: true,
+	pv_show_bands: false,
 	pv_show_pump_threshold: true,
 	pv_show_aux_threshold: true,
 	pv_legend_show_pv_group: true,
+	pv_legend_show_pool_load: true,
 	pv_legend_show_house_load: true,
 	pv_legend_show_surplus: true,
 	pv_legend_show_thresholds: false,
@@ -114,13 +116,15 @@ const I18N = {
 			pv_timerange: "PV-Zeitraum",
 			pv_series: "PV-Reihen",
 			pv_show_pv: "PV",
+			pv_show_pool_load: "Pool-Last",
 			pv_show_house_load: "Hauslast",
 			pv_show_surplus: "PV-Überschuss Pool",
-			pv_show_bands: "PV-Bänder",
+			pv_show_bands: "PV-Bänder (nur ohne PV)",
 			pv_show_pump_threshold: "Schwelle Pumpe",
 			pv_show_aux_threshold: "Schwelle Zusatzheizung",
 			pv_legend: "PV-Legende",
-			pv_legend_show_pv_group: "Legendeneintrag PV (inkl. Bänder)",
+			pv_legend_show_pv_group: "Legendeneintrag PV",
+			pv_legend_show_pool_load: "Legendeneintrag Pool-Last",
 			pv_legend_show_house_load: "Legendeneintrag Hauslast",
 			pv_legend_show_surplus: "Legendeneintrag PV-Überschuss",
 			pv_legend_show_thresholds: "Legendeneintrag Stromspar-Schwellen",
@@ -275,13 +279,15 @@ const I18N = {
 			pv_timerange: "PV time range",
 			pv_series: "PV series",
 			pv_show_pv: "PV",
+			pv_show_pool_load: "Pool load",
 			pv_show_house_load: "House load",
 			pv_show_surplus: "PV surplus pool",
-			pv_show_bands: "PV bands",
+			pv_show_bands: "PV bands (only without PV)",
 			pv_show_pump_threshold: "Pump threshold",
 			pv_show_aux_threshold: "Aux threshold",
 			pv_legend: "PV legend",
-			pv_legend_show_pv_group: "Legend item PV (incl. bands)",
+			pv_legend_show_pv_group: "Legend item PV",
+			pv_legend_show_pool_load: "Legend item Pool load",
 			pv_legend_show_house_load: "Legend item House load",
 			pv_legend_show_surplus: "Legend item PV surplus",
 			pv_legend_show_thresholds: "Legend item Power-saving thresholds",
@@ -485,12 +491,14 @@ class PoolControllerCard extends HTMLElement {
 			debug_cost: config.debug_cost ?? DEFAULTS.debug_cost,
 			pv_timerange: config.pv_timerange ?? DEFAULTS.pv_timerange,
 			pv_show_pv: config.pv_show_pv ?? DEFAULTS.pv_show_pv,
+			pv_show_pool_load: config.pv_show_pool_load ?? DEFAULTS.pv_show_pool_load,
 			pv_show_house_load: config.pv_show_house_load ?? DEFAULTS.pv_show_house_load,
 			pv_show_surplus: config.pv_show_surplus ?? DEFAULTS.pv_show_surplus,
 			pv_show_bands: config.pv_show_bands ?? DEFAULTS.pv_show_bands,
 			pv_show_pump_threshold: config.pv_show_pump_threshold ?? DEFAULTS.pv_show_pump_threshold,
 			pv_show_aux_threshold: config.pv_show_aux_threshold ?? DEFAULTS.pv_show_aux_threshold,
 			pv_legend_show_pv_group: config.pv_legend_show_pv_group ?? DEFAULTS.pv_legend_show_pv_group,
+			pv_legend_show_pool_load: config.pv_legend_show_pool_load ?? DEFAULTS.pv_legend_show_pool_load,
 			pv_legend_show_house_load: config.pv_legend_show_house_load ?? DEFAULTS.pv_legend_show_house_load,
 			pv_legend_show_surplus: config.pv_legend_show_surplus ?? DEFAULTS.pv_legend_show_surplus,
 			pv_legend_show_thresholds: config.pv_legend_show_thresholds ?? DEFAULTS.pv_legend_show_thresholds,
@@ -1244,10 +1252,14 @@ class PoolControllerCard extends HTMLElement {
 			.pv-legend { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin-top:10px; font-size:12px; color: var(--secondary-text-color); }
 			.pv-legend-item { display:inline-flex; align-items:center; gap:6px; }
 			.pv-legend-dot { width:14px; height:8px; border-radius:999px; display:inline-block; }
-			.pv-legend-dot-pv-group { background: linear-gradient(90deg, #7b8794 0%, #e57373 25%, #f6b26b 50%, #7bc67b 75%, #43a047 100%); }
+			.pv-legend-dot-pv-group { background:#2e7d32; }
+			.pv-legend-dot-pool-load { background:#8a3b32; }
 			.pv-legend-dot-house { background:#1e88e5; }
 			.pv-legend-dot-surplus { background:#26a69a; }
 			.pv-legend-dot-thresholds { background: repeating-linear-gradient(90deg, #2e7d32 0 6px, #6a1b9a 6px 12px); }
+			.pv-legend-dot-zone-off { background: rgba(244,67,54,0.85); }
+			.pv-legend-dot-zone-stage1 { background: rgba(255,193,7,0.9); }
+			.pv-legend-dot-zone-stage2 { background: rgba(76,175,80,0.9); }
 		</style>`;
 	}
 
@@ -1735,6 +1747,7 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderPvBlock(d, c) {
 		const smoothedEntity = c.pv_smoothed_entity || c.pv_power_entity || "";
+		const poolLoadEntity = c.power_entity || "";
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = c.power_saving_pump_threshold_entity || "";
@@ -1745,6 +1758,7 @@ class PoolControllerCard extends HTMLElement {
 		const bandHighEntity = c.pv_band_high_entity || "";
 		const range = (c.pv_timerange || DEFAULTS.pv_timerange || "day").toString().trim();
 		const showPv = c.pv_show_pv !== false;
+		const showPoolLoad = c.pv_show_pool_load !== false;
 		const showHouseLoad = c.pv_show_house_load !== false;
 		const showSurplus = c.pv_show_surplus !== false;
 		const showBands = c.pv_show_bands !== false;
@@ -1752,7 +1766,7 @@ class PoolControllerCard extends HTMLElement {
 		const showAuxThreshold = c.pv_show_aux_threshold !== false;
 
 		const hasAny = !!(
-			smoothedEntity || houseLoadEntity || surplusEntity || pumpThresholdEntity || auxThresholdEntity
+			smoothedEntity || poolLoadEntity || houseLoadEntity || surplusEntity || pumpThresholdEntity || auxThresholdEntity
 		);
 		if (!hasAny) {
 			return `<div class="info-badge">PV-/Stromsparen-Sensoren nicht gefunden</div>`;
@@ -1763,12 +1777,14 @@ class PoolControllerCard extends HTMLElement {
 				data-pv-graph
 				data-pv-range="${range}"
 				data-show-pv="${showPv ? "1" : "0"}"
+				data-show-pool-load="${showPoolLoad ? "1" : "0"}"
 				data-show-house-load="${showHouseLoad ? "1" : "0"}"
 				data-show-surplus="${showSurplus ? "1" : "0"}"
 				data-show-bands="${showBands ? "1" : "0"}"
 				data-show-pump-threshold="${showPumpThreshold ? "1" : "0"}"
 				data-show-aux-threshold="${showAuxThreshold ? "1" : "0"}"
 				data-pv-smoothed-entity="${smoothedEntity}"
+				data-pool-load-entity="${poolLoadEntity}"
 				data-pv-house-load-entity="${houseLoadEntity}"
 				data-pv-surplus-entity="${surplusEntity}"
 				data-pump-threshold-entity="${pumpThresholdEntity}"
@@ -1790,50 +1806,87 @@ class PoolControllerCard extends HTMLElement {
 		const fmtW = (value) => (value == null ? "n/v" : `${value.toLocaleString("de-DE", { maximumFractionDigits: 1 })} W`);
 
 		const showPv = c.pv_show_pv !== false;
+		const showPoolLoad = c.pv_show_pool_load !== false;
 		const showHouseLoad = c.pv_show_house_load !== false;
 		const showSurplus = c.pv_show_surplus !== false;
 		const showBands = c.pv_show_bands !== false;
 		const showPumpThreshold = c.pv_show_pump_threshold !== false;
 		const showAuxThreshold = c.pv_show_aux_threshold !== false;
+		const showBandsEffective = showBands && !showPv;
 
 		const legendPvGroup = c.pv_legend_show_pv_group !== false;
+		const legendPoolLoad = c.pv_legend_show_pool_load !== false;
 		const legendHouse = c.pv_legend_show_house_load !== false;
 		const legendSurplus = c.pv_legend_show_surplus !== false;
 		const legendThresholds = c.pv_legend_show_thresholds !== false;
-		const powerSavingActive = !!d?.powerSavingActive;
 
 		const smoothedEntity = c.pv_smoothed_entity || c.pv_power_entity || "";
+		const poolLoadEntity = c.power_entity || "";
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = c.power_saving_pump_threshold_entity || "";
 		const auxThresholdEntity = c.power_saving_aux_threshold_entity || "";
-		const bandMidOffEntity = c.pv_band_mid_off_entity || "";
-		const bandMidOnEntity = c.pv_band_mid_on_entity || "";
 
 		const pvNow = num(smoothedEntity);
+		const poolLoadNow = num(poolLoadEntity);
 		const houseNow = num(houseLoadEntity);
 		const surplusNow = num(surplusEntity);
+		const pumpThreshold = num(pumpThresholdEntity);
+		const auxThreshold = num(auxThresholdEntity);
+
+		const lang = _langFromHass(this._hass);
+		const labels = {
+			de: {
+				pv: "PV",
+				pool_load: "Pool-Last",
+				house_load: "Hauslast",
+				surplus: "PV Überschuss Pool",
+				off: "Aus",
+				stage1: "Stufe 1 (Pumpe)",
+				stage2: "Stufe 2 (Zusatz)",
+				below: "unter",
+				from: "ab",
+			},
+			en: {
+				pv: "PV",
+				pool_load: "Pool load",
+				house_load: "House load",
+				surplus: "PV surplus pool",
+				off: "Off",
+				stage1: "Stage 1 (Pump)",
+				stage2: "Stage 2 (Aux)",
+				below: "below",
+				from: "from",
+			},
+		};
+		const L = labels[lang] || labels.en;
 
 		const items = [];
-		if (legendPvGroup && (showPv || showBands)) {
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-pv-group"></span><span>PV (inkl. Bänder): <strong>${fmtW(pvNow)}</strong></span></div>`);
+		if (legendPvGroup && (showPv || showBandsEffective)) {
+			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-pv-group"></span><span>${L.pv}: <strong>${fmtW(pvNow)}</strong></span></div>`);
+		}
+		if (legendPoolLoad && showPoolLoad) {
+			const poolValue = (poolLoadNow != null) ? poolLoadNow : (Number.isFinite(Number(d?.displayPower)) ? Number(d.displayPower) : null);
+			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-pool-load"></span><span>${L.pool_load}: <strong>${fmtW(poolValue)}</strong></span></div>`);
 		}
 		if (legendHouse && showHouseLoad) {
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-house"></span><span>Hauslast: <strong>${fmtW(houseNow)}</strong></span></div>`);
+			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-house"></span><span>${L.house_load}: <strong>${fmtW(houseNow)}</strong></span></div>`);
 		}
 		if (legendSurplus && showSurplus) {
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-surplus"></span><span>PV Überschuss Pool: <strong>${fmtW(surplusNow)}</strong></span></div>`);
+			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-surplus"></span><span>${L.surplus}: <strong>${fmtW(surplusNow)}</strong></span></div>`);
 		}
 		if (legendThresholds) {
-			if (powerSavingActive) {
-				const pumpVal = fmtW(num(pumpThresholdEntity));
-				const auxVal = fmtW(num(auxThresholdEntity));
-				const midOnVal = fmtW(num(bandMidOnEntity));
-				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-thresholds"></span><span>Schwellen: Ein ${midOnVal} · Pumpe ${pumpVal} · Zusatz ${auxVal}</span></div>`);
-			} else {
-				const midOffVal = fmtW(num(bandMidOffEntity));
-				const midOnVal = fmtW(num(bandMidOnEntity));
-				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-thresholds"></span><span>Schwellen: Aus ${midOffVal} · Ein ${midOnVal}</span></div>`);
+			if (showPumpThreshold && Number.isFinite(pumpThreshold) && pumpThreshold > 0) {
+				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-off"></span><span>${L.off}: ${L.below} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
+				if (showAuxThreshold && Number.isFinite(auxThreshold) && auxThreshold > pumpThreshold) {
+					items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage1"></span><span>${L.stage1}: ${L.from} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
+					items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage2"></span><span>${L.stage2}: ${L.from} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
+				} else {
+					items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage1"></span><span>${L.stage1}: ${L.from} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
+				}
+			} else if (showAuxThreshold && Number.isFinite(auxThreshold) && auxThreshold > 0) {
+				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-off"></span><span>${L.off}: ${L.below} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
+				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage2"></span><span>${L.stage2}: ${L.from} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
 			}
 		}
 
@@ -2269,13 +2322,16 @@ class PoolControllerCard extends HTMLElement {
 		if (!host) return;
 		const range = host.getAttribute("data-pv-range") || "day";
 		const showPv = host.getAttribute("data-show-pv") !== "0";
+		const showPoolLoad = host.getAttribute("data-show-pool-load") !== "0";
 		const showHouseLoad = host.getAttribute("data-show-house-load") !== "0";
 		const showSurplus = host.getAttribute("data-show-surplus") !== "0";
 		const showBands = host.getAttribute("data-show-bands") !== "0";
+		const showBandsEffective = showBands && !showPv;
 		const showPumpThreshold = host.getAttribute("data-show-pump-threshold") !== "0";
 		const showAuxThreshold = host.getAttribute("data-show-aux-threshold") !== "0";
 
 		const smoothedEntity = host.getAttribute("data-pv-smoothed-entity") || "";
+		const poolLoadEntity = host.getAttribute("data-pool-load-entity") || "";
 		const houseLoadEntity = host.getAttribute("data-pv-house-load-entity") || "";
 		const surplusEntity = host.getAttribute("data-pv-surplus-entity") || "";
 		const pumpThresholdEntity = host.getAttribute("data-pump-threshold-entity") || "";
@@ -2292,12 +2348,14 @@ class PoolControllerCard extends HTMLElement {
 			range,
 			powerSavingActive ? "ps-on" : "ps-off",
 			showPv ? "1" : "0",
+			showPoolLoad ? "1" : "0",
 			showHouseLoad ? "1" : "0",
 			showSurplus ? "1" : "0",
-			showBands ? "1" : "0",
+			showBandsEffective ? "1" : "0",
 			showPumpThreshold ? "1" : "0",
 			showAuxThreshold ? "1" : "0",
 			smoothedEntity,
+			poolLoadEntity,
 			houseLoadEntity,
 			surplusEntity,
 			pumpThresholdEntity,
@@ -2333,22 +2391,25 @@ class PoolControllerCard extends HTMLElement {
 		if (showPv && smoothedEntity) {
 			series.push({ entity: smoothedEntity, name: "PV", color: "#2e7d32", stroke_width: 3, opacity: 0.8 });
 		}
+		if (showPoolLoad && poolLoadEntity) {
+			series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85 });
+		}
 		if (showHouseLoad && houseLoadEntity) {
 			series.push({ entity: houseLoadEntity, name: "Hauslast", color: "#1565c0", stroke_width: 2, opacity: 0.85 });
 		}
 		if (showSurplus && surplusEntity) {
 			series.push({ entity: surplusEntity, name: "PV Überschuss Pool", color: "#00897b", stroke_width: 2, opacity: 0.7 });
 		}
-		if (showBands && bandLowEntity) {
+		if (showBandsEffective && bandLowEntity) {
 			series.push({ entity: bandLowEntity, name: "PV low", color: "#a5d6a7", stroke_width: 2, opacity: 0.55 });
 		}
-		if (showBands && bandMidOffEntity) {
+		if (showBandsEffective && bandMidOffEntity) {
 			series.push({ entity: bandMidOffEntity, name: "PV mid (off)", color: "#81c784", stroke_width: 2, opacity: 0.6 });
 		}
-		if (showBands && bandMidOnEntity) {
+		if (showBandsEffective && bandMidOnEntity) {
 			series.push({ entity: bandMidOnEntity, name: "PV mid (on)", color: "#66bb6a", stroke_width: 2, opacity: 0.65 });
 		}
-		if (showBands && bandHighEntity) {
+		if (showBandsEffective && bandHighEntity) {
 			series.push({ entity: bandHighEntity, name: "PV high", color: "#43a047", stroke_width: 2, opacity: 0.75 });
 		}
 		if (showPumpThreshold && pumpThresholdEntity) {
@@ -2365,34 +2426,37 @@ class PoolControllerCard extends HTMLElement {
 			return this._num(this._hass.states[entityId].state);
 		};
 
-		const thresholdValues = [];
-		if (powerSavingActive) {
-			thresholdValues.push(stateNum(bandMidOnEntity));
-			thresholdValues.push(stateNum(pumpThresholdEntity));
-			thresholdValues.push(stateNum(auxThresholdEntity));
-		} else {
-			thresholdValues.push(stateNum(bandMidOffEntity));
-			thresholdValues.push(stateNum(bandMidOnEntity));
-		}
-		const cleanThresholds = Array.from(new Set(thresholdValues.filter((v) => Number.isFinite(v) && v > 0))).sort((a, b) => a - b);
+		const pumpThreshold = stateNum(pumpThresholdEntity);
+		const auxThreshold = stateNum(auxThresholdEntity);
 		const valueCandidates = [
 			stateNum(smoothedEntity),
+			stateNum(poolLoadEntity),
 			stateNum(houseLoadEntity),
 			stateNum(surplusEntity),
 			stateNum(bandLowEntity),
 			stateNum(bandHighEntity),
-			...cleanThresholds,
+			pumpThreshold,
+			auxThreshold,
 		].filter((v) => Number.isFinite(v) && v >= 0);
 		const maxCandidate = valueCandidates.length ? Math.max(...valueCandidates) : null;
-		const bandMax = Number.isFinite(maxCandidate) ? Math.max(maxCandidate * 1.1, (cleanThresholds.at(-1) || 0) * 1.1) : null;
-		const zoneStops = [0, ...cleanThresholds, bandMax].filter((v) => Number.isFinite(v));
-		const zoneColors = ["rgba(244,67,54,0.08)", "rgba(255,193,7,0.08)", "rgba(139,195,74,0.08)", "rgba(76,175,80,0.06)"];
+		const highestThreshold = [pumpThreshold, auxThreshold].filter((v) => Number.isFinite(v) && v > 0).reduce((acc, cur) => Math.max(acc, cur), 0);
+		const bandMax = Number.isFinite(maxCandidate) ? Math.max(maxCandidate * 1.1, highestThreshold * 1.1) : null;
 		const yaxisZones = [];
-		for (let i = 0; i + 1 < zoneStops.length; i += 1) {
-			const y = zoneStops[i];
-			const y2 = zoneStops[i + 1];
-			if (!Number.isFinite(y) || !Number.isFinite(y2) || y2 <= y) continue;
-			yaxisZones.push({ y, y2, fillColor: zoneColors[Math.min(i, zoneColors.length - 1)], opacity: 1 });
+		if (Number.isFinite(bandMax) && bandMax > 0) {
+			const pump = Number.isFinite(pumpThreshold) && pumpThreshold > 0 ? pumpThreshold : null;
+			const aux = Number.isFinite(auxThreshold) && auxThreshold > 0 ? auxThreshold : null;
+			if (pump != null) {
+				yaxisZones.push({ y: 0, y2: Math.min(pump, bandMax), fillColor: "rgba(244,67,54,0.08)", opacity: 1 });
+				if (aux != null && aux > pump) {
+					yaxisZones.push({ y: pump, y2: Math.min(aux, bandMax), fillColor: "rgba(255,193,7,0.08)", opacity: 1 });
+					yaxisZones.push({ y: aux, y2: bandMax, fillColor: "rgba(76,175,80,0.06)", opacity: 1 });
+				} else {
+					yaxisZones.push({ y: pump, y2: bandMax, fillColor: "rgba(255,193,7,0.08)", opacity: 1 });
+				}
+			} else if (aux != null) {
+				yaxisZones.push({ y: 0, y2: Math.min(aux, bandMax), fillColor: "rgba(244,67,54,0.08)", opacity: 1 });
+				yaxisZones.push({ y: aux, y2: bandMax, fillColor: "rgba(76,175,80,0.06)", opacity: 1 });
+			}
 		}
 
 		const cardConfig = {
@@ -2932,6 +2996,7 @@ class PoolControllerCard extends HTMLElement {
 						c?.power_saving_active_entity,
 					c?.pv_smoothed_entity,
 					c?.pv_power_entity,
+					c?.power_entity,
 					c?.pv_house_load_entity,
 					c?.pv_surplus_for_pool_entity,
 					c?.power_saving_pump_threshold_entity,
@@ -3668,6 +3733,7 @@ class PoolControllerCardEditor extends HTMLElement {
 				<label>${_t(lang, "editor.pv_series")}</label>
 				<div class="grid2">
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-pv" type="checkbox" /><span>${_t(lang, "editor.pv_show_pv")}</span></label>
+					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-pool-load" type="checkbox" /><span>${_t(lang, "editor.pv_show_pool_load")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-house-load" type="checkbox" /><span>${_t(lang, "editor.pv_show_house_load")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-surplus" type="checkbox" /><span>${_t(lang, "editor.pv_show_surplus")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-bands" type="checkbox" /><span>${_t(lang, "editor.pv_show_bands")}</span></label>
@@ -3679,6 +3745,7 @@ class PoolControllerCardEditor extends HTMLElement {
 				<label>${_t(lang, "editor.pv_legend")}</label>
 				<div class="grid2">
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-legend-show-pv-group" type="checkbox" /><span>${_t(lang, "editor.pv_legend_show_pv_group")}</span></label>
+					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-legend-show-pool-load" type="checkbox" /><span>${_t(lang, "editor.pv_legend_show_pool_load")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-legend-show-house-load" type="checkbox" /><span>${_t(lang, "editor.pv_legend_show_house_load")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-legend-show-surplus" type="checkbox" /><span>${_t(lang, "editor.pv_legend_show_surplus")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-legend-show-thresholds" type="checkbox" /><span>${_t(lang, "editor.pv_legend_show_thresholds")}</span></label>
@@ -3762,12 +3829,14 @@ class PoolControllerCardEditor extends HTMLElement {
 				const pvCopyRow = this.shadowRoot.querySelector('#pv-copy-row');
 				const pvRangeSelect = this.shadowRoot.querySelector('#pv-range-select');
 				const pvShowPv = this.shadowRoot.querySelector('#pv-show-pv');
+				const pvShowPoolLoad = this.shadowRoot.querySelector('#pv-show-pool-load');
 				const pvShowHouseLoad = this.shadowRoot.querySelector('#pv-show-house-load');
 				const pvShowSurplus = this.shadowRoot.querySelector('#pv-show-surplus');
 				const pvShowBands = this.shadowRoot.querySelector('#pv-show-bands');
 				const pvShowPumpThreshold = this.shadowRoot.querySelector('#pv-show-pump-threshold');
 				const pvShowAuxThreshold = this.shadowRoot.querySelector('#pv-show-aux-threshold');
 				const pvLegendShowPvGroup = this.shadowRoot.querySelector('#pv-legend-show-pv-group');
+				const pvLegendShowPoolLoad = this.shadowRoot.querySelector('#pv-legend-show-pool-load');
 				const pvLegendShowHouseLoad = this.shadowRoot.querySelector('#pv-legend-show-house-load');
 				const pvLegendShowSurplus = this.shadowRoot.querySelector('#pv-legend-show-surplus');
 				const pvLegendShowThresholds = this.shadowRoot.querySelector('#pv-legend-show-thresholds');
@@ -3777,12 +3846,14 @@ class PoolControllerCardEditor extends HTMLElement {
 				if (costDebugToggle) costDebugToggle.checked = !!this._config?.debug_cost;
 				if (pvRangeSelect) pvRangeSelect.value = (this._config?.pv_timerange || DEFAULTS.pv_timerange);
 				if (pvShowPv) pvShowPv.checked = this._config?.pv_show_pv !== false;
+				if (pvShowPoolLoad) pvShowPoolLoad.checked = this._config?.pv_show_pool_load !== false;
 				if (pvShowHouseLoad) pvShowHouseLoad.checked = this._config?.pv_show_house_load !== false;
 				if (pvShowSurplus) pvShowSurplus.checked = this._config?.pv_show_surplus !== false;
 				if (pvShowBands) pvShowBands.checked = this._config?.pv_show_bands !== false;
 				if (pvShowPumpThreshold) pvShowPumpThreshold.checked = this._config?.pv_show_pump_threshold !== false;
 				if (pvShowAuxThreshold) pvShowAuxThreshold.checked = this._config?.pv_show_aux_threshold !== false;
 				if (pvLegendShowPvGroup) pvLegendShowPvGroup.checked = this._config?.pv_legend_show_pv_group !== false;
+				if (pvLegendShowPoolLoad) pvLegendShowPoolLoad.checked = this._config?.pv_legend_show_pool_load !== false;
 				if (pvLegendShowHouseLoad) pvLegendShowHouseLoad.checked = this._config?.pv_legend_show_house_load !== false;
 				if (pvLegendShowSurplus) pvLegendShowSurplus.checked = this._config?.pv_legend_show_surplus !== false;
 				if (pvLegendShowThresholds) pvLegendShowThresholds.checked = this._config?.pv_legend_show_thresholds !== false;
@@ -3813,6 +3884,9 @@ class PoolControllerCardEditor extends HTMLElement {
 				if (pvShowPv) {
 					pvShowPv.onchange = (e) => { this._updateConfig({ pv_show_pv: !!e.target.checked }); };
 				}
+				if (pvShowPoolLoad) {
+					pvShowPoolLoad.onchange = (e) => { this._updateConfig({ pv_show_pool_load: !!e.target.checked }); };
+				}
 				if (pvShowHouseLoad) {
 					pvShowHouseLoad.onchange = (e) => { this._updateConfig({ pv_show_house_load: !!e.target.checked }); };
 				}
@@ -3830,6 +3904,9 @@ class PoolControllerCardEditor extends HTMLElement {
 				}
 				if (pvLegendShowPvGroup) {
 					pvLegendShowPvGroup.onchange = (e) => { this._updateConfig({ pv_legend_show_pv_group: !!e.target.checked }); };
+				}
+				if (pvLegendShowPoolLoad) {
+					pvLegendShowPoolLoad.onchange = (e) => { this._updateConfig({ pv_legend_show_pool_load: !!e.target.checked }); };
 				}
 				if (pvLegendShowHouseLoad) {
 					pvLegendShowHouseLoad.onchange = (e) => { this._updateConfig({ pv_legend_show_house_load: !!e.target.checked }); };
@@ -3906,6 +3983,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		return {
 			power_saving_active_entity: this._pickEntity(entries, "binary_sensor", ["power_saving_active"]) || null,
 			pv_power_entity: this._pickEntity(entries, "sensor", ["pv_power"]) || null,
+			power_entity: this._pickEntity(entries, "sensor", ["power"]) || null,
 			pv_smoothed_entity: this._pickEntity(entries, "sensor", ["pv_smoothed"]) || null,
 			pv_house_load_entity: this._pickEntity(entries, "sensor", ["pv_house_load"]) || null,
 			pv_surplus_for_pool_entity: this._pickEntity(entries, "sensor", ["pv_surplus_for_pool"]) || null,
@@ -3923,6 +4001,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		const derived = await this._derivePvEntitiesForEditor();
 
 		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || merged.pv_power_entity || derived.pv_power_entity || "";
+		const poolLoadEntity = merged.power_entity || derived.power_entity || "";
 		const houseLoadEntity = merged.pv_house_load_entity || derived.pv_house_load_entity || "";
 		const surplusEntity = merged.pv_surplus_for_pool_entity || derived.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = merged.power_saving_pump_threshold_entity || derived.power_saving_pump_threshold_entity || "";
@@ -3933,20 +4012,23 @@ class PoolControllerCardEditor extends HTMLElement {
 		const bandHighEntity = merged.pv_band_high_entity || derived.pv_band_high_entity || "";
 
 		const showPv = merged.pv_show_pv !== false;
+		const showPoolLoad = merged.pv_show_pool_load !== false;
 		const showHouseLoad = merged.pv_show_house_load !== false;
 		const showSurplus = merged.pv_show_surplus !== false;
 		const showBands = merged.pv_show_bands !== false;
+		const showBandsEffective = showBands && !showPv;
 		const showPumpThreshold = merged.pv_show_pump_threshold !== false;
 		const showAuxThreshold = merged.pv_show_aux_threshold !== false;
 
 		const series = [];
 		if (showPv && smoothedEntity) series.push({ entity: smoothedEntity, name: "PV", color: "#2e7d32", stroke_width: 3, opacity: 0.8 });
+		if (showPoolLoad && poolLoadEntity) series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85 });
 		if (showHouseLoad && houseLoadEntity) series.push({ entity: houseLoadEntity, name: "Hauslast", color: "#1565c0", stroke_width: 2, opacity: 0.85 });
 		if (showSurplus && surplusEntity) series.push({ entity: surplusEntity, name: "PV Überschuss Pool", color: "#00897b", stroke_width: 2, opacity: 0.7 });
-		if (showBands && bandLowEntity) series.push({ entity: bandLowEntity, name: "PV low", color: "#a5d6a7", stroke_width: 2, opacity: 0.55 });
-		if (showBands && bandMidOffEntity) series.push({ entity: bandMidOffEntity, name: "PV mid (off)", color: "#81c784", stroke_width: 2, opacity: 0.6 });
-		if (showBands && bandMidOnEntity) series.push({ entity: bandMidOnEntity, name: "PV mid (on)", color: "#66bb6a", stroke_width: 2, opacity: 0.65 });
-		if (showBands && bandHighEntity) series.push({ entity: bandHighEntity, name: "PV high", color: "#43a047", stroke_width: 2, opacity: 0.75 });
+		if (showBandsEffective && bandLowEntity) series.push({ entity: bandLowEntity, name: "PV low", color: "#a5d6a7", stroke_width: 2, opacity: 0.55 });
+		if (showBandsEffective && bandMidOffEntity) series.push({ entity: bandMidOffEntity, name: "PV mid (off)", color: "#81c784", stroke_width: 2, opacity: 0.6 });
+		if (showBandsEffective && bandMidOnEntity) series.push({ entity: bandMidOnEntity, name: "PV mid (on)", color: "#66bb6a", stroke_width: 2, opacity: 0.65 });
+		if (showBandsEffective && bandHighEntity) series.push({ entity: bandHighEntity, name: "PV high", color: "#43a047", stroke_width: 2, opacity: 0.75 });
 		if (showPumpThreshold && pumpThresholdEntity) series.push({ entity: pumpThresholdEntity, name: "Stromsparen Schwelle Pumpe", color: "#2e7d32", stroke_width: 2, opacity: 0.9, stroke_dash: 6 });
 		if (showAuxThreshold && auxThresholdEntity) series.push({ entity: auxThresholdEntity, name: "Stromsparen Schwelle Zusatzheizung", color: "#6a1b9a", stroke_width: 2, opacity: 0.95, stroke_dash: 6 });
 
@@ -3954,36 +4036,37 @@ class PoolControllerCardEditor extends HTMLElement {
 			if (!entityId || !this._hass?.states?.[entityId]) return null;
 			return this._num(this._hass.states[entityId].state);
 		};
-		const powerSavingActiveEntityId = merged.power_saving_active_entity || derived.power_saving_active_entity || null;
-		const powerSavingActive = powerSavingActiveEntityId ? this._isOn(this._hass?.states?.[powerSavingActiveEntityId]) : false;
-		const thresholdValues = [];
-		if (powerSavingActive) {
-			thresholdValues.push(stateNum(bandMidOnEntity));
-			thresholdValues.push(stateNum(pumpThresholdEntity));
-			thresholdValues.push(stateNum(auxThresholdEntity));
-		} else {
-			thresholdValues.push(stateNum(bandMidOffEntity));
-			thresholdValues.push(stateNum(bandMidOnEntity));
-		}
-		const cleanThresholds = Array.from(new Set(thresholdValues.filter((v) => Number.isFinite(v) && v > 0))).sort((a, b) => a - b);
+		const pumpThreshold = stateNum(pumpThresholdEntity);
+		const auxThreshold = stateNum(auxThresholdEntity);
 		const valueCandidates = [
 			stateNum(smoothedEntity),
+			stateNum(poolLoadEntity),
 			stateNum(houseLoadEntity),
 			stateNum(surplusEntity),
 			stateNum(bandLowEntity),
 			stateNum(bandHighEntity),
-			...cleanThresholds,
+			pumpThreshold,
+			auxThreshold,
 		].filter((v) => Number.isFinite(v) && v >= 0);
 		const maxCandidate = valueCandidates.length ? Math.max(...valueCandidates) : null;
-		const bandMax = Number.isFinite(maxCandidate) ? Math.max(maxCandidate * 1.1, (cleanThresholds.at(-1) || 0) * 1.1) : null;
-		const zoneStops = [0, ...cleanThresholds, bandMax].filter((v) => Number.isFinite(v));
-		const zoneColors = ["rgba(244,67,54,0.08)", "rgba(255,193,7,0.08)", "rgba(139,195,74,0.08)", "rgba(76,175,80,0.06)"];
+		const highestThreshold = [pumpThreshold, auxThreshold].filter((v) => Number.isFinite(v) && v > 0).reduce((acc, cur) => Math.max(acc, cur), 0);
+		const bandMax = Number.isFinite(maxCandidate) ? Math.max(maxCandidate * 1.1, highestThreshold * 1.1) : null;
 		const yaxisZones = [];
-		for (let i = 0; i + 1 < zoneStops.length; i += 1) {
-			const y = zoneStops[i];
-			const y2 = zoneStops[i + 1];
-			if (!Number.isFinite(y) || !Number.isFinite(y2) || y2 <= y) continue;
-			yaxisZones.push({ y, y2, fillColor: zoneColors[Math.min(i, zoneColors.length - 1)], opacity: 1 });
+		if (Number.isFinite(bandMax) && bandMax > 0) {
+			const pump = Number.isFinite(pumpThreshold) && pumpThreshold > 0 ? pumpThreshold : null;
+			const aux = Number.isFinite(auxThreshold) && auxThreshold > 0 ? auxThreshold : null;
+			if (pump != null) {
+				yaxisZones.push({ y: 0, y2: Math.min(pump, bandMax), fillColor: "rgba(244,67,54,0.08)", opacity: 1 });
+				if (aux != null && aux > pump) {
+					yaxisZones.push({ y: pump, y2: Math.min(aux, bandMax), fillColor: "rgba(255,193,7,0.08)", opacity: 1 });
+					yaxisZones.push({ y: aux, y2: bandMax, fillColor: "rgba(76,175,80,0.06)", opacity: 1 });
+				} else {
+					yaxisZones.push({ y: pump, y2: bandMax, fillColor: "rgba(255,193,7,0.08)", opacity: 1 });
+				}
+			} else if (aux != null) {
+				yaxisZones.push({ y: 0, y2: Math.min(aux, bandMax), fillColor: "rgba(244,67,54,0.08)", opacity: 1 });
+				yaxisZones.push({ y: aux, y2: bandMax, fillColor: "rgba(76,175,80,0.06)", opacity: 1 });
+			}
 		}
 
 		const cardConfig = {
@@ -4074,12 +4157,14 @@ class PoolControllerCardEditor extends HTMLElement {
 			debug_cost: merged.debug_cost ?? DEFAULTS.debug_cost,
 			pv_timerange: merged.pv_timerange ?? DEFAULTS.pv_timerange,
 			pv_show_pv: merged.pv_show_pv ?? DEFAULTS.pv_show_pv,
+			pv_show_pool_load: merged.pv_show_pool_load ?? DEFAULTS.pv_show_pool_load,
 			pv_show_house_load: merged.pv_show_house_load ?? DEFAULTS.pv_show_house_load,
 			pv_show_surplus: merged.pv_show_surplus ?? DEFAULTS.pv_show_surplus,
 			pv_show_bands: merged.pv_show_bands ?? DEFAULTS.pv_show_bands,
 			pv_show_pump_threshold: merged.pv_show_pump_threshold ?? DEFAULTS.pv_show_pump_threshold,
 			pv_show_aux_threshold: merged.pv_show_aux_threshold ?? DEFAULTS.pv_show_aux_threshold,
 			pv_legend_show_pv_group: merged.pv_legend_show_pv_group ?? DEFAULTS.pv_legend_show_pv_group,
+			pv_legend_show_pool_load: merged.pv_legend_show_pool_load ?? DEFAULTS.pv_legend_show_pool_load,
 			pv_legend_show_house_load: merged.pv_legend_show_house_load ?? DEFAULTS.pv_legend_show_house_load,
 			pv_legend_show_surplus: merged.pv_legend_show_surplus ?? DEFAULTS.pv_legend_show_surplus,
 			pv_legend_show_thresholds: merged.pv_legend_show_thresholds ?? DEFAULTS.pv_legend_show_thresholds,
