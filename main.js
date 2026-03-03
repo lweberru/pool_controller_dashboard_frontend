@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.38";
+const VERSION = "2.3.39";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2638,6 +2638,7 @@ class PoolControllerCard extends HTMLElement {
 				head: "Stromsparen",
 				stage2: "Stufe 2 (Zusatzheizung)",
 				stage1: "Stufe 1 (Pumpe)",
+				no_heat_demand: "aus – kein Heizbedarf",
 				sensors_missing: "wartet – Sensorwerte fehlen",
 				quiet: "wartet – Ruhezeit aktiv",
 				away: "wartet – Abwesend aktiv",
@@ -2649,6 +2650,7 @@ class PoolControllerCard extends HTMLElement {
 				head: "Power saving",
 				stage2: "Stage 2 (Aux heater)",
 				stage1: "Stage 1 (Pump)",
+				no_heat_demand: "off – no heat demand",
 				sensors_missing: "waiting – missing live sensor values",
 				quiet: "waiting – quiet hours active",
 				away: "waiting – away mode active",
@@ -2658,12 +2660,20 @@ class PoolControllerCard extends HTMLElement {
 			},
 		};
 		const L = labels[lang] || labels.en;
+		const noHeatDemand = (
+			(d.current != null)
+			&& (d.target != null)
+			&& Number.isFinite(Number(d.current))
+			&& Number.isFinite(Number(d.target))
+			&& Number(d.current) >= Number(d.target)
+		);
 		let detail = L.waiting;
 		if (!d.powerSavingAvailable) detail = L.sensors_missing;
 		else if (d.maintenanceActive) detail = L.maintenance;
 		else if (d.pauseState?.active) detail = L.pause;
 		else if (d.awayActive) detail = L.away;
 		else if (d.quiet) detail = L.quiet;
+		else if (noHeatDemand) detail = L.no_heat_demand;
 		else if (d.powerSavingStage === 2) detail = L.stage2;
 		else if (d.powerSavingStage === 1) detail = L.stage1;
 		return `${L.head}: ${detail}`;
