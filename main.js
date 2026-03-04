@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.40";
+const VERSION = "2.3.41";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -925,6 +925,8 @@ class PoolControllerCard extends HTMLElement {
 		const nextEventStart = c.next_event_entity ? h.states[c.next_event_entity]?.state : null;
 		const nextEventEnd = c.next_event_end_entity ? h.states[c.next_event_end_entity]?.state : null;
 		const nextEventSummary = c.next_event_summary_entity ? h.states[c.next_event_summary_entity]?.state : null;
+		const nextEventSummaryEntityId = c.next_event_summary_entity || null;
+		const nextEventEndEntityId = c.next_event_end_entity || null;
 		const eventRainProbabilityEntityId = c.event_rain_probability_entity || this._derivedEntities?.event_rain_probability_entity || null;
 		const eventRainBlockedEntityId = c.event_rain_blocked_entity || this._derivedEntities?.event_rain_blocked_entity || null;
 		const eventRainProbability = eventRainProbabilityEntityId ? this._num(h.states[eventRainProbabilityEntityId]?.state) : null;
@@ -995,6 +997,12 @@ class PoolControllerCard extends HTMLElement {
 			shouldAuxOnEntityId,
 			powerEntityId: c.power_entity || null,
 			powerMoreInfoEntityId,
+			phPlusEntityId: c.ph_plus_entity || null,
+			phMinusEntityId: c.ph_minus_entity || null,
+			chlorDoseEntityId: c.chlor_dose_entity || null,
+			waterChangePercentEntityId,
+			waterChangeLitersEntityId,
+			tdsAssessmentEntityId: tdsAssessmentEntityId || null,
 
 			maintenanceActive,
 			awayActive,
@@ -1032,6 +1040,8 @@ class PoolControllerCard extends HTMLElement {
 			nextStartMinsEntityId: c.next_start_entity || null,
 			nextFilterMinsEntityId: c.next_filter_in || null,
 			nextEventEntityId: c.next_event_entity || null,
+			nextEventSummaryEntityId,
+			nextEventEndEntityId,
 			effectiveMinTemp: tc.min_temp,
 			effectiveMaxTemp: tc.max_temp,
 			effectiveStep: tc.step,
@@ -1635,16 +1645,19 @@ class PoolControllerCard extends HTMLElement {
 
 		const rows = [];
 		if (nextEvent) {
+			const nextEventEntityId = d.nextEventEntityId || d.nextEventSummaryEntityId || d.nextEventEndEntityId || d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId;
 			rows.push({
 				label: nextEventSummary,
 				value: nextEvent,
 				title: nextEventTitle,
+				entityId: nextEventEntityId,
 			});
 		}
 		rows.push({
 			label: _t(lang, "ui.next_event"),
 			value: nextStartText,
 			title: nextStartTitle,
+			entityId: d.nextStartMinsEntityId,
 		});
 		if (nextFilter != null) {
 			const nf = this._formatCountdown(lang, nextFilter);
@@ -1652,6 +1665,7 @@ class PoolControllerCard extends HTMLElement {
 				label: _t(lang, "ui.next_filter_cycle"),
 				value: nf.text,
 				title: nf.title,
+				entityId: d.nextFilterMinsEntityId,
 			});
 		}
 		if (showNextFrost) {
@@ -1659,6 +1673,7 @@ class PoolControllerCard extends HTMLElement {
 				label: _t(lang, "ui.next_frost_cycle"),
 				value: nextFrostText,
 				title: nextFrostTitle,
+				entityId: d.nextFrostMinsEntityId,
 			});
 		}
 		creditLines.forEach((line) => rows.push({
@@ -1687,12 +1702,15 @@ class PoolControllerCard extends HTMLElement {
 			? (d.saltAddNum >= 1000 ? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)` : `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
 		const items = [];
-		if (d.phPlusNum && d.phPlusNum > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div><div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div></div></div>`);
-		if (saltAddDisplay) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:shaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_salt")}</div><div class="maintenance-value">${saltAddDisplay}</div></div></div>`);
-		if (d.waterChangePercent && d.waterChangePercent > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:water"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.change_water")}</div><div class="maintenance-value">${d.waterChangePercent}%${d.waterChangeLiters ? ` — ${d.waterChangeLiters} L` : ''}</div></div></div>`);
-		if (d.phMinusNum && d.phMinusNum > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_minus")}</div><div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div></div></div>`);
-		if (d.chlorDoseNum && d.chlorDoseNum > 0) items.push(`<div class="maintenance-item"><ha-icon icon="mdi:beaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_chlorine")}</div><div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div></div></div>`);
-		if (items.length === 0) items.push(`<div class="maintenance-item"><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.maintenance")}</div><div class="maintenance-value">${_t(lang, "ui.no_actions_needed") || '—'}</div></div></div>`);
+		if (d.phPlusNum && d.phPlusNum > 0) items.push(`<div class="maintenance-item" ${d.phPlusEntityId ? `data-more-info="${d.phPlusEntityId}"` : ""}><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div><div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div></div></div>`);
+		if (saltAddDisplay) items.push(`<div class="maintenance-item" ${d.saltAddEntityId ? `data-more-info="${d.saltAddEntityId}"` : ""}><ha-icon icon="mdi:shaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_salt")}</div><div class="maintenance-value">${saltAddDisplay}</div></div></div>`);
+		if (d.waterChangePercent && d.waterChangePercent > 0) {
+			const waterChangeEntityId = d.waterChangePercentEntityId || d.waterChangeLitersEntityId || d.tdsAssessmentEntityId || d.tdsEntityId;
+			items.push(`<div class="maintenance-item" ${waterChangeEntityId ? `data-more-info="${waterChangeEntityId}"` : ""}><ha-icon icon="mdi:water"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.change_water")}</div><div class="maintenance-value">${d.waterChangePercent}%${d.waterChangeLiters ? ` — ${d.waterChangeLiters} L` : ''}</div></div></div>`);
+		}
+		if (d.phMinusNum && d.phMinusNum > 0) items.push(`<div class="maintenance-item" ${d.phMinusEntityId ? `data-more-info="${d.phMinusEntityId}"` : ""}><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_minus")}</div><div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div></div></div>`);
+		if (d.chlorDoseNum && d.chlorDoseNum > 0) items.push(`<div class="maintenance-item" ${d.chlorDoseEntityId ? `data-more-info="${d.chlorDoseEntityId}"` : ""}><ha-icon icon="mdi:beaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_chlorine")}</div><div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div></div></div>`);
+		if (items.length === 0) items.push(`<div class="maintenance-item" ${d.maintenanceEntityId ? `data-more-info="${d.maintenanceEntityId}"` : ""}><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.maintenance")}</div><div class="maintenance-value">${_t(lang, "ui.no_actions_needed") || '—'}</div></div></div>`);
 
 		return `<div class="maintenance-block">
 			<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
@@ -1863,30 +1881,31 @@ class PoolControllerCard extends HTMLElement {
 
 		const items = [];
 		if (legendPvGroup && (showPv || showBandsEffective)) {
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-pv-group"></span><span>${L.pv}: <strong>${fmtW(pvNow)}</strong></span></div>`);
+			items.push(`<div class="pv-legend-item" ${smoothedEntity ? `data-more-info="${smoothedEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-pv-group"></span><span>${L.pv}: <strong>${fmtW(pvNow)}</strong></span></div>`);
 		}
 		if (legendPoolLoad && showPoolLoad) {
 			const poolValue = (poolLoadNow != null) ? poolLoadNow : (Number.isFinite(Number(d?.displayPower)) ? Number(d.displayPower) : null);
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-pool-load"></span><span>${L.pool_load}: <strong>${fmtW(poolValue)}</strong></span></div>`);
+			const poolEntityId = poolLoadEntity || d?.powerEntityId || d?.powerMoreInfoEntityId || "";
+			items.push(`<div class="pv-legend-item" ${poolEntityId ? `data-more-info="${poolEntityId}"` : ""}><span class="pv-legend-dot pv-legend-dot-pool-load"></span><span>${L.pool_load}: <strong>${fmtW(poolValue)}</strong></span></div>`);
 		}
 		if (legendHouse && showHouseLoad) {
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-house"></span><span>${L.house_load}: <strong>${fmtW(houseNow)}</strong></span></div>`);
+			items.push(`<div class="pv-legend-item" ${houseLoadEntity ? `data-more-info="${houseLoadEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-house"></span><span>${L.house_load}: <strong>${fmtW(houseNow)}</strong></span></div>`);
 		}
 		if (legendSurplus && showSurplus) {
-			items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-surplus"></span><span>${L.surplus}: <strong>${fmtW(surplusNow)}</strong></span></div>`);
+			items.push(`<div class="pv-legend-item" ${surplusEntity ? `data-more-info="${surplusEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-surplus"></span><span>${L.surplus}: <strong>${fmtW(surplusNow)}</strong></span></div>`);
 		}
 		if (legendThresholds) {
 			if (showPumpThreshold && Number.isFinite(pumpThreshold) && pumpThreshold > 0) {
-				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-off"></span><span>${L.off}: ${L.below} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
+				items.push(`<div class="pv-legend-item" ${pumpThresholdEntity ? `data-more-info="${pumpThresholdEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-zone-off"></span><span>${L.off}: ${L.below} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
 				if (showAuxThreshold && Number.isFinite(auxThreshold) && auxThreshold > pumpThreshold) {
-					items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage1"></span><span>${L.stage1}: ${L.from} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
-					items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage2"></span><span>${L.stage2}: ${L.from} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
+					items.push(`<div class="pv-legend-item" ${pumpThresholdEntity ? `data-more-info="${pumpThresholdEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-zone-stage1"></span><span>${L.stage1}: ${L.from} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
+					items.push(`<div class="pv-legend-item" ${auxThresholdEntity ? `data-more-info="${auxThresholdEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-zone-stage2"></span><span>${L.stage2}: ${L.from} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
 				} else {
-					items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage1"></span><span>${L.stage1}: ${L.from} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
+					items.push(`<div class="pv-legend-item" ${pumpThresholdEntity ? `data-more-info="${pumpThresholdEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-zone-stage1"></span><span>${L.stage1}: ${L.from} <strong>${fmtW(pumpThreshold)}</strong></span></div>`);
 				}
 			} else if (showAuxThreshold && Number.isFinite(auxThreshold) && auxThreshold > 0) {
-				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-off"></span><span>${L.off}: ${L.below} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
-				items.push(`<div class="pv-legend-item"><span class="pv-legend-dot pv-legend-dot-zone-stage2"></span><span>${L.stage2}: ${L.from} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
+				items.push(`<div class="pv-legend-item" ${auxThresholdEntity ? `data-more-info="${auxThresholdEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-zone-off"></span><span>${L.off}: ${L.below} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
+				items.push(`<div class="pv-legend-item" ${auxThresholdEntity ? `data-more-info="${auxThresholdEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-zone-stage2"></span><span>${L.stage2}: ${L.from} <strong>${fmtW(auxThreshold)}</strong></span></div>`);
 			}
 		}
 
