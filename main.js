@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.39";
+const VERSION = "2.3.40";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -801,7 +801,7 @@ class PoolControllerCard extends HTMLElement {
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
 		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
-		const pvPowerEntityId = c.pv_power_entity || null;
+		const pvPowerEntityId = c.pv_smoothed_entity || null;
 		const outdoorTempEntityId = c.outdoor_temp_entity || this._derivedEntities?.outdoor_temp_entity || null;
 		const outdoorTemp = outdoorTempEntityId ? this._num(h.states[outdoorTempEntityId]?.state) : null;
 		const nextFrostMinsEntityId = c.next_frost_mins_entity || this._derivedEntities?.next_frost_mins_entity || null;
@@ -1746,7 +1746,7 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_renderPvBlock(d, c) {
-		const smoothedEntity = c.pv_smoothed_entity || c.pv_power_entity || "";
+		const smoothedEntity = c.pv_smoothed_entity || "";
 		const poolLoadEntity = c.power_entity || "";
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
@@ -1820,7 +1820,7 @@ class PoolControllerCard extends HTMLElement {
 		const legendSurplus = c.pv_legend_show_surplus !== false;
 		const legendThresholds = c.pv_legend_show_thresholds !== false;
 
-		const smoothedEntity = c.pv_smoothed_entity || c.pv_power_entity || "";
+		const smoothedEntity = c.pv_smoothed_entity || "";
 		const poolLoadEntity = c.power_entity || "";
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
@@ -4010,7 +4010,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		const merged = { ...DEFAULTS, ...(this._config || {}) };
 		const derived = await this._derivePvEntitiesForEditor();
 
-		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || merged.pv_power_entity || derived.pv_power_entity || "";
+		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || "";
 		const poolLoadEntity = merged.power_entity || derived.power_entity || "";
 		const houseLoadEntity = merged.pv_house_load_entity || derived.pv_house_load_entity || "";
 		const surplusEntity = merged.pv_surplus_for_pool_entity || derived.pv_surplus_for_pool_entity || "";
