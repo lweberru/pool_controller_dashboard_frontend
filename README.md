@@ -1,227 +1,144 @@
+# Pool Controller Dashboard Frontend
 
-# Pool Controller Dashboard (Frontend)
-
-Lovelace custom card (frontend UI) for the Home Assistant integration **pool_controller**.
+Lovelace Custom Card for the Home Assistant integration `pool_controller`.
 
 - Backend integration: https://github.com/lweberru/pool_controller
-- This repository (HACS frontend plugin): ships the single-file resource `main.js`
+- This repository provides the frontend as a single-file plugin: `main.js`
+- Card type: `custom:pc-pool-controller`
 
-## Screenshot
+## Prerequisites
+
+- Home Assistant with the backend integration `pool_controller` installed
+- For `content: cost` and `content: pv`: `custom:apexcharts-card` must be available
+
+## Screenshots
+
+### Full Dashboard
+
+![Full dashboard example](full_dashboard_example.png)
+
+### Individual Cards / Blocks
+
+#### Controller (`content: controller`)
+![Controller card example](controller_card_example.png)
+
+#### Calendar (`content: calendar`)
+![Calendar card example](calendar_card_example.png)
+
+#### Water Quality (`content: waterquality`)
+![Water quality card example](water_quality_card_example.png)
+
+#### Maintenance (`content: maintenance`)
+![Maintenance card example](maintenance_card_example.png)
+
+#### Costs (`content: cost`)
+![Cost card example](cost_card_example.png)
+
+#### PV & Power Saving (`content: pv`)
+![PV card example](pv_card_example.png)
+
+### Additional Views
 
 ![Card example 1](card_example_1.png)
 ![Card example 2](card_example_2.png)
 
-## Features (high level)
-
-- Thermostat-style dial (current/target temperature)
-- Target temperature control via ring (click/drag) and via `+` / `−`
-- Quick actions: **Bathing**, **Filtering**, **Chlorine**, **Pause**
-- Optional AUX heater toggle
-- Status indicators: Frost protection, Quiet hours, PV surplus
-- Outdoor temperature display
-- Next frost protection run countdown
-- Transparency: shows “why” via Heat Reason / Run Reason (icon between target temp and outdoor temp)
-- Physical switch state row: shows if main/pump/aux switches are actually ON
-- Maintenance mode warning banner (disables automation incl. frost protection)
-- Sanitizer mode badge (chlorine / saltwater / mixed)
-- Water quality: pH, ORP/Chlorine (mV), Salt (g/L + %) and TDS (ppm)
-- Maintenance hints (dosing + salt + water change recommendation for high TDS)
-- Runtime auto-discovery from the entity registry (YAML-friendly)
-
 ## Installation (HACS)
 
-1. In HACS → **Custom repositories** add this repo (Category: **Lovelace**)
-2. Install
-3. Ensure the resource is registered as a **JavaScript Module**:
-	- `/hacsfiles/pool_controller_dashboard_frontend/main.js`
+1. HACS → **Custom repositories** → add this repository (category **Lovelace**)
+2. Install the repository
+3. Verify that the resource is loaded as a JavaScript module:
+   - `/hacsfiles/pool_controller_dashboard_frontend/main.js`
 
-Note: HACS usually adds the resource automatically.
+Note: HACS usually creates the resource entry automatically.
 
-## Installation (manual)
+## Installation (Manual)
 
 1. Copy `main.js` to `config/www/pool_controller_dashboard_frontend/`
-2. In Home Assistant go to **Settings → Dashboards → Resources** and add as module:
-	- `/local/pool_controller_dashboard_frontend/main.js`
+2. In Home Assistant under **Settings → Dashboards → Resources**, add it as a module:
+   - `/local/pool_controller_dashboard_frontend/main.js`
 
-## Add the card (UI editor)
-
-Recommended path:
-
-1. Open your dashboard → **Edit dashboard**
-2. **Add card** → search for “Pool Controller” (custom card)
-3. In the card editor select your Pool Controller instance (the `climate.*` entity from `pool_controller`)
-4. The card stores only the selected **device** (or climate entity) and the chosen **content**
-
-## Add the card (YAML)
+## Quick Start (YAML)
 
 ```yaml
 type: custom:pc-pool-controller
 device_id: 0123456789abcdef0123456789abcdef
-# optional alternative:
+# alternative:
 # climate_entity: climate.my_pool
 content: controller
 ```
 
-### Does auto-discovery work without using the UI editor?
+The card is YAML-first: with `device_id` (or `climate_entity`), auto-discovery of all related sensors/switches works via the entity registry.
 
-Yes. The card always derives all related entities from the entity registry at runtime. YAML-only with `type` + `device_id` (or `climate_entity`) is enough to get the full UI.
+## Content Modes (`content`)
 
-## Card variants (content)
+The card supports these modes:
 
-The card has five fixed variants. Select them via the `content` parameter:
+- `controller`
+- `calendar`
+- `waterquality`
+- `maintenance`
+- `cost`
+- `pv`
 
-### 1) Controller card
+## Key Features
 
-```
-content: controller
-```
+- Temperature dial with drag/click + `+` / `−`
+- Actions: Bathe, Filter, Chlorine, Pause
+- Maintenance mode with visible lockout
+- Heat/run reason shown transparently in the UI
+- Entity auto-discovery (minimal YAML effort)
+- Cost and PV visualization via ApexCharts
+- Click-to-open more-info (`hass-more-info`) on key data points
 
-Shows the temperature dial, actions (Bathing/Filtering/Chlorine/Pause), status icons, switch states, and the heat/run reasons.
+## Clickable Information (More-Info)
 
-![Controller card](pool_controller.png)
+Many UI elements directly open the matching sensor/switch in Home Assistant, including:
 
-### 2) Calendar card
+- Status/switch icons in the controller block
+- Values in the water quality block
+- Entries in calendar/upcoming
+- Maintenance recommendations
+- PV legend entries
 
-```
-content: calendar
-```
+## Service Behavior
 
-Shows the next calendar session with start/end, countdown to start, next filter run, next frost run, and credits.
+The card primarily uses `pool_controller` services (`start_*` / `stop_*`).
+If needed, it falls back to climate/buttons/switches to keep workflows robust.
 
-![Calendar card](pool_calendar.png)
+## Editor Usage
 
-### 3) Water quality card
-
-```
-content: waterquality
-```
-
-Shows pH, ORP/Chlorine (mV), Salt (g/L + %) and TDS (ppm) including status assessment.
-
-![Water quality card](pool_quality.png)
-
-### 4) Maintenance card
-
-```
-content: maintenance
-```
-
-Shows concrete maintenance hints (e.g., pH+/pH‑ dosing, salt refill, water change, chlorine dose).
-
-![Maintenance card](pool_maintenance.png)
-
-### 5) PV & Power-Saving chart
-
-```
-content: pv
-```
-
-Renders an embedded `custom:apexcharts-card` automatically for PV/power-saving analysis.
-
-The chart uses the integration's auto-discovered entities and shows, when available:
-- PV smoothed / PV power
-- house load (configured `pv_house_load_sensor` value mirrored by backend)
-- PV surplus available for pool
-- dynamic power-saving thresholds for pump stage and auxiliary-heater stage
-- PV bands (low/mid off/mid on/high)
-
-This view is designed to work in both Auto and Power-saving mode and visualizes the additional stage-2 threshold for the auxiliary heater.
-
-## How to use / meaning of elements
-
-### Temperature dial (left)
-
-- Big number: **current temperature** (measured water temperature)
-- Smaller value: **target temperature**
-- Dial ring:
-	- Progress arc shows current temperature relative to the configured min/max
-	- Target marker shows the target temperature
-	- Click/drag on the ring sets the target temperature (calls `climate.set_temperature` on release)
-- `+` / `−` buttons: change target temperature (calls `climate.set_temperature`)
-
-Note: If the backend `climate.*` entity exposes `min_temp`, `max_temp` and `target_temp_step`, the card uses those values automatically.
-
-### Status icons (inside the dial)
-
-- Frost: frost danger detected (by default mapped to `binary_sensor.*_frost_danger`; you can also map to `*_frost_active` if you prefer the duty-cycle state). Click opens the frost sensor more-info when available (fallback: Run Reason).
-- Moon: quiet hours active
-- Solar: PV surplus allows heating/filtering
-
-### Reason icon + physical switch icons (inside the dial)
-
-- Mid icon (between target temperature and outdoor temperature):
-	- Shows *why heating is allowed* (Heat Reason) or *why the pool is running* (Run Reason)
-	- Tooltip explains the reason; click opens more-info for the underlying sensor
-- Row below: shows the **physical** switch states (mirrors from the backend)
-	- Main power (plug)
-	- Pump
-	- Aux heater (fire)
-
-### Maintenance mode
-
-When `binary_sensor.*_maintenance_active` is `on`, the card shows a prominent warning banner.
-
-Important: maintenance mode is a hard lockout in the backend and disables automation, including frost protection.
-
-### Actions
-
-- **Bathing**: start/stop bathing mode
-- **Filtering**: start/stop filter cycle
-- **Chlorine**: start/stop quick chlorine
-- **Pause**: pause automation
-
-The card calls the `pool_controller` services (`start_*` / `stop_*`) and includes `climate_entity` in the payload so multi-instance setups are routed correctly.
-
-### AUX heater
-
-- “Additional heater”: toggles the AUX heater (if configured)
-
-### Upcoming
-
-The “Next event” block shows:
-
-- Next calendar event (start/end/summary)
-- Next filter cycle (“Next filter cycle in …”)
-- Next frost protection run (“Next frost protection in …”)
-
-## Water quality (right)
-
-The card shows a small “Sanitizer” badge (derived from `sensor.*_sanitizer_mode`).
-For saltwater/mixed systems the backend provides `tds_effective` (effective/non-salt TDS); the card prefers that value.
-
-- **pH**: scale 0–14
-- **Chlorine/ORP**: shown in mV (scale 0–1200)
-- **Salt** (optional): shown as g/L plus percent (g/L × 0.1 = %)
-- **TDS** (optional): shown in ppm
-
-Salt and TDS bars are rendered whenever the sensors are available (including a value of 0).
-
-## Maintenance
-
-The “Maintenance” section appears when the backend recommends an action, e.g.:
-
-- Add pH+ / pH-
-- Add chlorine
-- Add salt (saltwater/mixed mode): based on `sensor.*_salt_add_g` (grams of salt to add)
-- Water change (when TDS is high; based on backend recommendation: percent and optionally liters)
+1. Edit your dashboard
+2. **Add card** → “Pool Controller”
+3. Select the controller instance
+4. Set the desired `content` mode
 
 ## Configuration
 
-Required (one of):
+### Required Field (one of these)
 
 - `device_id` (recommended)
 - `climate_entity`
 
-Optional:
+### Optional Fields
 
-- `content`: one of `controller`, `calendar`, `waterquality`, `maintenance` (default: `controller`)
+- `content`: see mode list above (default: `controller`)
+- Additional display options depending on mode (for example Cost/PV in editor)
 
-All other entities are derived automatically from the entity registry at runtime.
+All remaining entity mappings are derived automatically from the registry.
 
 ## Troubleshooting
 
-- After updates: hard reload the browser (Ctrl+F5) and/or clear the HA frontend cache.
+- After an update: hard-reload the browser (`Ctrl+F5`) and clear cache if needed
+- Check browser console for the loaded version:
+  - `[pool_controller_dashboard_frontend] loaded vX.Y.Z`
+- If `cost`/`pv` stays empty: verify `custom:apexcharts-card` is installed
 
-## Contributing
+## Development & Contributing
 
-Development rules and release workflow (HACS via GitHub Releases): see [CONTRIBUTING.md](CONTRIBUTING.md).
+- No build pipeline/dependencies: all frontend changes are in `main.js`
+- i18n is handled via the internal `I18N` object
+- Guidelines and workflow: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## Release Note
+
+HACS updates are release-based (GitHub release/tag). Make sure to bump `VERSION` in `main.js` to match the release version.
