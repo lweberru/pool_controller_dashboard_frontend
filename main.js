@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.47";
+const VERSION = "2.3.48";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -810,7 +810,11 @@ class PoolControllerCard extends HTMLElement {
 		const mainPowerEntityId = c.main_power_entity || null;
 		const auxPowerEntityId = c.aux_power_entity || null;
 		let totalPowerEntityId = c.power_entity || null;
-		if (totalPowerEntityId && pvPowerEntityId && totalPowerEntityId === pvPowerEntityId) {
+		const pvPowerRawEntityId = c.pv_power_entity || null;
+		if (
+			totalPowerEntityId
+			&& ((pvPowerEntityId && totalPowerEntityId === pvPowerEntityId) || (pvPowerRawEntityId && totalPowerEntityId === pvPowerRawEntityId))
+		) {
 			totalPowerEntityId = null;
 		}
 		const mainPower = mainPowerEntityId ? this._num(h.states[mainPowerEntityId]?.state) : null;
@@ -1771,8 +1775,11 @@ class PoolControllerCard extends HTMLElement {
 		const smoothedEntity = c.pv_smoothed_entity || "";
 		let poolLoadEntity = c.power_entity || "";
 		const pvPowerEntity = c.pv_power_entity || "";
-		if (poolLoadEntity && pvPowerEntity && poolLoadEntity === pvPowerEntity) {
-			poolLoadEntity = d?.powerMoreInfoEntityId || d?.powerEntityId || "";
+		if (
+			poolLoadEntity
+			&& ((pvPowerEntity && poolLoadEntity === pvPowerEntity) || (smoothedEntity && poolLoadEntity === smoothedEntity))
+		) {
+			poolLoadEntity = d?.powerMoreInfoEntityId || d?.powerEntityId || c.main_power_entity || c.aux_power_entity || "";
 		}
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
@@ -1849,8 +1856,11 @@ class PoolControllerCard extends HTMLElement {
 		const smoothedEntity = c.pv_smoothed_entity || "";
 		let poolLoadEntity = c.power_entity || "";
 		const pvPowerEntity = c.pv_power_entity || "";
-		if (poolLoadEntity && pvPowerEntity && poolLoadEntity === pvPowerEntity) {
-			poolLoadEntity = d?.powerMoreInfoEntityId || d?.powerEntityId || "";
+		if (
+			poolLoadEntity
+			&& ((pvPowerEntity && poolLoadEntity === pvPowerEntity) || (smoothedEntity && poolLoadEntity === smoothedEntity))
+		) {
+			poolLoadEntity = d?.powerMoreInfoEntityId || d?.powerEntityId || c.main_power_entity || c.aux_power_entity || "";
 		}
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
@@ -3487,7 +3497,12 @@ class PoolControllerCard extends HTMLElement {
 				const configuredStr = typeof configured === 'string' ? configured.trim() : configured;
 				const derivedPower = d?.power_entity || null;
 				const pvEntity = c?.pv_power_entity || d?.pv_power_entity || null;
+				const pvSmoothedEntity = c?.pv_smoothed_entity || d?.pv_smoothed_entity || null;
 				if (!configuredStr) return derivedPower ?? configured;
+				if ((pvEntity && configuredStr === pvEntity) || (pvSmoothedEntity && configuredStr === pvSmoothedEntity)) {
+					if (derivedPower && derivedPower !== configuredStr) return derivedPower;
+					return null;
+				}
 				if (pvEntity && configuredStr === pvEntity && derivedPower && derivedPower !== configuredStr) {
 					return derivedPower;
 				}
@@ -3533,15 +3548,6 @@ class PoolControllerCard extends HTMLElement {
 		for (const suffix of list) {
 			const token = String(suffix).toLowerCase();
 			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && String(e.entity_id).toLowerCase().includes(token));
-			if (hit?.entity_id) return hit.entity_id;
-		}
-		return null;
-	}
-
-	_pickEntityExactSuffix(entries, domain, suffixes = []) {
-		const list = Array.isArray(suffixes) ? suffixes.filter(Boolean) : [];
-		for (const suffix of list) {
-			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && e.unique_id?.endsWith(`_${suffix}`));
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		return null;
@@ -4036,6 +4042,15 @@ class PoolControllerCardEditor extends HTMLElement {
 		return null;
 	}
 
+	_pickEntityExactSuffix(entries, domain, suffixes = []) {
+		const list = Array.isArray(suffixes) ? suffixes.filter(Boolean) : [];
+		for (const suffix of list) {
+			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && e.unique_id?.endsWith(`_${suffix}`));
+			if (hit?.entity_id) return hit.entity_id;
+		}
+		return null;
+	}
+
 	async _derivePvEntitiesForEditor() {
 		if (!this._hass) return {};
 		const reg = await this._getEntityRegistry();
@@ -4088,8 +4103,14 @@ class PoolControllerCardEditor extends HTMLElement {
 		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || "";
 		let poolLoadEntity = merged.power_entity || derived.power_entity || "";
 		const pvPowerEntity = merged.pv_power_entity || derived.pv_power_entity || "";
-		if (poolLoadEntity && pvPowerEntity && poolLoadEntity === pvPowerEntity && derived.power_entity && derived.power_entity !== poolLoadEntity) {
-			poolLoadEntity = derived.power_entity;
+		if (
+			poolLoadEntity
+			&& (
+				(pvPowerEntity && poolLoadEntity === pvPowerEntity)
+				|| (smoothedEntity && poolLoadEntity === smoothedEntity)
+			)
+		) {
+			poolLoadEntity = derived.power_entity || merged.main_power_entity || derived.main_power_entity || merged.aux_power_entity || derived.aux_power_entity || "";
 		}
 		const houseLoadEntity = merged.pv_house_load_entity || derived.pv_house_load_entity || "";
 		const surplusEntity = merged.pv_surplus_for_pool_entity || derived.pv_surplus_for_pool_entity || "";
