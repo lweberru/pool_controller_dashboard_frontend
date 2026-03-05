@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.52";
+const VERSION = "2.3.53";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3378,6 +3378,7 @@ class PoolControllerCard extends HTMLElement {
 
 	_resolvePreferredPowerEntity(config = {}, derived = {}) {
 		const states = this._hass?.states || {};
+		const stateIds = Object.keys(states || {});
 		const c = config || {};
 		const d = derived || {};
 		const invalid = new Set([
@@ -3397,6 +3398,22 @@ class PoolControllerCard extends HTMLElement {
 		if (climateSlug) {
 			probes.push(`sensor.${climateSlug}_pool_leistung_gesamt`);
 			probes.push(`sensor.${climateSlug}_power`);
+		}
+
+		const mainCandidate = d.main_power_entity || c.main_power_entity || "";
+		if (typeof mainCandidate === "string" && mainCandidate.startsWith("sensor.")) {
+			const base = mainCandidate.slice("sensor.".length);
+			const m = base.match(/^(.*)_netz_leistung$/);
+			if (m && m[1]) {
+				probes.unshift(`sensor.${m[1]}_pool_leistung_gesamt`);
+			}
+		}
+
+		const globalTotal = stateIds.find((entityId) => /_pool_leistung_gesamt$/i.test(entityId));
+		if (globalTotal && !invalid.has(globalTotal)) return globalTotal;
+
+		for (const probe of probes) {
+			if (probe && !invalid.has(probe) && states[probe]) return probe;
 		}
 
 		const candidates = [
@@ -4056,6 +4073,7 @@ class PoolControllerCardEditor extends HTMLElement {
 
 	_resolvePreferredPowerEntity(config = {}, derived = {}) {
 		const states = this._hass?.states || {};
+		const stateIds = Object.keys(states || {});
 		const c = config || {};
 		const d = derived || {};
 		const invalid = new Set([
@@ -4075,6 +4093,22 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (climateSlug) {
 			probes.push(`sensor.${climateSlug}_pool_leistung_gesamt`);
 			probes.push(`sensor.${climateSlug}_power`);
+		}
+
+		const mainCandidate = d.main_power_entity || c.main_power_entity || "";
+		if (typeof mainCandidate === "string" && mainCandidate.startsWith("sensor.")) {
+			const base = mainCandidate.slice("sensor.".length);
+			const m = base.match(/^(.*)_netz_leistung$/);
+			if (m && m[1]) {
+				probes.unshift(`sensor.${m[1]}_pool_leistung_gesamt`);
+			}
+		}
+
+		const globalTotal = stateIds.find((entityId) => /_pool_leistung_gesamt$/i.test(entityId));
+		if (globalTotal && !invalid.has(globalTotal)) return globalTotal;
+
+		for (const probe of probes) {
+			if (probe && !invalid.has(probe) && states[probe]) return probe;
 		}
 
 		const candidates = [
