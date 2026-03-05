@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.51";
+const VERSION = "2.3.52";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3400,9 +3400,9 @@ class PoolControllerCard extends HTMLElement {
 		}
 
 		const candidates = [
+			...probes,
 			d.power_entity,
 			c.power_entity,
-			...probes,
 			d.main_power_entity,
 			c.main_power_entity,
 			d.aux_power_entity,
@@ -4078,9 +4078,9 @@ class PoolControllerCardEditor extends HTMLElement {
 		}
 
 		const candidates = [
+			...probes,
 			d.power_entity,
 			c.power_entity,
-			...probes,
 			d.main_power_entity,
 			c.main_power_entity,
 			d.aux_power_entity,
