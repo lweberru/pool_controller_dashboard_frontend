@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.45";
+const VERSION = "2.3.46";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -809,9 +809,10 @@ class PoolControllerCard extends HTMLElement {
 		
 		const mainPowerEntityId = c.main_power_entity || null;
 		const auxPowerEntityId = c.aux_power_entity || null;
+		const totalPowerEntityId = c.power_entity || null;
 		const mainPower = mainPowerEntityId ? this._num(h.states[mainPowerEntityId]?.state) : null;
 		const auxPower = auxPowerEntityId ? this._num(h.states[auxPowerEntityId]?.state) : null;
-		const powerVal = mainPower ?? (c.power_entity ? this._num(h.states[c.power_entity]?.state) : null);
+		const powerVal = mainPower ?? (totalPowerEntityId ? this._num(h.states[totalPowerEntityId]?.state) : null);
 
 		// Display power: prefer total (main + aux) if available, else fallback.
 		let displayPower = null;
@@ -819,7 +820,7 @@ class PoolControllerCard extends HTMLElement {
 		let powerTooltip = "";
 		if (mainPower != null || auxPower != null) {
 			displayPower = (mainPower ?? 0) + (auxPower ?? 0);
-			powerMoreInfoEntityId = mainPowerEntityId || auxPowerEntityId;
+			powerMoreInfoEntityId = totalPowerEntityId || mainPowerEntityId || auxPowerEntityId;
 			if (mainPower != null && auxPower != null) {
 				powerTooltip = `${mainPower}W + ${auxPower}W`;
 			} else if (mainPower != null) {
@@ -829,7 +830,7 @@ class PoolControllerCard extends HTMLElement {
 			}
 		} else if (powerVal != null) {
 			displayPower = powerVal;
-			powerMoreInfoEntityId = c.power_entity || null;
+			powerMoreInfoEntityId = totalPowerEntityId || null;
 			powerTooltip = `${powerVal}W`;
 		}
 
@@ -1403,7 +1404,7 @@ class PoolControllerCard extends HTMLElement {
 		return `<div class="dial-container">
 				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
 					<div class="ring">
-						<div class="power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''}>
+						<div class="power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''} ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''}>
 							${d.displayPower !== null ? `<span class="power-pill">${d.displayPower}W</span>` : ""}
 						</div>
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
