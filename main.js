@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.44";
+const VERSION = "2.3.45";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3470,7 +3470,17 @@ class PoolControllerCard extends HTMLElement {
 			pv_band_high_entity: prefer('pv_band_high_entity'),
 			main_power_entity: prefer('main_power_entity'),
 			aux_power_entity: prefer('aux_power_entity'),
-			power_entity: prefer('power_entity'),
+			power_entity: (() => {
+				const configured = c?.power_entity;
+				const configuredStr = typeof configured === 'string' ? configured.trim() : configured;
+				const derivedPower = d?.power_entity || null;
+				const pvEntity = c?.pv_power_entity || d?.pv_power_entity || null;
+				if (!configuredStr) return derivedPower ?? configured;
+				if (pvEntity && configuredStr === pvEntity && derivedPower && derivedPower !== configuredStr) {
+					return derivedPower;
+				}
+				return configured;
+			})(),
 			ph_entity: prefer('ph_entity'),
 			chlorine_value_entity: prefer('chlorine_value_entity'),
 			// Config duration sensors
@@ -3511,6 +3521,15 @@ class PoolControllerCard extends HTMLElement {
 		for (const suffix of list) {
 			const token = String(suffix).toLowerCase();
 			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && String(e.entity_id).toLowerCase().includes(token));
+			if (hit?.entity_id) return hit.entity_id;
+		}
+		return null;
+	}
+
+	_pickEntityExactSuffix(entries, domain, suffixes = []) {
+		const list = Array.isArray(suffixes) ? suffixes.filter(Boolean) : [];
+		for (const suffix of list) {
+			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && e.unique_id?.endsWith(`_${suffix}`));
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		return null;
@@ -3629,6 +3648,7 @@ class PoolControllerCard extends HTMLElement {
 			pv_band_high_entity: this._pickEntity(entries, "sensor", ["pv_band_high"]) || null,
 			main_power_entity: this._pickEntity(entries, "sensor", ["main_power"]) || null,
 			aux_power_entity: this._pickEntity(entries, "sensor", ["aux_power"]) || null,
+			power_entity: this._pickEntityExactSuffix(entries, "sensor", ["power"]) || null,
 
 			// Water quality
 			ph_entity: this._pickEntity(entries, "sensor", ["ph_val"]) || null,
@@ -4019,7 +4039,9 @@ class PoolControllerCardEditor extends HTMLElement {
 		const derived = {
 			power_saving_active_entity: this._pickEntity(entries, "binary_sensor", ["power_saving_active"]) || null,
 			pv_power_entity: this._pickEntity(entries, "sensor", ["pv_power"]) || null,
-			power_entity: this._pickEntity(entries, "sensor", ["power"]) || null,
+			main_power_entity: this._pickEntity(entries, "sensor", ["main_power"]) || null,
+			aux_power_entity: this._pickEntity(entries, "sensor", ["aux_power"]) || null,
+			power_entity: this._pickEntityExactSuffix(entries, "sensor", ["power"]) || null,
 			pv_smoothed_entity: this._pickEntity(entries, "sensor", ["pv_smoothed"]) || null,
 			pv_house_load_entity: this._pickEntity(entries, "sensor", ["pv_house_load"]) || null,
 			pv_surplus_for_pool_entity: this._pickEntity(entries, "sensor", ["pv_surplus_for_pool"]) || null,
@@ -4043,7 +4065,11 @@ class PoolControllerCardEditor extends HTMLElement {
 		const derived = this._pvDerivedEditorEntities || {};
 
 		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || "";
-		const poolLoadEntity = merged.power_entity || derived.power_entity || "";
+		let poolLoadEntity = merged.power_entity || derived.power_entity || "";
+		const pvPowerEntity = merged.pv_power_entity || derived.pv_power_entity || "";
+		if (poolLoadEntity && pvPowerEntity && poolLoadEntity === pvPowerEntity && derived.power_entity && derived.power_entity !== poolLoadEntity) {
+			poolLoadEntity = derived.power_entity;
+		}
 		const houseLoadEntity = merged.pv_house_load_entity || derived.pv_house_load_entity || "";
 		const surplusEntity = merged.pv_surplus_for_pool_entity || derived.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = merged.power_saving_pump_threshold_entity || derived.power_saving_pump_threshold_entity || "";
@@ -4156,14 +4182,16 @@ class PoolControllerCardEditor extends HTMLElement {
 			hasClipboardRead: !!navigator?.clipboard?.readText,
 			permissionWrite: "unknown",
 		};
-		try {
-			if (navigator?.permissions?.query) {
-				const p = await navigator.permissions.query({ name: "clipboard-write" });
-				diagnostics.permissionWrite = p?.state || "unknown";
+		const resolvePermissionState = async () => {
+			try {
+				if (navigator?.permissions?.query) {
+					const p = await navigator.permissions.query({ name: "clipboard-write" });
+					diagnostics.permissionWrite = p?.state || "unknown";
+				}
+			} catch (_e) {
+				// ignore: not supported in all browsers/webviews
 			}
-		} catch (_e) {
-			// ignore: not supported in all browsers/webviews
-		}
+		};
 
 		const verifyClipboard = async () => {
 			if (!navigator?.clipboard?.readText) return false;
@@ -4183,27 +4211,7 @@ class PoolControllerCardEditor extends HTMLElement {
 			}
 		};
 
-		try {
-			if (navigator?.clipboard?.writeText) {
-				await navigator.clipboard.writeText(payload);
-				if (await verifyClipboard()) {
-					return { ok: true, message: "Apex config copied to clipboard." };
-				}
-				openManualFallback();
-				return {
-					ok: false,
-					message: `Clipboard write not verifiable (secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
-				};
-			}
-			openManualFallback();
-			return {
-				ok: false,
-				message: `Clipboard API unavailable (secure=${diagnostics.secureContext}). Manual copy dialog opened.`,
-			};
-		} catch (e) {
-			// fallback below
-			const errName = e?.name || "Error";
-			const errMsg = e?.message || "unknown";
+		const tryLegacyCopy = async () => {
 			try {
 				const ta = document.createElement("textarea");
 				ta.value = payload;
@@ -4218,22 +4226,41 @@ class PoolControllerCardEditor extends HTMLElement {
 				ta.setSelectionRange(0, ta.value.length);
 				const copied = document.execCommand("copy");
 				document.body.removeChild(ta);
-				if (copied && (await verifyClipboard())) {
+				if (!copied) return false;
+
+				if (diagnostics.hasClipboardRead) {
+					return await verifyClipboard();
+				}
+				return true;
+			} catch (_e) {
+				return false;
+			}
+		};
+
+		let writeError = null;
+		try {
+			if (navigator?.clipboard?.writeText) {
+				await navigator.clipboard.writeText(payload);
+				if (!diagnostics.hasClipboardRead || await verifyClipboard()) {
 					return { ok: true, message: "Apex config copied to clipboard." };
 				}
-				openManualFallback();
-				return {
-					ok: false,
-					message: `Clipboard blocked (${errName}: ${errMsg}; secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
-				};
-			} catch (_fallbackErr) {
-				openManualFallback();
-				return {
-					ok: false,
-					message: `Clipboard blocked (${errName}: ${errMsg}; secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
-				};
 			}
+		} catch (e) {
+			writeError = e;
 		}
+
+		if (await tryLegacyCopy()) {
+			return { ok: true, message: "Apex config copied to clipboard." };
+		}
+
+		await resolvePermissionState();
+		const errName = writeError?.name || "Error";
+		const errMsg = writeError?.message || "unknown";
+		openManualFallback();
+		return {
+			ok: false,
+			message: `Clipboard blocked (${errName}: ${errMsg}; secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
+		};
 	}
 
 	_num(v) {
