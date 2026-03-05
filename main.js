@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.42";
+const VERSION = "2.3.43";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3895,10 +3895,14 @@ class PoolControllerCardEditor extends HTMLElement {
 					if (pvCopyRow) pvCopyRow.style.display = (val === 'pv') ? 'grid' : 'none';
 				};
 				toggleExtraRows(this._config?.content || 'controller');
+				if ((this._config?.content || 'controller') === 'pv') {
+					this._refreshPvDerivedEntitiesForEditor();
+				}
 				// Assign onchange to avoid duplicate listeners when re-rendering the editor
 				contentSelect.onchange = (e) => {
 					const val = e.target.value;
 					toggleExtraRows(val);
+					if (val === 'pv') this._refreshPvDerivedEntitiesForEditor();
 					this._updateConfig({ content: val });
 				};
 				if (costSelect) {
@@ -4006,10 +4010,13 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (!selected && this._config?.device_id) {
 			selected = poolControllers.find((entity) => entity.device_id === this._config.device_id) || null;
 		}
-		if (!selected?.config_entry_id) return {};
+		if (!selected?.config_entry_id) {
+			this._pvDerivedEditorEntities = {};
+			return {};
+		}
 
 		const entries = reg.filter((r) => r.config_entry_id === selected.config_entry_id && r.platform === "pool_controller");
-		return {
+		const derived = {
 			power_saving_active_entity: this._pickEntity(entries, "binary_sensor", ["power_saving_active"]) || null,
 			pv_power_entity: this._pickEntity(entries, "sensor", ["pv_power"]) || null,
 			power_entity: this._pickEntity(entries, "sensor", ["power"]) || null,
@@ -4023,11 +4030,17 @@ class PoolControllerCardEditor extends HTMLElement {
 			pv_band_mid_on_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_on"]) || null,
 			pv_band_high_entity: this._pickEntity(entries, "sensor", ["pv_band_high"]) || null,
 		};
+		this._pvDerivedEditorEntities = derived;
+		return derived;
 	}
 
-	async _buildPvApexConfigForClipboard() {
+	_refreshPvDerivedEntitiesForEditor() {
+		this._derivePvEntitiesForEditor().catch(() => {});
+	}
+
+	_buildPvApexConfigForClipboard() {
 		const merged = { ...DEFAULTS, ...(this._config || {}) };
-		const derived = await this._derivePvEntitiesForEditor();
+		const derived = this._pvDerivedEditorEntities || {};
 
 		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || "";
 		const poolLoadEntity = merged.power_entity || derived.power_entity || "";
@@ -4135,7 +4148,7 @@ class PoolControllerCardEditor extends HTMLElement {
 	}
 
 	async _copyPvApexConfig() {
-		const config = await this._buildPvApexConfigForClipboard();
+		const config = this._buildPvApexConfigForClipboard();
 		const payload = JSON.stringify(config, null, 2);
 
 		try {
@@ -4152,12 +4165,17 @@ class PoolControllerCardEditor extends HTMLElement {
 			ta.value = payload;
 			ta.setAttribute("readonly", "");
 			ta.style.position = "fixed";
+			ta.style.top = "0";
+			ta.style.left = "0";
 			ta.style.opacity = "0";
 			document.body.appendChild(ta);
+			ta.focus();
 			ta.select();
-			document.execCommand("copy");
+			ta.setSelectionRange(0, ta.value.length);
+			const copied = document.execCommand("copy");
 			document.body.removeChild(ta);
-			return { ok: true };
+			if (copied) return { ok: true };
+			return { ok: false };
 		} catch (_e) {
 			return { ok: false };
 		}
