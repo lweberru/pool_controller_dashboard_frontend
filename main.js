@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.50";
+const VERSION = "2.3.51";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -4052,6 +4052,45 @@ class PoolControllerCardEditor extends HTMLElement {
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		return null;
+	}
+
+	_resolvePreferredPowerEntity(config = {}, derived = {}) {
+		const states = this._hass?.states || {};
+		const c = config || {};
+		const d = derived || {};
+		const invalid = new Set([
+			c.pv_power_entity,
+			d.pv_power_entity,
+			c.pv_smoothed_entity,
+			d.pv_smoothed_entity,
+		].filter(Boolean));
+
+		const climateEntity = c.climate_entity || d.climate_entity || "";
+		let climateSlug = "";
+		if (typeof climateEntity === "string" && climateEntity.includes(".")) {
+			climateSlug = climateEntity.split(".")[1] || "";
+		}
+
+		const probes = [];
+		if (climateSlug) {
+			probes.push(`sensor.${climateSlug}_pool_leistung_gesamt`);
+			probes.push(`sensor.${climateSlug}_power`);
+		}
+
+		const candidates = [
+			d.power_entity,
+			c.power_entity,
+			...probes,
+			d.main_power_entity,
+			c.main_power_entity,
+			d.aux_power_entity,
+			c.aux_power_entity,
+		].filter(Boolean);
+
+		const unique = [...new Set(candidates)];
+		const existing = unique.find((entityId) => !invalid.has(entityId) && !!states[entityId]);
+		if (existing) return existing;
+		return unique.find((entityId) => !invalid.has(entityId)) || null;
 	}
 
 	async _derivePvEntitiesForEditor() {
