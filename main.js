@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.48";
+const VERSION = "2.3.49";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1773,7 +1773,11 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderPvBlock(d, c) {
 		const smoothedEntity = c.pv_smoothed_entity || "";
-		let poolLoadEntity = c.power_entity || "";
+		let poolLoadEntity = c.power_entity || d?.powerEntityId || d?.powerMoreInfoEntityId || "";
+		const preferredTotalPowerEntity = d?.powerEntityId || "";
+		if (preferredTotalPowerEntity) {
+			poolLoadEntity = preferredTotalPowerEntity;
+		}
 		const pvPowerEntity = c.pv_power_entity || "";
 		if (
 			poolLoadEntity
@@ -1854,7 +1858,11 @@ class PoolControllerCard extends HTMLElement {
 		const legendThresholds = c.pv_legend_show_thresholds !== false;
 
 		const smoothedEntity = c.pv_smoothed_entity || "";
-		let poolLoadEntity = c.power_entity || "";
+		let poolLoadEntity = c.power_entity || d?.powerEntityId || d?.powerMoreInfoEntityId || "";
+		const preferredTotalPowerEntity = d?.powerEntityId || "";
+		if (preferredTotalPowerEntity) {
+			poolLoadEntity = preferredTotalPowerEntity;
+		}
 		const pvPowerEntity = c.pv_power_entity || "";
 		if (
 			poolLoadEntity
@@ -3496,15 +3504,25 @@ class PoolControllerCard extends HTMLElement {
 				const configured = c?.power_entity;
 				const configuredStr = typeof configured === 'string' ? configured.trim() : configured;
 				const derivedPower = d?.power_entity || null;
+				const derivedMain = d?.main_power_entity || null;
+				const derivedAux = d?.aux_power_entity || null;
 				const pvEntity = c?.pv_power_entity || d?.pv_power_entity || null;
 				const pvSmoothedEntity = c?.pv_smoothed_entity || d?.pv_smoothed_entity || null;
 				if (!configuredStr) return derivedPower ?? configured;
+				if (derivedPower && configuredStr !== derivedPower) {
+					if (
+						(derivedMain && configuredStr === derivedMain)
+						|| (derivedAux && configuredStr === derivedAux)
+						|| (pvEntity && configuredStr === pvEntity)
+						|| (pvSmoothedEntity && configuredStr === pvSmoothedEntity)
+						|| /(^|[_.])pv([_.]|$)/i.test(String(configuredStr))
+					) {
+						return derivedPower;
+					}
+				}
 				if ((pvEntity && configuredStr === pvEntity) || (pvSmoothedEntity && configuredStr === pvSmoothedEntity)) {
 					if (derivedPower && derivedPower !== configuredStr) return derivedPower;
 					return null;
-				}
-				if (pvEntity && configuredStr === pvEntity && derivedPower && derivedPower !== configuredStr) {
-					return derivedPower;
 				}
 				return configured;
 			})(),
@@ -4101,13 +4119,17 @@ class PoolControllerCardEditor extends HTMLElement {
 		const derived = this._pvDerivedEditorEntities || {};
 
 		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || "";
-		let poolLoadEntity = merged.power_entity || derived.power_entity || "";
+		let poolLoadEntity = derived.power_entity || merged.power_entity || "";
+		if (derived.power_entity) {
+			poolLoadEntity = derived.power_entity;
+		}
 		const pvPowerEntity = merged.pv_power_entity || derived.pv_power_entity || "";
 		if (
 			poolLoadEntity
 			&& (
 				(pvPowerEntity && poolLoadEntity === pvPowerEntity)
 				|| (smoothedEntity && poolLoadEntity === smoothedEntity)
+				|| /(^|[_.])pv([_.]|$)/i.test(String(poolLoadEntity))
 			)
 		) {
 			poolLoadEntity = derived.power_entity || merged.main_power_entity || derived.main_power_entity || merged.aux_power_entity || derived.aux_power_entity || "";
