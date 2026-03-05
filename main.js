@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.49";
+const VERSION = "2.3.50";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -809,14 +809,7 @@ class PoolControllerCard extends HTMLElement {
 		
 		const mainPowerEntityId = c.main_power_entity || null;
 		const auxPowerEntityId = c.aux_power_entity || null;
-		let totalPowerEntityId = c.power_entity || null;
-		const pvPowerRawEntityId = c.pv_power_entity || null;
-		if (
-			totalPowerEntityId
-			&& ((pvPowerEntityId && totalPowerEntityId === pvPowerEntityId) || (pvPowerRawEntityId && totalPowerEntityId === pvPowerRawEntityId))
-		) {
-			totalPowerEntityId = null;
-		}
+		const totalPowerEntityId = this._resolvePreferredPowerEntity(c, this._derivedEntities || {});
 		const mainPower = mainPowerEntityId ? this._num(h.states[mainPowerEntityId]?.state) : null;
 		const auxPower = auxPowerEntityId ? this._num(h.states[auxPowerEntityId]?.state) : null;
 		const powerVal = mainPower ?? (totalPowerEntityId ? this._num(h.states[totalPowerEntityId]?.state) : null);
@@ -1773,18 +1766,7 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderPvBlock(d, c) {
 		const smoothedEntity = c.pv_smoothed_entity || "";
-		let poolLoadEntity = c.power_entity || d?.powerEntityId || d?.powerMoreInfoEntityId || "";
-		const preferredTotalPowerEntity = d?.powerEntityId || "";
-		if (preferredTotalPowerEntity) {
-			poolLoadEntity = preferredTotalPowerEntity;
-		}
-		const pvPowerEntity = c.pv_power_entity || "";
-		if (
-			poolLoadEntity
-			&& ((pvPowerEntity && poolLoadEntity === pvPowerEntity) || (smoothedEntity && poolLoadEntity === smoothedEntity))
-		) {
-			poolLoadEntity = d?.powerMoreInfoEntityId || d?.powerEntityId || c.main_power_entity || c.aux_power_entity || "";
-		}
+		const poolLoadEntity = this._resolvePreferredPowerEntity(c, this._derivedEntities || {}) || "";
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = c.power_saving_pump_threshold_entity || "";
@@ -1858,18 +1840,7 @@ class PoolControllerCard extends HTMLElement {
 		const legendThresholds = c.pv_legend_show_thresholds !== false;
 
 		const smoothedEntity = c.pv_smoothed_entity || "";
-		let poolLoadEntity = c.power_entity || d?.powerEntityId || d?.powerMoreInfoEntityId || "";
-		const preferredTotalPowerEntity = d?.powerEntityId || "";
-		if (preferredTotalPowerEntity) {
-			poolLoadEntity = preferredTotalPowerEntity;
-		}
-		const pvPowerEntity = c.pv_power_entity || "";
-		if (
-			poolLoadEntity
-			&& ((pvPowerEntity && poolLoadEntity === pvPowerEntity) || (smoothedEntity && poolLoadEntity === smoothedEntity))
-		) {
-			poolLoadEntity = d?.powerMoreInfoEntityId || d?.powerEntityId || c.main_power_entity || c.aux_power_entity || "";
-		}
+		const poolLoadEntity = this._resolvePreferredPowerEntity(c, this._derivedEntities || {}) || "";
 		const houseLoadEntity = c.pv_house_load_entity || "";
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = c.power_saving_pump_threshold_entity || "";
@@ -3405,6 +3376,45 @@ class PoolControllerCard extends HTMLElement {
 		return this._clamp(t, min, max);
 	}
 
+	_resolvePreferredPowerEntity(config = {}, derived = {}) {
+		const states = this._hass?.states || {};
+		const c = config || {};
+		const d = derived || {};
+		const invalid = new Set([
+			c.pv_power_entity,
+			d.pv_power_entity,
+			c.pv_smoothed_entity,
+			d.pv_smoothed_entity,
+		].filter(Boolean));
+
+		const climateEntity = c.climate_entity || d.climate_entity || "";
+		let climateSlug = "";
+		if (typeof climateEntity === "string" && climateEntity.includes(".")) {
+			climateSlug = climateEntity.split(".")[1] || "";
+		}
+
+		const probes = [];
+		if (climateSlug) {
+			probes.push(`sensor.${climateSlug}_pool_leistung_gesamt`);
+			probes.push(`sensor.${climateSlug}_power`);
+		}
+
+		const candidates = [
+			d.power_entity,
+			c.power_entity,
+			...probes,
+			d.main_power_entity,
+			c.main_power_entity,
+			d.aux_power_entity,
+			c.aux_power_entity,
+		].filter(Boolean);
+
+		const unique = [...new Set(candidates)];
+		const existing = unique.find((entityId) => !invalid.has(entityId) && !!states[entityId]);
+		if (existing) return existing;
+		return unique.find((entityId) => !invalid.has(entityId)) || null;
+	}
+
 	_updateDialPreview(newTemp) {
 		const tc = this._effectiveTempConfig();
 		const min = Number(tc.min_temp);
@@ -3500,32 +3510,7 @@ class PoolControllerCard extends HTMLElement {
 			pv_band_high_entity: prefer('pv_band_high_entity'),
 			main_power_entity: prefer('main_power_entity'),
 			aux_power_entity: prefer('aux_power_entity'),
-			power_entity: (() => {
-				const configured = c?.power_entity;
-				const configuredStr = typeof configured === 'string' ? configured.trim() : configured;
-				const derivedPower = d?.power_entity || null;
-				const derivedMain = d?.main_power_entity || null;
-				const derivedAux = d?.aux_power_entity || null;
-				const pvEntity = c?.pv_power_entity || d?.pv_power_entity || null;
-				const pvSmoothedEntity = c?.pv_smoothed_entity || d?.pv_smoothed_entity || null;
-				if (!configuredStr) return derivedPower ?? configured;
-				if (derivedPower && configuredStr !== derivedPower) {
-					if (
-						(derivedMain && configuredStr === derivedMain)
-						|| (derivedAux && configuredStr === derivedAux)
-						|| (pvEntity && configuredStr === pvEntity)
-						|| (pvSmoothedEntity && configuredStr === pvSmoothedEntity)
-						|| /(^|[_.])pv([_.]|$)/i.test(String(configuredStr))
-					) {
-						return derivedPower;
-					}
-				}
-				if ((pvEntity && configuredStr === pvEntity) || (pvSmoothedEntity && configuredStr === pvSmoothedEntity)) {
-					if (derivedPower && derivedPower !== configuredStr) return derivedPower;
-					return null;
-				}
-				return configured;
-			})(),
+			power_entity: this._resolvePreferredPowerEntity(c, d),
 			ph_entity: prefer('ph_entity'),
 			chlorine_value_entity: prefer('chlorine_value_entity'),
 			// Config duration sensors
@@ -4119,21 +4104,7 @@ class PoolControllerCardEditor extends HTMLElement {
 		const derived = this._pvDerivedEditorEntities || {};
 
 		const smoothedEntity = merged.pv_smoothed_entity || derived.pv_smoothed_entity || "";
-		let poolLoadEntity = derived.power_entity || merged.power_entity || "";
-		if (derived.power_entity) {
-			poolLoadEntity = derived.power_entity;
-		}
-		const pvPowerEntity = merged.pv_power_entity || derived.pv_power_entity || "";
-		if (
-			poolLoadEntity
-			&& (
-				(pvPowerEntity && poolLoadEntity === pvPowerEntity)
-				|| (smoothedEntity && poolLoadEntity === smoothedEntity)
-				|| /(^|[_.])pv([_.]|$)/i.test(String(poolLoadEntity))
-			)
-		) {
-			poolLoadEntity = derived.power_entity || merged.main_power_entity || derived.main_power_entity || merged.aux_power_entity || derived.aux_power_entity || "";
-		}
+		const poolLoadEntity = this._resolvePreferredPowerEntity(merged, derived) || "";
 		const houseLoadEntity = merged.pv_house_load_entity || derived.pv_house_load_entity || "";
 		const surplusEntity = merged.pv_surplus_for_pool_entity || derived.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = merged.power_saving_pump_threshold_entity || derived.power_saving_pump_threshold_entity || "";
