@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.43";
+const VERSION = "2.3.44";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3954,9 +3954,9 @@ class PoolControllerCardEditor extends HTMLElement {
 					pvCopyBtn.onclick = async () => {
 						const result = await this._copyPvApexConfig();
 						if (pvCopyStatus) {
-							pvCopyStatus.textContent = result.ok
+							pvCopyStatus.textContent = result.message || (result.ok
 								? _t(lang, "editor.copy_pv_apex_success")
-								: _t(lang, "editor.copy_pv_apex_failed");
+								: _t(lang, "editor.copy_pv_apex_failed"));
 						}
 					};
 				}
@@ -4150,34 +4150,89 @@ class PoolControllerCardEditor extends HTMLElement {
 	async _copyPvApexConfig() {
 		const config = this._buildPvApexConfigForClipboard();
 		const payload = JSON.stringify(config, null, 2);
+		const diagnostics = {
+			secureContext: !!window.isSecureContext,
+			hasClipboardWrite: !!navigator?.clipboard?.writeText,
+			hasClipboardRead: !!navigator?.clipboard?.readText,
+			permissionWrite: "unknown",
+		};
+		try {
+			if (navigator?.permissions?.query) {
+				const p = await navigator.permissions.query({ name: "clipboard-write" });
+				diagnostics.permissionWrite = p?.state || "unknown";
+			}
+		} catch (_e) {
+			// ignore: not supported in all browsers/webviews
+		}
+
+		const verifyClipboard = async () => {
+			if (!navigator?.clipboard?.readText) return false;
+			try {
+				const current = await navigator.clipboard.readText();
+				return current === payload;
+			} catch (_e) {
+				return false;
+			}
+		};
+
+		const openManualFallback = () => {
+			try {
+				window.prompt("Copy PV Apex config manually:", payload);
+			} catch (_e) {
+				// ignore
+			}
+		};
 
 		try {
 			if (navigator?.clipboard?.writeText) {
 				await navigator.clipboard.writeText(payload);
-				return { ok: true };
+				if (await verifyClipboard()) {
+					return { ok: true, message: "Apex config copied to clipboard." };
+				}
+				openManualFallback();
+				return {
+					ok: false,
+					message: `Clipboard write not verifiable (secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
+				};
 			}
-		} catch (_e) {
+			openManualFallback();
+			return {
+				ok: false,
+				message: `Clipboard API unavailable (secure=${diagnostics.secureContext}). Manual copy dialog opened.`,
+			};
+		} catch (e) {
 			// fallback below
-		}
-
-		try {
-			const ta = document.createElement("textarea");
-			ta.value = payload;
-			ta.setAttribute("readonly", "");
-			ta.style.position = "fixed";
-			ta.style.top = "0";
-			ta.style.left = "0";
-			ta.style.opacity = "0";
-			document.body.appendChild(ta);
-			ta.focus();
-			ta.select();
-			ta.setSelectionRange(0, ta.value.length);
-			const copied = document.execCommand("copy");
-			document.body.removeChild(ta);
-			if (copied) return { ok: true };
-			return { ok: false };
-		} catch (_e) {
-			return { ok: false };
+			const errName = e?.name || "Error";
+			const errMsg = e?.message || "unknown";
+			try {
+				const ta = document.createElement("textarea");
+				ta.value = payload;
+				ta.setAttribute("readonly", "");
+				ta.style.position = "fixed";
+				ta.style.top = "0";
+				ta.style.left = "0";
+				ta.style.opacity = "0";
+				document.body.appendChild(ta);
+				ta.focus();
+				ta.select();
+				ta.setSelectionRange(0, ta.value.length);
+				const copied = document.execCommand("copy");
+				document.body.removeChild(ta);
+				if (copied && (await verifyClipboard())) {
+					return { ok: true, message: "Apex config copied to clipboard." };
+				}
+				openManualFallback();
+				return {
+					ok: false,
+					message: `Clipboard blocked (${errName}: ${errMsg}; secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
+				};
+			} catch (_fallbackErr) {
+				openManualFallback();
+				return {
+					ok: false,
+					message: `Clipboard blocked (${errName}: ${errMsg}; secure=${diagnostics.secureContext}, perm=${diagnostics.permissionWrite}). Manual copy dialog opened.`,
+				};
+			}
 		}
 	}
 
