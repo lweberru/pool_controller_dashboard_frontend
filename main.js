@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.53";
+const VERSION = "2.3.54";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2412,7 +2412,7 @@ class PoolControllerCard extends HTMLElement {
 			series.push({ entity: smoothedEntity, name: "PV", color: "#2e7d32", stroke_width: 3, opacity: 0.8 });
 		}
 		if (showPoolLoad && poolLoadEntity) {
-			series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85 });
+			series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85, curve: "stepline" });
 		}
 		if (showHouseLoad && houseLoadEntity) {
 			series.push({ entity: houseLoadEntity, name: "Hauslast", color: "#1565c0", stroke_width: 2, opacity: 0.85 });
@@ -4198,7 +4198,7 @@ class PoolControllerCardEditor extends HTMLElement {
 
 		const series = [];
 		if (showPv && smoothedEntity) series.push({ entity: smoothedEntity, name: "PV", color: "#2e7d32", stroke_width: 3, opacity: 0.8 });
-		if (showPoolLoad && poolLoadEntity) series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85 });
+		if (showPoolLoad && poolLoadEntity) series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85, curve: "stepline" });
 		if (showHouseLoad && houseLoadEntity) series.push({ entity: houseLoadEntity, name: "Hauslast", color: "#1565c0", stroke_width: 2, opacity: 0.85 });
 		if (showSurplus && surplusEntity) series.push({ entity: surplusEntity, name: "PV Überschuss Pool", color: "#00897b", stroke_width: 2, opacity: 0.7 });
 		if (showBandsEffective && bandLowEntity) series.push({ entity: bandLowEntity, name: "PV low", color: "#a5d6a7", stroke_width: 2, opacity: 0.55 });
