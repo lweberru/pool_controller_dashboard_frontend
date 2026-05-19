@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.5.0";
+const VERSION = "2.5.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -619,6 +619,8 @@ class PoolControllerCard extends HTMLElement {
 			this._setShellLoading();
 			return;
 		}
+		// First paint: draw a static content scaffold immediately, then patch with live data.
+		this._ensureContentScaffold(content, c, lang);
 
 		// Falls optionale Entities nicht im Config sind, leite sie aus der Backend-Instanz ab.
 		await this._ensureDerivedEntities();
@@ -690,6 +692,108 @@ class PoolControllerCard extends HTMLElement {
 		this._attachHandlers();
 		this._attachCostGraph();
 		this._attachPvGraph();
+	}
+
+	_ensureContentScaffold(content, config, lang) {
+		const host = this.shadowRoot?.querySelector('[data-role="content-host"]');
+		if (!host) return;
+		const current = host.getAttribute("data-content") || "";
+		if (current === content && host.childElementCount > 0) return;
+
+		let scaffold = "";
+		if (content === "controller") {
+			scaffold = this._renderControllerScaffold(lang, config);
+		} else if (content === "waterquality") {
+			scaffold = this._renderWaterqualityScaffold(lang);
+		}
+		if (!scaffold) return;
+		host.innerHTML = scaffold;
+		host.setAttribute("data-content", content);
+	}
+
+	_renderControllerScaffold(lang, c) {
+		return `<div class="dial-container" data-role="pc-controller-root">
+			<div class="dial" style="--accent:#8a3b32; --target-accent:rgba(138,59,50,0.3)" data-dial data-role="pc-dial">
+				<div class="ring">
+					<div class="power-top" data-role="pc-power-top"><span class="power-pill" data-role="pc-power-pill">--W</span></div>
+					<svg class="ring-svg" data-role="pc-ring-svg" viewBox="0 0 100 100">
+						<path class="ring-track" d="${this._arcPath(50, 50, 44, 135, 270)}"></path>
+					</svg>
+					<div class="status-icons">
+						<div class="status-icon frost" data-role="pc-status-frost" title="${_t(lang, "ui.frost")}"><ha-icon icon="mdi:snowflake"></ha-icon></div>
+						<div class="status-icon" data-role="pc-status-quiet" title="${_t(lang, "ui.quiet")}"><ha-icon icon="mdi:power-sleep"></ha-icon></div>
+						<div class="status-icon" data-role="pc-status-pv" title="${_t(lang, "ui.pv")}"><ha-icon icon="mdi:solar-power"></ha-icon></div>
+						<div class="status-icon rain" data-role="pc-status-rain" title="${_t(lang, "tooltips.rain", { pct: 0 })}"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
+					</div>
+				</div>
+				<div class="dial-core">
+					<div class="temp-current" data-role="pc-temp-current">--<span style="font-size:0.55em">°C</span></div>
+					<div class="divider"></div>
+					<div class="temp-target-row">
+						<span class="temp-target-left" data-role="pc-temp-target">--°C</span>
+						<span class="temp-target-mid" data-role="pc-temp-mid">${this._renderStatusMidIcon({ maintenanceActive: false, hvac: "off", hvacAction: null, bathingState: { active: false }, filterState: { active: false }, chlorState: { active: false }, pauseState: { active: false } })}</span>
+						<span class="temp-target-right" data-role="pc-temp-outdoor"></span>
+					</div>
+					<div class="switch-icons-row">
+						<div class="switch-icon" data-role="pc-switch-main" title="${_t(lang, "ui.main_switch")}"><ha-icon icon="mdi:power-plug"></ha-icon></div>
+						<div class="switch-icon" data-role="pc-switch-pump" title="${_t(lang, "ui.pump_switch")}"><ha-icon icon="mdi:pump"></ha-icon></div>
+						<div class="switch-icon" data-role="pc-switch-aux" title="${_t(lang, "ui.aux_heater_switch")}"><ha-icon icon="mdi:fire"></ha-icon></div>
+					</div>
+				</div>
+			</div>
+			<div data-role="pc-dial-timer-host"></div>
+			<div class="timer-text" data-role="pc-power-saving-reason" style="margin-top:4px; font-weight:600; display:none;"></div>
+			<div class="temp-controls">
+				<button class="temp-btn" data-action="dec">−</button>
+				<button class="temp-btn" data-action="inc">+</button>
+			</div>
+			<div class="action-buttons">
+				<button class="action-btn power-saving" data-action="power-saving-toggle"><ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span></button>
+				<button class="action-btn away" data-action="away-toggle"><ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span></button>
+				<button class="action-btn" data-mode="bathing" data-duration="60" data-start="${c?.bathing_start || ""}" data-stop="${c?.bathing_stop || ""}" data-active="false"><ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span></button>
+				<button class="action-btn filter" data-mode="filter" data-duration="30" data-start="${c?.filter_start || ""}" data-stop="${c?.filter_stop || ""}" data-active="false"><ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span></button>
+				<button class="action-btn chlorine" data-mode="chlorine" data-duration="5" data-start="${c?.chlorine_start || ""}" data-stop="${c?.chlorine_stop || ""}" data-active="false"><ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span></button>
+				<button class="action-btn" data-mode="pause" data-duration="60" data-start="${c?.pause_start || ""}" data-stop="${c?.pause_stop || ""}" data-active="false"><ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span></button>
+			</div>
+			<div class="aux-switch" data-entity="${c?.aux_entity || ""}">
+				<div class="aux-switch-label"><ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span></div>
+				<div class="toggle"></div>
+			</div>
+		</div>`;
+	}
+
+	_renderWaterqualityScaffold(lang) {
+		const phTicksMajor = Array.from({ length: 15 }, (_, i) => `<div class="scale-tick major" style="left: ${(i / 14) * 100}%"></div>`).join("");
+		const phTicksMinor = Array.from({ length: 14 }, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("");
+		const phLabels = Array.from({ length: 15 }, (_, i) => {
+			const cls = `scale-label-abs${i === 0 ? " first" : ""}${i === 14 ? " last" : ""}`;
+			return `<span class="${cls}" style="left: ${(i / 14) * 100}%">${i}</span>`;
+		}).join("");
+		return `<div class="quality" data-role="pc-waterquality-root">
+			<div class="info-badge" data-role="pc-wq-sanitizer">${_t(lang, "ui.sanitizer")}: --</div>
+			<div class="scale-container">
+				<div class="scale-title-row" title="--"><div class="scale-title">${_t(lang, "ui.ph")}</div><div class="scale-value" data-role="pc-wq-ph-value">--</div></div>
+				<div style="position: relative;" data-role="pc-wq-ph-wrap" title="--"><div class="scale-marker-line" data-role="pc-wq-ph-marker" style="display:none;"></div><div class="scale-bar ph-bar">${phTicksMajor}${phTicksMinor}</div></div>
+				<div class="scale-labels-abs">${phLabels}</div>
+			</div>
+			<div class="scale-container">
+				<div class="scale-title-row" title="--"><div class="scale-title">${_t(lang, "ui.chlorine")}</div><div class="scale-value" data-role="pc-wq-chlor-value">--</div></div>
+				<div style="position: relative;" data-role="pc-wq-chlor-wrap" title="--"><div class="scale-marker-line" data-role="pc-wq-chlor-marker" style="display:none;"></div><div class="scale-bar chlor-bar"><div class="scale-tick major" style="left:0%"></div><div class="scale-tick major" style="left:25%"></div><div class="scale-tick major" style="left:50%"></div><div class="scale-tick major" style="left:75%"></div><div class="scale-tick major" style="left:100%"></div></div></div>
+				<div class="scale-labels"><span>0</span><span>300</span><span>600</span><span>900</span><span>1200</span></div>
+			</div>
+			<div class="scale-container">
+				<div class="scale-title-row" title="--"><div class="scale-title">${_t(lang, "ui.salt")}</div><div class="scale-value" data-role="pc-wq-salt-value">--</div></div>
+				<div style="position: relative;" data-role="pc-wq-salt-wrap" title="--"><div class="scale-marker-line" data-role="pc-wq-salt-marker" style="display:none;"></div><div class="scale-bar salt-bar"><div class="scale-tick major" style="left:0%"></div><div class="scale-tick major" style="left:25%"></div><div class="scale-tick major" style="left:50%"></div><div class="scale-tick major" style="left:75%"></div><div class="scale-tick major" style="left:100%"></div></div></div>
+				<div class="scale-labels"><span>0</span><span>2.5</span><span>5</span><span>7.5</span><span>10</span></div>
+				<div class="scale-labels" style="margin-top:6px; font-size:11px; color:#666;"><span>0%</span><span>0.25%</span><span>0.50%</span><span>0.75%</span><span>1.00%</span></div>
+			</div>
+			<div class="scale-container">
+				<div class="scale-title-row" title="--"><div class="scale-title">${_t(lang, "ui.tds")}</div><div class="scale-value" data-role="pc-wq-tds-value">--</div></div>
+				<div style="position: relative;" data-role="pc-wq-tds-wrap" title="--"><div class="scale-marker-line" data-role="pc-wq-tds-marker" style="display:none;"></div><div class="scale-bar tds-bar"><div class="scale-tick major" style="left:0%"></div><div class="scale-tick major" style="left:25%"></div><div class="scale-tick major" style="left:50%"></div><div class="scale-tick major" style="left:75%"></div><div class="scale-tick major" style="left:100%"></div></div></div>
+				<div class="scale-labels"><span>0</span><span>500</span><span>1000</span><span>1500</span><span>2000</span></div>
+			</div>
+			<div data-role="pc-wq-hints-host"></div>
+		</div>`;
 	}
 
 	_buildHeaderBaseTitle(content, config, lang) {
