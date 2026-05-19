@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.3.54";
+const VERSION = "2.5.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -606,10 +606,19 @@ class PoolControllerCard extends HTMLElement {
 	// MODULAR: Haupt-Render orchestriert alles
 	// ========================================
 	async _render() {
-		if (!this._hass || !this._config) return;
 		const h = this._hass;
 		const c = this._config;
+		if (!this.shadowRoot) {
+			this.attachShadow({ mode: "open" });
+		}
 		const lang = _langFromHass(h);
+		const content = (c?.content || DEFAULTS.content || "controller").toString().trim();
+		this._ensureShell();
+		this._updateShellTitle(this._buildHeaderBaseTitle(content, c, lang));
+		if (!h || !c) {
+			this._setShellLoading();
+			return;
+		}
 
 		// Falls optionale Entities nicht im Config sind, leite sie aus der Backend-Instanz ab.
 		await this._ensureDerivedEntities();
@@ -629,19 +638,10 @@ class PoolControllerCard extends HTMLElement {
 		const data = this._prepareData(h, effectiveConfig, climate);
 		this._renderData = data;
 
-		// Komplettes Rendering
+		// Dynamisches Rendering in statische Shell
 		// Determine selected content block and title (append pool friendly name)
-		const content = (c.content || DEFAULTS.content).toString().trim();
 		const poolName = climate.attributes?.friendly_name || "";
-		const titles = {
-			controller: _t(lang, "ui.controller_title"),
-			calendar: _t(lang, "ui.calendar_title"),
-			waterquality: _t(lang, "ui.waterquality_title"),
-			maintenance: _t(lang, "ui.maintenance_title"),
-			cost: _t(lang, "ui.cost_title"),
-			pv: _t(lang, "ui.pv_chart_title"),
-		};
-		let headerBase = titles[content] || "Pool Controller";
+		let headerBase = this._buildHeaderBaseTitle(content, c, lang);
 		if (content === "cost") {
 			const viewKey = `ui.cost_view_${(c.cost_view || DEFAULTS.cost_view || "day").toString().trim()}`;
 			const viewLabel = _t(lang, viewKey);
@@ -675,26 +675,441 @@ class PoolControllerCard extends HTMLElement {
 			default:
 				blockHtml = this._renderControllerBlock(data, effectiveConfig);
 		}
-
-		this.shadowRoot.innerHTML = `
-		${this._getStyles()}
-		<ha-card>
-			<div class="header">
-				<div class="title">${headerTitle}</div>
-				<div class="header-actions"></div>
-			</div>
-			${data.maintenanceActive ? `
-			<div class="maintenance-mode" ${data.maintenanceEntityId ? `data-more-info="${data.maintenanceEntityId}"` : ""}>
-				<div class="maintenance-mode-title">${_t(lang, "ui.maintenance_mode_title")}</div>
-				<div class="maintenance-mode-text">${_t(lang, "ui.maintenance_mode_text")}</div>
-			</div>` : ""}
-
-			<div class="block">${blockHtml}</div>
-		</ha-card>`;
+		this._renderIntoShell({
+			content,
+			data,
+			effectiveConfig,
+			headerTitle,
+			maintenanceActive: !!data.maintenanceActive,
+			maintenanceEntityId: data.maintenanceEntityId,
+			maintenanceTitle: _t(lang, "ui.maintenance_mode_title"),
+			maintenanceText: _t(lang, "ui.maintenance_mode_text"),
+			blockHtml,
+		});
 
 		this._attachHandlers();
 		this._attachCostGraph();
 		this._attachPvGraph();
+	}
+
+	_buildHeaderBaseTitle(content, config, lang) {
+		const titles = {
+			controller: _t(lang, "ui.controller_title"),
+			calendar: _t(lang, "ui.calendar_title"),
+			waterquality: _t(lang, "ui.waterquality_title"),
+			maintenance: _t(lang, "ui.maintenance_title"),
+			cost: _t(lang, "ui.cost_title"),
+			pv: _t(lang, "ui.pv_chart_title"),
+		};
+		if (content === "cost") {
+			const viewKey = `ui.cost_view_${(config?.cost_view || DEFAULTS.cost_view || "day").toString().trim()}`;
+			const viewLabel = _t(lang, viewKey);
+			return `${_t(lang, "ui.cost_title")} — ${viewLabel}`;
+		}
+		return titles[content] || "Pool Controller";
+	}
+
+	_ensureShell() {
+		if (!this.shadowRoot) return;
+		if (this.shadowRoot.querySelector('[data-role="card-shell"]')) return;
+		this.shadowRoot.innerHTML = `
+		${this._getStyles()}
+		<ha-card data-role="card-shell">
+			<div class="header">
+				<div class="title" data-role="header-title"></div>
+				<div class="header-actions"></div>
+			</div>
+			<div class="maintenance-mode hidden" data-role="maintenance-banner"></div>
+			<div class="block" data-role="content-host"></div>
+		</ha-card>`;
+	}
+
+	_updateShellTitle(title) {
+		const titleEl = this.shadowRoot?.querySelector('[data-role="header-title"]');
+		if (titleEl) titleEl.textContent = title || "";
+	}
+
+	_setShellLoading() {
+		const host = this.shadowRoot?.querySelector('[data-role="content-host"]');
+		if (!host) return;
+		host.innerHTML = `<div class="block-loading"><div class="loading-line w70"></div><div class="loading-line w50"></div><div class="loading-line w60"></div></div>`;
+	}
+
+	_renderIntoShell({ content, data, effectiveConfig, headerTitle, maintenanceActive, maintenanceEntityId, maintenanceTitle, maintenanceText, blockHtml }) {
+		this._updateShellTitle(headerTitle);
+		const maintenanceEl = this.shadowRoot?.querySelector('[data-role="maintenance-banner"]');
+		if (maintenanceEl) {
+			if (maintenanceActive) {
+				maintenanceEl.classList.remove("hidden");
+				if (maintenanceEntityId) maintenanceEl.setAttribute("data-more-info", maintenanceEntityId);
+				else maintenanceEl.removeAttribute("data-more-info");
+				maintenanceEl.innerHTML = `<div class="maintenance-mode-title">${maintenanceTitle}</div><div class="maintenance-mode-text">${maintenanceText}</div>`;
+			} else {
+				maintenanceEl.classList.add("hidden");
+				maintenanceEl.removeAttribute("data-more-info");
+				maintenanceEl.innerHTML = "";
+			}
+		}
+		const host = this.shadowRoot?.querySelector('[data-role="content-host"]');
+		if (!host) return;
+		if (content === "controller") {
+			const sig = this._getControllerStructureSignature(data, effectiveConfig);
+			if (this._controllerPatchSig === sig && this._patchControllerBlock(host, data, effectiveConfig)) {
+				return;
+			}
+			host.innerHTML = blockHtml || "";
+			this._controllerPatchSig = sig;
+			this._waterqualityPatchSig = null;
+			return;
+		}
+		if (content === "waterquality") {
+			const sig = this._getWaterqualityStructureSignature(data, effectiveConfig);
+			if (this._waterqualityPatchSig === sig && this._patchWaterqualityBlock(host, data, effectiveConfig)) {
+				return;
+			}
+			host.innerHTML = blockHtml || "";
+			this._waterqualityPatchSig = sig;
+			this._controllerPatchSig = null;
+			return;
+		}
+		host.innerHTML = blockHtml || "";
+		this._controllerPatchSig = null;
+		this._waterqualityPatchSig = null;
+	}
+
+	_getControllerViewFlags(d, c) {
+		const disabled = !!d.maintenanceActive;
+		const showAwayButton = !!(
+			d.awayEntityId ||
+			d.awayStartButtonEntityId ||
+			d.awayStopButtonEntityId ||
+			this._hasService("pool_controller", "start_away") ||
+			this._hasService("pool_controller", "stop_away")
+		);
+		const showPowerSavingButton = !!(
+			d.powerSavingActive || d.powerSavingAvailable
+		) && !!(
+			this._hasService("pool_controller", "start_power_saving") ||
+			this._hasService("pool_controller", "stop_power_saving") ||
+			d.climateEntityId
+		);
+		const showAuxSwitch = (() => {
+			if (c.aux_binary && this._hass.states[c.aux_binary]) {
+				return this._isOn(this._hass.states[c.aux_binary]);
+			}
+			return (c.aux_entity && this._hass.states[c.aux_entity]);
+		})();
+		return { disabled, showAwayButton, showPowerSavingButton, showAuxSwitch };
+	}
+
+	_getControllerDurations(d, c) {
+		const _numPos = (v, fallback) => {
+			if (v == null) return fallback;
+			const n = Number(v);
+			if (!Number.isFinite(n) || n <= 0) return fallback;
+			return n;
+		};
+		const bathingDur = _numPos(d.bathingMaxMins, (Number.isFinite(Number(c.bathing_max_mins)) ? Number(c.bathing_max_mins) : 60));
+		const filterDur = _numPos(d.filterMaxMins, (Number.isFinite(Number(c.filter_max_mins)) ? Number(c.filter_max_mins) : 30));
+		const chlorDur = _numPos(d.chlorMaxMins, (Number.isFinite(Number(c.chlor_max_mins)) ? Number(c.chlor_max_mins) : 5));
+		const pauseDur = _numPos(d.pauseMaxMins, (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60));
+
+		const cfgFilter = c.filter_duration_entity ? this._num(this._hass.states[c.filter_duration_entity]?.state) : null;
+		const cfgChlor = c.chlorine_duration_entity ? this._num(this._hass.states[c.chlorine_duration_entity]?.state) : null;
+		const cfgBath = c.bathing_duration_entity ? this._num(this._hass.states[c.bathing_duration_entity]?.state) : null;
+		return {
+			finalBathDur: Number.isFinite(Number(cfgBath)) ? cfgBath : bathingDur,
+			finalFilterDur: Number.isFinite(Number(cfgFilter)) ? cfgFilter : filterDur,
+			finalChlorDur: Number.isFinite(Number(cfgChlor)) ? cfgChlor : chlorDur,
+			pauseDur,
+		};
+	}
+
+	_getControllerStructureSignature(d, c) {
+		const f = this._getControllerViewFlags(d, c);
+		return JSON.stringify({
+			disabled: f.disabled,
+			showAwayButton: f.showAwayButton,
+			showPowerSavingButton: f.showPowerSavingButton,
+			showAuxSwitch: f.showAuxSwitch,
+			bathingActive: !!d.bathingState?.active,
+			filterActive: !!d.filterState?.active,
+			chlorActive: !!d.chlorState?.active,
+			pauseActive: !!d.pauseState?.active,
+			awayActive: !!d.awayActive,
+			powerSavingActive: !!d.powerSavingActive,
+			maintenanceActive: !!d.maintenanceActive,
+			lang: _langFromHass(this._hass),
+		});
+	}
+
+	_renderDialSvgMarkup(d) {
+		const RING_CX = 50;
+		const RING_CY = 50;
+		const RING_R = 44;
+		const DOT_R = RING_R;
+		const RING_START_DEG = 135;
+		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
+		return `
+			<path class="ring-track" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, 270)}" />
+			${d.targetAngle > d.dialAngle ? `<path class="ring-target" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ""}
+			<path class="ring-progress" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, d.dialAngle)}" />
+			${d.targetAngle > d.dialAngle ? `<path class="ring-highlight" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ""}
+			<circle class="ring-dot-current" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.25" style="fill:${dotCurrentFill};" />
+			<circle class="ring-dot-target" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
+		`;
+	}
+
+	_patchControllerBlock(host, d, c) {
+		const root = host.querySelector('[data-role="pc-controller-root"]');
+		if (!root) return false;
+		const lang = _langFromHass(this._hass);
+		const f = this._getControllerViewFlags(d, c);
+		const durations = this._getControllerDurations(d, c);
+
+		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
+		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
+		const dial = root.querySelector('[data-role="pc-dial"]');
+		if (dial) {
+			dial.classList.toggle("disabled", f.disabled);
+			dial.style.setProperty("--accent", accent);
+			dial.style.setProperty("--target-accent", targetAccent);
+		}
+
+		const powerTop = root.querySelector('[data-role="pc-power-top"]');
+		if (powerTop) {
+			if (d.powerTooltip) powerTop.setAttribute("title", d.powerTooltip);
+			else powerTop.removeAttribute("title");
+			if (d.powerMoreInfoEntityId) powerTop.setAttribute("data-more-info", d.powerMoreInfoEntityId);
+			else powerTop.removeAttribute("data-more-info");
+		}
+		const powerPill = root.querySelector('[data-role="pc-power-pill"]');
+		if (powerPill) {
+			if (d.displayPower !== null) {
+				powerPill.textContent = `${d.displayPower}W`;
+				powerPill.style.display = "inline-flex";
+			} else {
+				powerPill.style.display = "none";
+			}
+		}
+
+		const ringSvg = root.querySelector('[data-role="pc-ring-svg"]');
+		if (ringSvg) ringSvg.innerHTML = this._renderDialSvgMarkup(d);
+
+		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
+		const pvStageLabel = d.powerSavingActive
+			? (d.powerSavingStage === 2 ? _t(lang, "ui.pv_stage2") : d.powerSavingStage === 1 ? _t(lang, "ui.pv_stage1") : _t(lang, "ui.pv_off"))
+			: null;
+		const pvTitle = d.powerSavingActive ? `${_t(lang, "ui.pv")}: ${pvStageLabel}` : _t(lang, "ui.pv");
+		const pvClass = d.powerSavingActive
+			? (d.powerSavingStage === 2 ? "active stage2" : d.powerSavingStage === 1 ? "active stage1" : "")
+			: (d.pvAllows ? "active" : "");
+
+		const frostEl = root.querySelector('[data-role="pc-status-frost"]');
+		if (frostEl) {
+			frostEl.className = `status-icon frost ${d.frost ? "active" : ""}`;
+			frostEl.setAttribute("title", _t(lang, "ui.frost"));
+		}
+		const quietEl = root.querySelector('[data-role="pc-status-quiet"]');
+		if (quietEl) {
+			quietEl.className = `status-icon ${d.quiet ? "active" : ""}`;
+			quietEl.setAttribute("title", _t(lang, "ui.quiet"));
+		}
+		const pvEl = root.querySelector('[data-role="pc-status-pv"]');
+		if (pvEl) {
+			pvEl.className = `status-icon ${pvClass}`;
+			pvEl.setAttribute("title", pvTitle);
+		}
+		const rainEl = root.querySelector('[data-role="pc-status-rain"]');
+		if (rainEl) {
+			rainEl.className = `status-icon rain ${d.eventRainBlocked ? "active" : ""}`;
+			rainEl.setAttribute("title", _t(lang, "tooltips.rain", { pct: rainPct }));
+		}
+
+		const tempCurrent = root.querySelector('[data-role="pc-temp-current"]');
+		if (tempCurrent) tempCurrent.innerHTML = `${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span>`;
+		const tempTarget = root.querySelector('[data-role="pc-temp-target"]');
+		if (tempTarget) tempTarget.textContent = `${d.target != null ? d.target.toFixed(1) : "–"}°C`;
+		const tempMid = root.querySelector('[data-role="pc-temp-mid"]');
+		if (tempMid) tempMid.innerHTML = this._renderStatusMidIcon(d);
+		const tempOut = root.querySelector('[data-role="pc-temp-outdoor"]');
+		if (tempOut) tempOut.textContent = d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : "";
+
+		const swMain = root.querySelector('[data-role="pc-switch-main"]');
+		if (swMain) swMain.classList.toggle("active", !!d.mainSwitchOn);
+		const swPump = root.querySelector('[data-role="pc-switch-pump"]');
+		if (swPump) swPump.classList.toggle("active", !!d.pumpSwitchOn);
+		const swAux = root.querySelector('[data-role="pc-switch-aux"]');
+		if (swAux) swAux.classList.toggle("active", !!d.auxHeatingSwitchOn);
+
+		const timerHost = root.querySelector('[data-role="pc-dial-timer-host"]');
+		if (timerHost) timerHost.innerHTML = this._renderDialTimer(d);
+
+		const reasonEl = root.querySelector('[data-role="pc-power-saving-reason"]');
+		if (reasonEl) {
+			const txt = this._powerSavingReasonText(d);
+			reasonEl.textContent = txt || "";
+			reasonEl.style.display = txt ? "block" : "none";
+		}
+
+		const powerSavingBtn = root.querySelector('[data-action="power-saving-toggle"]');
+		if (powerSavingBtn) {
+			powerSavingBtn.classList.toggle("active", !!d.powerSavingActive);
+			powerSavingBtn.title = d.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive");
+		}
+		const awayBtn = root.querySelector('[data-action="away-toggle"]');
+		if (awayBtn) {
+			awayBtn.classList.toggle("active", !!d.awayActive);
+			awayBtn.title = d.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive");
+		}
+
+		const bathingBtn = root.querySelector('[data-mode="bathing"]');
+		if (bathingBtn) {
+			bathingBtn.classList.toggle("active", !!d.bathingState.active);
+			bathingBtn.dataset.active = String(!!d.bathingState.active);
+			bathingBtn.dataset.duration = String(durations.finalBathDur);
+			bathingBtn.title = d.bathingState.active
+				? _t(lang, "tooltips.bathing.active", { mins: (d.bathingEta != null ? d.bathingEta : durations.finalBathDur) })
+				: _t(lang, "tooltips.bathing.inactive", { mins: durations.finalBathDur });
+		}
+		const filterBtn = root.querySelector('[data-mode="filter"]');
+		if (filterBtn) {
+			filterBtn.classList.toggle("active", !!d.filterState.active);
+			filterBtn.dataset.active = String(!!d.filterState.active);
+			filterBtn.dataset.duration = String(durations.finalFilterDur);
+			filterBtn.title = d.filterState.active
+				? _t(lang, "tooltips.filter.active", { mins: (d.filterEta != null ? d.filterEta : durations.finalFilterDur) })
+				: _t(lang, "tooltips.filter.inactive", { mins: durations.finalFilterDur });
+		}
+		const chlorBtn = root.querySelector('[data-mode="chlorine"]');
+		if (chlorBtn) {
+			chlorBtn.classList.toggle("active", !!d.chlorState.active);
+			chlorBtn.dataset.active = String(!!d.chlorState.active);
+			chlorBtn.dataset.duration = String(durations.finalChlorDur);
+			chlorBtn.title = d.chlorState.active
+				? _t(lang, "tooltips.chlorine.active", { mins: (d.chlorEta != null ? d.chlorEta : durations.finalChlorDur) })
+				: _t(lang, "tooltips.chlorine.inactive", { mins: durations.finalChlorDur });
+		}
+		const pauseBtn = root.querySelector('[data-mode="pause"]');
+		if (pauseBtn) {
+			pauseBtn.classList.toggle("active", !!d.pauseState.active);
+			pauseBtn.dataset.active = String(!!d.pauseState.active);
+			pauseBtn.dataset.duration = String(durations.pauseDur);
+			pauseBtn.title = d.pauseState.active
+				? _t(lang, "tooltips.pause.active", { mins: (d.pauseEta != null ? d.pauseEta : durations.pauseDur) })
+				: _t(lang, "tooltips.pause.inactive", { mins: durations.pauseDur });
+		}
+
+		const auxSwitch = root.querySelector(".aux-switch");
+		if (auxSwitch) {
+			auxSwitch.classList.toggle("active", !!d.auxOn);
+			auxSwitch.classList.toggle("disabled", !!f.disabled);
+			auxSwitch.title = d.auxOn ? _t(lang, "tooltips.aux.active") : _t(lang, "tooltips.aux.inactive");
+		}
+
+		root.querySelectorAll(".temp-btn, .action-btn").forEach((el) => {
+			if (f.disabled) el.setAttribute("disabled", "");
+			else if (el.dataset.action !== "maintenance-toggle") el.removeAttribute("disabled");
+		});
+		return true;
+	}
+
+	_getWaterqualityStructureSignature(d, c) {
+		return JSON.stringify({
+			lang: _langFromHass(this._hass),
+			hasSanitizerLabel: !!d.sanitizerModeLabel,
+			hasSalt: d.salt != null,
+			hasTds: d.tds != null,
+			sanitizerMode: d.sanitizerMode || "",
+			chlorOkMin: Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min,
+		});
+	}
+
+	_patchWaterqualityBlock(host, d, c) {
+		const root = host.querySelector('[data-role="pc-waterquality-root"]');
+		if (!root) return false;
+		const lang = _langFromHass(this._hass);
+
+		const phValueText = d.ph != null ? `${d.ph.toFixed(2)}` : "–";
+		const chlorValueText = d.chlor != null ? `${d.chlor.toFixed(0)} mV` : "–";
+		const saltValueText = d.salt != null ? `${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)` : "–";
+		const tdsValueText = d.tds != null ? `${d.tds.toFixed(0)} ppm` : "–";
+
+		const sanitizerBadge = root.querySelector('[data-role="pc-wq-sanitizer"]');
+		if (sanitizerBadge) {
+			sanitizerBadge.textContent = `${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}`;
+		}
+
+		const setText = (role, text) => {
+			const el = root.querySelector(`[data-role="${role}"]`);
+			if (el) el.textContent = text;
+		};
+		setText("pc-wq-ph-value", phValueText);
+		setText("pc-wq-chlor-value", chlorValueText);
+		setText("pc-wq-salt-value", saltValueText);
+		setText("pc-wq-tds-value", tdsValueText);
+
+		const setTitle = (role, title) => {
+			const el = root.querySelector(`[data-role="${role}"]`);
+			if (el) el.setAttribute("title", title);
+		};
+		setTitle("pc-wq-ph-wrap", phValueText);
+		setTitle("pc-wq-chlor-wrap", chlorValueText);
+		setTitle("pc-wq-salt-wrap", saltValueText);
+		setTitle("pc-wq-tds-wrap", tdsValueText);
+
+		const setMarker = (role, value, min, max) => {
+			const marker = root.querySelector(`[data-role="${role}"]`);
+			if (!marker) return;
+			if (value == null) {
+				marker.style.display = "none";
+				return;
+			}
+			marker.style.display = "block";
+			marker.style.left = `${this._pct(value, min, max)}%`;
+		};
+		setMarker("pc-wq-ph-marker", d.ph, 0, 14);
+		setMarker("pc-wq-chlor-marker", d.chlor, 0, 1200);
+		setMarker("pc-wq-salt-marker", d.salt, 0, 10);
+		setMarker("pc-wq-tds-marker", d.tds, 0, 2000);
+
+		const hintsHost = root.querySelector('[data-role="pc-wq-hints-host"]');
+		if (hintsHost) {
+			hintsHost.innerHTML = this._renderWaterqualityHints(d, c, lang);
+		}
+
+		return true;
+	}
+
+	_renderWaterqualityHints(d, c, lang) {
+		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
+			? (d.saltAddNum >= 1000
+				? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)`
+				: `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
+			: null;
+		const chlorOkMin = Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min;
+		const chlorLow = (d.chlor != null) && (chlorOkMin != null) && (Number(d.chlor) < Number(chlorOkMin));
+		const isSaltwater = d.sanitizerMode === "saltwater";
+		const isMixed = d.sanitizerMode === "mixed";
+		const saltAddNeeded = !!saltAddDisplay;
+		const showSaltwaterHint = isSaltwater && chlorLow && !saltAddNeeded;
+		const showMixedHint = isMixed && chlorLow && !saltAddNeeded;
+		const items = [];
+
+		if (saltAddDisplay) {
+			items.push(`<div class="info-badge">${_t(lang, "ui.add_salt")}: <strong>${saltAddDisplay}</strong></div>`);
+		}
+		if (chlorLow) {
+			items.push(`<div class="info-badge">${_t(lang, "ui.low_chlorine")}</div>`);
+		}
+		if (showSaltwaterHint) {
+			items.push(`<div class="info-badge">${_t(lang, "ui.saltwater_chlor_hint")}</div>`);
+		}
+		if (showMixedHint) {
+			items.push(`<div class="info-badge">${_t(lang, "ui.mixed_chlor_hint")}</div>`);
+		}
+		if (!items.length) return "";
+		return `<div class="credit-row">${items.join("")}</div>`;
 	}
 
 	// ========================================
@@ -1085,9 +1500,16 @@ class PoolControllerCard extends HTMLElement {
 				--pc-border: var(--divider-color, #d0d7de);
 				--pc-muted: var(--secondary-text-color, #666);
 			}
+			.hidden { display: none !important; }
 			[data-more-info] { cursor: pointer; }
 			ha-card { padding: 16px; background: var(--pc-surface); color: var(--primary-text-color); container-type: inline-size; }
 			* { box-sizing: border-box; }
+			.block-loading { display: grid; gap: 10px; margin-top: 8px; }
+			.loading-line { height: 12px; border-radius: 999px; background: linear-gradient(90deg, color-mix(in srgb, var(--pc-border) 75%, transparent 25%) 20%, color-mix(in srgb, var(--pc-border) 45%, transparent 55%) 50%, color-mix(in srgb, var(--pc-border) 75%, transparent 25%) 80%); background-size: 250% 100%; animation: pc-loading 1.1s linear infinite; }
+			.loading-line.w70 { width: 70%; }
+			.loading-line.w60 { width: 60%; }
+			.loading-line.w50 { width: 50%; }
+			@keyframes pc-loading { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 			.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-family: "Montserrat", "Segoe UI", sans-serif; }
 			.header-actions { display: flex; align-items: center; gap: 10px; }
 			.header-actions .action-btn { padding: 8px 10px; font-size: 12px; }
@@ -1332,58 +1754,12 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderControllerBlock(d, c) {
 		const lang = _langFromHass(this._hass);
-		const disabled = !!d.maintenanceActive;
-		const showAwayButton = !!(
-			d.awayEntityId ||
-			d.awayStartButtonEntityId ||
-			d.awayStopButtonEntityId ||
-			this._hasService("pool_controller", "start_away") ||
-			this._hasService("pool_controller", "stop_away")
-		);
-		const showPowerSavingButton = !!(
-			d.powerSavingActive || d.powerSavingAvailable
-		) && !!(
-			this._hasService("pool_controller", "start_power_saving") ||
-			this._hasService("pool_controller", "stop_power_saving") ||
-			d.climateEntityId
-		);
+		const { disabled, showAwayButton, showPowerSavingButton, showAuxSwitch } = this._getControllerViewFlags(d, c);
 		const powerSavingReasonText = this._powerSavingReasonText(d);
-		// Compute runtime-visible aux availability:
-		// - If the backend provides a dedicated `aux_binary` sensor (preferred), only
-		//   show the UI when that sensor reports ON (this follows the integration option).
-		// - Fallback: if no aux_binary exists, show the aux controls when an aux_entity is configured.
-		const showAuxSwitch = (() => {
-			if (c.aux_binary && this._hass.states[c.aux_binary]) {
-				return this._isOn(this._hass.states[c.aux_binary]);
-			}
-			return (c.aux_entity && this._hass.states[c.aux_entity]);
-		})();
-		// Use dynamic durations for tooltips / data-duration attributes (prefer backend-provided values)
-		const _numPos = (v, fallback) => {
-			if (v == null) return fallback;
-			const n = Number(v);
-			if (!Number.isFinite(n) || n <= 0) return fallback;
-			return n;
-		};
-		const bathingDur = _numPos(d.bathingMaxMins, (Number.isFinite(Number(c.bathing_max_mins)) ? Number(c.bathing_max_mins) : 60));
-		const filterDur = _numPos(d.filterMaxMins, (Number.isFinite(Number(c.filter_max_mins)) ? Number(c.filter_max_mins) : 30));
-		const chlorDur = _numPos(d.chlorMaxMins, (Number.isFinite(Number(c.chlor_max_mins)) ? Number(c.chlor_max_mins) : 5));
-		const pauseDur = _numPos(d.pauseMaxMins, (Number.isFinite(Number(c.pause_max_mins)) ? Number(c.pause_max_mins) : 60));
-
-		// If backend exposes configured defaults via config sensors, prefer them
-		const cfgFilter = c.filter_duration_entity ? this._num(this._hass.states[c.filter_duration_entity]?.state) : null;
-		const cfgChlor = c.chlorine_duration_entity ? this._num(this._hass.states[c.chlorine_duration_entity]?.state) : null;
-		const cfgBath = c.bathing_duration_entity ? this._num(this._hass.states[c.bathing_duration_entity]?.state) : null;
-		const finalFilterDur = Number.isFinite(Number(cfgFilter)) ? cfgFilter : filterDur;
-		const finalChlorDur = Number.isFinite(Number(cfgChlor)) ? cfgChlor : chlorDur;
-		const finalBathDur = Number.isFinite(Number(cfgBath)) ? cfgBath : bathingDur;
+		const { finalBathDur, finalFilterDur, finalChlorDur, pauseDur } = this._getControllerDurations(d, c);
 		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
 		const rainTooltip = _t(lang, "tooltips.rain", { pct: rainPct });
 		const rainInfo = _t(lang, "ui.event_rain_blocked", { pct: rainPct });
-		const RING_CX = 50;
-		const RING_CY = 50;
-		const RING_R = 44;
-		const DOT_R = RING_R;
 		const pvStageLabel = d.powerSavingActive
 			? (d.powerSavingStage === 2
 				? _t(lang, "ui.pv_stage2")
@@ -1397,71 +1773,54 @@ class PoolControllerCard extends HTMLElement {
 			: (d.pvAllows ? "active" : "");
 		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
 		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
-		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
-		// SVG-Winkel (Screen-Koordinaten): 0°=3 Uhr, 90°=6 Uhr.
-		// Gap unten (zentriert bei 90°): Gap 45°..135° => Arc Start 135°, Sweep 270° bis 45°.
-		const RING_START_DEG = 135;
-		return `<div class="dial-container">
-				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial>
+		return `<div class="dial-container" data-role="pc-controller-root">
+				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}" data-dial data-role="pc-dial">
 					<div class="ring">
-						<div class="power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''} ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''}>
-							${d.displayPower !== null ? `<span class="power-pill">${d.displayPower}W</span>` : ""}
+						<div class="power-top" data-role="pc-power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''} ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''}>
+							<span class="power-pill" data-role="pc-power-pill" style="${d.displayPower !== null ? "" : "display:none;"}">${d.displayPower !== null ? `${d.displayPower}W` : ""}</span>
 						</div>
 						<!-- SVG Ring mit 270° Arc (Öffnung bei 6 Uhr) -->
-						<svg class="ring-svg" viewBox="0 0 100 100">
-							<!-- Track: 270° Arc (Gap unten) -->
-							<path class="ring-track" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, 270)}" />
-							<!-- Target Range (nur wenn Target > Current) -->
-							${d.targetAngle > d.dialAngle ? `<path class="ring-target" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
-							<!-- Current Progress -->
-							<path class="ring-progress" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG, d.dialAngle)}" />
-							<!-- Highlight zwischen IST und SOLL -->
-							${d.targetAngle > d.dialAngle ? `<path class="ring-highlight" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, d.targetAngle - d.dialAngle)}" />` : ''}
-							<!-- Dot am IST-Wert (kleiner) -->
-							<circle class="ring-dot-current" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" 
-								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.25" style="fill:${dotCurrentFill};" />
-							<!-- Dot am SOLL-Wert (größer, weiß) -->
-							<circle class="ring-dot-target" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" 
-								cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.targetAngle) * Math.PI / 180)}" r="2.5" />
+						<svg class="ring-svg" data-role="pc-ring-svg" viewBox="0 0 100 100">
+							${this._renderDialSvgMarkup(d)}
 						</svg>
 						<div class="status-icons">
-							<div class="status-icon frost ${d.frost ? "active" : ""}" title="${_t(lang, "ui.frost")}" ${(d.frostEntityId || d.runReasonEntityId) ? `data-more-info="${d.frostEntityId || d.runReasonEntityId}"` : ''}>
+							<div class="status-icon frost ${d.frost ? "active" : ""}" data-role="pc-status-frost" title="${_t(lang, "ui.frost")}" ${(d.frostEntityId || d.runReasonEntityId) ? `data-more-info="${d.frostEntityId || d.runReasonEntityId}"` : ''}>
 								<ha-icon icon="mdi:snowflake"></ha-icon>
 							</div>
-							<div class="status-icon ${d.quiet ? "active" : ""}" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
+							<div class="status-icon ${d.quiet ? "active" : ""}" data-role="pc-status-quiet" title="${_t(lang, "ui.quiet")}" ${d.quietEntityId ? `data-more-info="${d.quietEntityId}"` : ''}>
 								<ha-icon icon="mdi:power-sleep"></ha-icon>
 							</div>
-							<div class="status-icon ${pvClass}" title="${pvTitle}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
+							<div class="status-icon ${pvClass}" data-role="pc-status-pv" title="${pvTitle}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
-								<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
+								<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" data-role="pc-status-rain" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
 									<ha-icon icon="mdi:weather-rainy"></ha-icon>
 								</div>
 						</div>
 					</div>
 					<div class="dial-core">
-						<div class="temp-current" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
+						<div class="temp-current" data-role="pc-temp-current" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
 						<div class="temp-target-row">
-							<span class="temp-target-left" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
-							<span class="temp-target-mid">${this._renderStatusMidIcon(d)}</span>
-							<span class="temp-target-right" ${d.outdoorTempEntityId ? `data-more-info="${d.outdoorTempEntityId}"` : ''}>${d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : ''}</span>
+							<span class="temp-target-left" data-role="pc-temp-target" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.target != null ? d.target.toFixed(1) : "–"}°C</span>
+							<span class="temp-target-mid" data-role="pc-temp-mid">${this._renderStatusMidIcon(d)}</span>
+							<span class="temp-target-right" data-role="pc-temp-outdoor" ${d.outdoorTempEntityId ? `data-more-info="${d.outdoorTempEntityId}"` : ''}>${d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : ''}</span>
 						</div>
 						<div class="switch-icons-row">
-							<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
+							<div class="switch-icon ${d.mainSwitchOn ? "active" : ""}" data-role="pc-switch-main" title="${_t(lang, "ui.main_switch")}" ${d.mainSwitchOnEntityId ? `data-more-info="${d.mainSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:power-plug"></ha-icon>
 							</div>
-							<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
+							<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" data-role="pc-switch-pump" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:pump"></ha-icon>
 							</div>
-							${showAuxSwitch ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
+							${showAuxSwitch ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" data-role="pc-switch-aux" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:fire"></ha-icon>
 							</div>` : ''}
 						</div>
 					</div>
 				</div>
-				${this._renderDialTimer(d)}
-				${powerSavingReasonText ? `<div class="timer-text" style="margin-top:4px; font-weight:600;" ${(d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId) ? `data-more-info="${d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId}"` : ""}>${powerSavingReasonText}</div>` : ""}
+				<div data-role="pc-dial-timer-host">${this._renderDialTimer(d)}</div>
+				<div class="timer-text" data-role="pc-power-saving-reason" style="margin-top:4px; font-weight:600; ${powerSavingReasonText ? "" : "display:none;"}" ${(d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId) ? `data-more-info="${d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId}"` : ""}>${powerSavingReasonText || ""}</div>
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
@@ -1495,36 +1854,20 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderWaterqualityBlock(d, c) {
 		const lang = _langFromHass(this._hass);
-		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
-			? (d.saltAddNum >= 1000
-				? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)`
-				: `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
-			: null;
-
 		const phValueText = d.ph != null ? `${d.ph.toFixed(2)}` : "–";
 		const chlorValueText = d.chlor != null ? `${d.chlor.toFixed(0)} mV` : "–";
 		const saltValueText = d.salt != null ? `${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)` : "–";
 		const tdsValueText = d.tds != null ? `${d.tds.toFixed(0)} ppm` : "–";
-
-		const chlorOkMin = Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min;
-		const chlorLow = (d.chlor != null) && (chlorOkMin != null) && (Number(d.chlor) < Number(chlorOkMin));
-		const isSaltwater = d.sanitizerMode === "saltwater";
-		const isMixed = d.sanitizerMode === "mixed";
-		const saltAddNeeded = !!saltAddDisplay;
-		// If salt is missing, the primary recommendation should be "add salt" (no extra hint noise).
-		const showSaltwaterHint = isSaltwater && chlorLow && !saltAddNeeded;
-		const showMixedHint = isMixed && chlorLow && !saltAddNeeded;
-		// Safety: never show manual chlorine dosing recommendation in pure saltwater mode.
-		const showChlorDose = (d.chlorDoseNum != null && d.chlorDoseNum > 0) && !isSaltwater;
-		return `<div class="quality">
-				${d.sanitizerModeLabel ? `<div class="info-badge" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
+		const hintsHtml = this._renderWaterqualityHints(d, c, lang);
+		return `<div class="quality" data-role="pc-waterquality-root">
+				${d.sanitizerModeLabel ? `<div class="info-badge" data-role="pc-wq-sanitizer" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
 					<div class="scale-title-row" title="${phValueText}">
 						<div class="scale-title">${_t(lang, "ui.ph")}</div>
-						<div class="scale-value">${phValueText}</div>
+						<div class="scale-value" data-role="pc-wq-ph-value">${phValueText}</div>
 					</div>
-					<div style="position: relative;" title="${phValueText}">
-						${d.ph != null ? `<div class="scale-marker-line" style="left: ${this._pct(d.ph, 0, 14)}%"></div>` : ""}
+					<div style="position: relative;" data-role="pc-wq-ph-wrap" title="${phValueText}">
+						<div class="scale-marker-line" data-role="pc-wq-ph-marker" style="${d.ph != null ? `left: ${this._pct(d.ph, 0, 14)}%` : "display:none;"}"></div>
 						<div class="scale-bar ph-bar">
 							${Array.from({length: 15}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 14) * 100}%"></div>`).join("")}
 							${Array.from({length: 14}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("")}
@@ -1541,10 +1884,10 @@ class PoolControllerCard extends HTMLElement {
 				<div class="scale-container" ${d.chlorEntityId ? `data-more-info="${d.chlorEntityId}"` : ''}>
 					<div class="scale-title-row" title="${chlorValueText}">
 						<div class="scale-title">${_t(lang, "ui.chlorine")}</div>
-						<div class="scale-value">${chlorValueText}</div>
+						<div class="scale-value" data-role="pc-wq-chlor-value">${chlorValueText}</div>
 					</div>
-					<div style="position: relative;" title="${chlorValueText}">
-						${d.chlor != null ? `<div class="scale-marker-line" style="left: ${this._pct(d.chlor, 0, 1200)}%"></div>` : ""}
+					<div style="position: relative;" data-role="pc-wq-chlor-wrap" title="${chlorValueText}">
+						<div class="scale-marker-line" data-role="pc-wq-chlor-marker" style="${d.chlor != null ? `left: ${this._pct(d.chlor, 0, 1200)}%` : "display:none;"}"></div>
 						<div class="scale-bar chlor-bar">
 							${[0, 300, 600, 900, 1200].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 							${[1, 2, 3].map(i => `<div class="scale-tick minor" style="left: ${((i - 0.5) / 4) * 100}%"></div>`).join("")}
@@ -1559,10 +1902,10 @@ class PoolControllerCard extends HTMLElement {
 				<div class="scale-container" ${d.saltEntityId ? `data-more-info="${d.saltEntityId}"` : ''}>
 					<div class="scale-title-row" title="${saltValueText}">
 						<div class="scale-title">${_t(lang, "ui.salt")}</div>
-						<div class="scale-value">${saltValueText}</div>
+						<div class="scale-value" data-role="pc-wq-salt-value">${saltValueText}</div>
 					</div>
-					<div style="position: relative;" title="${saltValueText}">
-						<div class="scale-marker-line" style="left: ${this._pct(d.salt, 0, 10)}%"></div>
+					<div style="position: relative;" data-role="pc-wq-salt-wrap" title="${saltValueText}">
+						<div class="scale-marker-line" data-role="pc-wq-salt-marker" style="left: ${this._pct(d.salt, 0, 10)}%"></div>
 						<div class="scale-bar salt-bar">
 							${[0,2.5,5,7.5,10].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
@@ -1579,10 +1922,10 @@ class PoolControllerCard extends HTMLElement {
 				<div class="scale-container" ${d.tdsEntityId ? `data-more-info="${d.tdsEntityId}"` : ''}>
 					<div class="scale-title-row" title="${tdsValueText}">
 						<div class="scale-title">${_t(lang, "ui.tds")}</div>
-						<div class="scale-value">${tdsValueText}</div>
+						<div class="scale-value" data-role="pc-wq-tds-value">${tdsValueText}</div>
 					</div>
-					<div style="position: relative;" title="${tdsValueText}">
-						<div class="scale-marker-line" style="left: ${this._pct(d.tds, 0, 2000)}%"></div>
+					<div style="position: relative;" data-role="pc-wq-tds-wrap" title="${tdsValueText}">
+						<div class="scale-marker-line" data-role="pc-wq-tds-marker" style="left: ${this._pct(d.tds, 0, 2000)}%"></div>
 						<div class="scale-bar tds-bar">
 							${[0,500,1000,1500,2000].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
@@ -1591,6 +1934,7 @@ class PoolControllerCard extends HTMLElement {
 						<span>0</span><span>500</span><span>1000</span><span>1500</span><span>2000</span>
 					</div>
 				</div>` : ""}
+				<div data-role="pc-wq-hints-host">${hintsHtml}</div>
 		</div>`;
 	}
 
@@ -1937,32 +2281,8 @@ class PoolControllerCard extends HTMLElement {
 	// ========================================
 	_attachHandlers() {
 		const maintenanceActive = !!this._renderData?.maintenanceActive;
-		const eff = this._withDerivedConfig(this._config || {});
-
-		const costDebugRefresh = this.shadowRoot.querySelector('[data-action="cost-debug-refresh"]');
-		if (costDebugRefresh) {
-			costDebugRefresh.addEventListener("click", (ev) => {
-				ev.stopPropagation();
-				try {
-					const graphHost = this.shadowRoot?.querySelector("[data-cost-graph]");
-					if (graphHost) graphHost.removeAttribute("data-rendered-key");
-				} catch (_e) {}
-				setTimeout(() => this._attachCostGraph(), 0);
-			});
-		}
-
-		// More-info popups (Home Assistant entity details)
-		this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
-			const entityId = el.getAttribute("data-more-info");
-			if (!entityId) return;
-			// Prevent dial drag when clicking on inner elements (icons, numbers)
-			el.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-			el.addEventListener("click", (ev) => {
-				ev.stopPropagation();
-				this._openMoreInfo(entityId);
-			});
-		});
-
+		this._ensureMoreInfoDelegation();
+		this._ensureActionDelegation();
 
 		// const powerTopDiv = this.shadowRoot.querySelector('.power-top');
 
@@ -2000,109 +2320,10 @@ class PoolControllerCard extends HTMLElement {
 		// 	};
 		// }
 
-		// Maintenance toggle: prefer pool_controller services, fallback to climate hvac_mode
-		const maintenanceBtn = this.shadowRoot.querySelector('[data-action="maintenance-toggle"]');
-		if (maintenanceBtn) {
-			maintenanceBtn.addEventListener("click", (ev) => {
-				ev.stopPropagation();
-				if (!this._hass) return;
-				const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
-				if (this._hasService("pool_controller", svc)) {
-					const targetObj = this._buildTargetObject();
-					this._hass.callService("pool_controller", svc, targetObj);
-					return;
-				}
-				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-				this._hass.callService("climate", "set_hvac_mode", {
-					entity_id: climateEntityId,
-					hvac_mode: maintenanceActive ? "heat" : "off",
-				});
-			});
-		}
-
-		// Away toggle: prefer pool_controller services, fallback to button or climate preset
-		const awayBtn = this.shadowRoot.querySelector('[data-action="away-toggle"]');
-		if (awayBtn) {
-			awayBtn.addEventListener("click", (ev) => {
-				ev.stopPropagation();
-				if (!this._hass) return;
-				const isAway = !!this._renderData?.awayActive;
-				const svc = isAway ? "stop_away" : "start_away";
-				if (this._hasService("pool_controller", svc)) {
-					const targetObj = this._buildTargetObject();
-					this._hass.callService("pool_controller", svc, targetObj);
-					return;
-				}
-				if (isAway && eff.away_stop_button) {
-					this._triggerEntity(eff.away_stop_button, true);
-					return;
-				}
-				if (!isAway && eff.away_start_button) {
-					this._triggerEntity(eff.away_start_button, true);
-					return;
-				}
-				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-				this._hass.callService("climate", "set_preset_mode", {
-					entity_id: climateEntityId,
-					preset_mode: isAway ? "Auto" : "Abwesend",
-				});
-			});
-		}
-
-		// Power-saving toggle: prefer pool_controller services, fallback to climate preset
-		const powerSavingBtn = this.shadowRoot.querySelector('[data-action="power-saving-toggle"]');
-		if (powerSavingBtn) {
-			powerSavingBtn.addEventListener("click", (ev) => {
-				ev.stopPropagation();
-				if (!this._hass) return;
-				const isActive = !!this._renderData?.powerSavingActive;
-				const svc = isActive ? "stop_power_saving" : "start_power_saving";
-				if (this._hasService("pool_controller", svc)) {
-					const targetObj = this._buildTargetObject();
-					this._hass.callService("pool_controller", svc, targetObj);
-					return;
-				}
-				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-				this._hass.callService("climate", "set_preset_mode", {
-					entity_id: climateEntityId,
-					preset_mode: isActive ? "Auto" : "Stromsparen",
-				});
-			});
-		}
-
-		const tempButtons = this.shadowRoot.querySelectorAll(".temp-btn");
-		tempButtons.forEach((btn) => {
-			btn.addEventListener("click", () => {
-				if (maintenanceActive) return;
-				const action = btn.dataset.action;
-				if (!this._hass) return;
-				const tc = this._effectiveTempConfig();
-				const step = Number(tc.step || 0.5);
-				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-				const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
-				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
-				const next = action === "inc" ? currentTarget + step : currentTarget - step;
-				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
-				
-				// Optimistic update: Sofort lokale Änderung anzeigen
-				if (climate) {
-					const optimisticState = { ...climate };
-					optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-					this._hass.states[climateEntityId] = optimisticState;
-					this._render();
-				}
-				
-				// Service call im Hintergrund
-				this._hass.callService("climate", "set_temperature", { 
-					entity_id: climateEntityId, 
-					temperature: newTemp 
-				});
-			});
-		});
-
 		// Dial: Target-Temperatur per Klick/Drag am Ring setzen (ähnlich HA Climate Card)
 		const dial = this.shadowRoot.querySelector("[data-dial]");
-		if (dial) {
+		if (dial && dial.dataset.pcPointerBound !== "1") {
+			dial.dataset.pcPointerBound = "1";
 			const onPointerDown = (ev) => {
 				if (!this._hass || !this._config) return;
 				if (maintenanceActive) return;
@@ -2130,59 +2351,164 @@ class PoolControllerCard extends HTMLElement {
 			dial.addEventListener("pointerup", onPointerUp);
 			dial.addEventListener("pointercancel", onPointerUp);
 		}
+	}
 
-		const actionButtons = this.shadowRoot.querySelectorAll(".action-btn");
-		actionButtons.forEach((btn) => {
-			btn.addEventListener("click", () => {
-				const eff = this._withDerivedConfig(this._config || {});
-				if (btn.dataset.action === "maintenance-toggle" || btn.dataset.action === "away-toggle" || btn.dataset.action === "power-saving-toggle") return;
+	_ensureMoreInfoDelegation() {
+		if (!this.shadowRoot || this._moreInfoDelegationBound) return;
+		this._moreInfoDelegationBound = true;
+		this.shadowRoot.addEventListener("pointerdown", (ev) => {
+			if (!(ev.target instanceof Element)) return;
+			if (ev.target.closest("[data-more-info]")) {
+				ev.stopPropagation();
+			}
+		});
+		this.shadowRoot.addEventListener("click", (ev) => {
+			if (!(ev.target instanceof Element)) return;
+			const el = ev.target.closest("[data-more-info]");
+			if (!el) return;
+			ev.stopPropagation();
+			const entityId = el.getAttribute("data-more-info");
+			if (entityId) this._openMoreInfo(entityId);
+		});
+	}
+
+	_ensureActionDelegation() {
+		if (!this.shadowRoot || this._actionDelegationBound) return;
+		this._actionDelegationBound = true;
+		this.shadowRoot.addEventListener("click", (ev) => {
+			if (!(ev.target instanceof Element)) return;
+			const target = ev.target;
+			const maintenanceActive = !!this._renderData?.maintenanceActive;
+			const eff = this._withDerivedConfig(this._config || {});
+
+			const actionEl = target.closest("[data-action]");
+			if (actionEl) {
+				if (actionEl.disabled || !this._hass) return;
+				const action = actionEl.getAttribute("data-action");
+				if (action === "cost-debug-refresh") {
+					ev.stopPropagation();
+					try {
+						const graphHost = this.shadowRoot?.querySelector("[data-cost-graph]");
+						if (graphHost) graphHost.removeAttribute("data-rendered-key");
+					} catch (_e) {}
+					setTimeout(() => this._attachCostGraph(), 0);
+					return;
+				}
+				if (action === "maintenance-toggle") {
+					ev.stopPropagation();
+					const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
+					if (this._hasService("pool_controller", svc)) {
+						this._hass.callService("pool_controller", svc, this._buildTargetObject());
+						return;
+					}
+					const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+					this._hass.callService("climate", "set_hvac_mode", {
+						entity_id: climateEntityId,
+						hvac_mode: maintenanceActive ? "heat" : "off",
+					});
+					return;
+				}
+				if (action === "away-toggle") {
+					ev.stopPropagation();
+					const isAway = !!this._renderData?.awayActive;
+					const svc = isAway ? "stop_away" : "start_away";
+					if (this._hasService("pool_controller", svc)) {
+						this._hass.callService("pool_controller", svc, this._buildTargetObject());
+						return;
+					}
+					if (isAway && eff.away_stop_button) {
+						this._triggerEntity(eff.away_stop_button, true);
+						return;
+					}
+					if (!isAway && eff.away_start_button) {
+						this._triggerEntity(eff.away_start_button, true);
+						return;
+					}
+					const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+					this._hass.callService("climate", "set_preset_mode", {
+						entity_id: climateEntityId,
+						preset_mode: isAway ? "Auto" : "Abwesend",
+					});
+					return;
+				}
+				if (action === "power-saving-toggle") {
+					ev.stopPropagation();
+					const isActive = !!this._renderData?.powerSavingActive;
+					const svc = isActive ? "stop_power_saving" : "start_power_saving";
+					if (this._hasService("pool_controller", svc)) {
+						this._hass.callService("pool_controller", svc, this._buildTargetObject());
+						return;
+					}
+					const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+					this._hass.callService("climate", "set_preset_mode", {
+						entity_id: climateEntityId,
+						preset_mode: isActive ? "Auto" : "Stromsparen",
+					});
+					return;
+				}
+			}
+
+			const tempBtn = target.closest(".temp-btn");
+			if (tempBtn) {
+				if (tempBtn.disabled || maintenanceActive || !this._hass) return;
+				const tc = this._effectiveTempConfig();
+				const step = Number(tc.step || 0.5);
+				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+				const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
+				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
+				const next = tempBtn.dataset.action === "inc" ? currentTarget + step : currentTarget - step;
+				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
+				if (climate) {
+					const optimisticState = { ...climate };
+					optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
+					this._hass.states[climateEntityId] = optimisticState;
+					this._render();
+				}
+				this._hass.callService("climate", "set_temperature", { entity_id: climateEntityId, temperature: newTemp });
+				return;
+			}
+
+			const actionBtn = target.closest(".action-btn");
+			if (actionBtn) {
+				if (actionBtn.disabled) return;
+				if (actionBtn.dataset.action === "maintenance-toggle" || actionBtn.dataset.action === "away-toggle" || actionBtn.dataset.action === "power-saving-toggle") return;
 				if (maintenanceActive) return;
-				const mode = btn.dataset.mode;
-				const duration = Number(btn.dataset.duration);
-				const active = btn.dataset.active === "true";
-				const start = btn.dataset.start;
-				const stop = btn.dataset.stop;
-
-				// Prefer pool_controller services (new timer model). Fallback to entity triggers (old model).
+				const mode = actionBtn.dataset.mode;
+				const duration = Number(actionBtn.dataset.duration);
+				const active = actionBtn.dataset.active === "true";
+				const start = actionBtn.dataset.start;
+				const stop = actionBtn.dataset.stop;
 				if (mode && this._hasService("pool_controller", active ? `stop_${mode}` : `start_${mode}`)) {
 					const svc = active ? `stop_${mode}` : `start_${mode}`;
 					const targetObj = this._buildTargetObject();
-					const data = active
-						? targetObj
-						: { ...targetObj, duration_minutes: Number.isFinite(duration) ? duration : undefined };
+					const data = active ? targetObj : { ...targetObj, duration_minutes: Number.isFinite(duration) ? duration : undefined };
 					this._hass.callService("pool_controller", svc, data);
-					// backend services will trigger coordinator refresh; still request entity update as fallback
-					try {
-						this._requestBackendEntityRefresh(eff);
-					} catch (e) {}
+					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 					return;
 				}
-
 				if (active && stop) {
 					this._triggerEntity(stop, false);
-					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
+					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 				} else if (!active && start) {
 					this._triggerEntity(start, true);
-					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
+					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
-					const targetObj = this._buildTargetObject();
-					this._hass.callService("pool_controller", `stop_${mode}`, targetObj);
-					try { this._requestBackendEntityRefresh(eff); } catch (e) {}
+					this._hass.callService("pool_controller", `stop_${mode}`, this._buildTargetObject());
+					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 				}
-			});
-		});
+				return;
+			}
 
-		const auxSwitch = this.shadowRoot.querySelector(".aux-switch");
-		if (auxSwitch) {
-			auxSwitch.addEventListener("click", () => {
+			const auxSwitch = target.closest(".aux-switch");
+			if (auxSwitch) {
 				if (maintenanceActive) return;
 				const entity = auxSwitch.dataset.entity;
 				if (entity && this._hass) {
 					const isOn = this._isOn(this._hass.states[entity]);
 					this._triggerEntity(entity, !isOn);
 				}
-			});
-		}
+			}
+		});
 	}
 
 	async _attachCostGraph() {
