@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.5.1";
+const VERSION = "2.5.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -155,7 +155,8 @@ const I18N = {
 			bathing: "Baden",
 			filter: "Filtern",
 			chlorine: "Chloren",
-			pause: "Pause"
+			pause: "Pause",
+			boost: "Boost"
 		},
 		tooltips: {
 			away: { active: "Abwesend — Klick beendet", inactive: "Abwesend-Modus aktivieren" },
@@ -183,6 +184,7 @@ const I18N = {
 			bathing: "Baden",
 			chlorine: "Chloren",
 			filter: "Filtern",
+			boost: "Boost",
 			heating: "Heizbetrieb",
 			off: "Aus"
 		},
@@ -318,7 +320,8 @@ const I18N = {
 			bathing: "Bathing",
 			filter: "Filter",
 			chlorine: "Chlorine",
-			pause: "Pause"
+			pause: "Pause",
+			boost: "Boost"
 		},
 		tooltips: {
 			away: { active: "Away — click to stop", inactive: "Enable away mode" },
@@ -346,6 +349,7 @@ const I18N = {
 			bathing: "Bathing",
 			chlorine: "Chlorine",
 			filter: "Filter",
+			boost: "Boost",
 			heating: "Heating",
 			off: "Off"
 		},
