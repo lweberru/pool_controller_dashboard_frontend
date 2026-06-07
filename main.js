@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.5.2";
+const VERSION = "2.6.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -69,6 +69,25 @@ const I18N = {
 			chlorine: "Chlor (mV)",
 			salt: "Salz",
 			tds: "TDS",
+			alkalinity: "Alkalinität",
+			sanitizer_product: "Mittel",
+			sanitizer_product_dichlor: "Dichlor",
+			sanitizer_product_trichlor: "Trichlor",
+			sanitizer_product_cal_hypo: "Calciumhypochlorit",
+			sanitizer_product_liquid_chlorine: "Flüssigchlor",
+			sanitizer_product_salt_cell: "Salzelektrolyse",
+			sanitizer_product_other: "Andere",
+			maintenance_actions: "Handlungsempfehlungen",
+			action_measure_first: "Bitte zuerst manuell messen (TA-Test)",
+			action_none: "Keine Korrektur nötig",
+			action_raise_bicarbonate: "TA erhöhen mit Natriumhydrogencarbonat (TA+)",
+			action_lower_ph_minus: "TA senken mit pH-",
+			action_water_change_then_adjust: "Zuerst Wasserwechsel, danach TA neu bewerten",
+			dose_total: "Gesamt",
+			dose_step: "Pro Schritt",
+			dose_steps: "Schritte",
+			wait_before_retest: "Wartezeit bis Nachmessung",
+			water_change_before_adjust: "Wasserwechsel vor Korrektur",
 			credit_label: "Gutschrift",
 			credit_filter_label: "Filter-Gutschrift",
 			credit_frost_label: "Frost-Gutschrift",
@@ -178,6 +197,7 @@ const I18N = {
 		},
 		status: {
 			maintenance: "Wartung",
+			manual: "Manuell",
 			away: "Abwesend",
 			power_saving: "Stromsparen",
 			pause: "Pause",
@@ -235,6 +255,25 @@ const I18N = {
 			chlorine: "Chlorine (mV)",
 			salt: "Salt",
 			tds: "TDS",
+			alkalinity: "Alkalinity",
+			sanitizer_product: "Product",
+			sanitizer_product_dichlor: "Dichlor",
+			sanitizer_product_trichlor: "Trichlor",
+			sanitizer_product_cal_hypo: "Calcium hypochlorite",
+			sanitizer_product_liquid_chlorine: "Liquid chlorine",
+			sanitizer_product_salt_cell: "Salt chlorinator",
+			sanitizer_product_other: "Other",
+			maintenance_actions: "Action recommendations",
+			action_measure_first: "Please measure first (TA test)",
+			action_none: "No correction required",
+			action_raise_bicarbonate: "Raise TA with bicarbonate (TA+)",
+			action_lower_ph_minus: "Lower TA with pH-",
+			action_water_change_then_adjust: "Do water change first, then re-evaluate TA",
+			dose_total: "Total",
+			dose_step: "Per step",
+			dose_steps: "Steps",
+			wait_before_retest: "Wait before re-test",
+			water_change_before_adjust: "Water change before correction",
 			credit_label: "Credit",
 			credit_filter_label: "Filter credit",
 			credit_frost_label: "Frost credit",
@@ -343,6 +382,7 @@ const I18N = {
 		},
 		status: {
 			maintenance: "Maintenance",
+			manual: "Manual",
 			away: "Away",
 			power_saving: "Power saving",
 			pause: "Pause",
@@ -1126,8 +1166,10 @@ class PoolControllerCard extends HTMLElement {
 		return JSON.stringify({
 			lang: _langFromHass(this._hass),
 			hasSanitizerLabel: !!d.sanitizerModeLabel,
+			hasSanitizerProductLabel: !!d.sanitizerProductLabel,
 			hasSalt: d.salt != null,
 			hasTds: d.tds != null,
+			hasAlkalinity: d.alkalinity != null,
 			sanitizerMode: d.sanitizerMode || "",
 			chlorOkMin: Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min,
 		});
@@ -1142,10 +1184,15 @@ class PoolControllerCard extends HTMLElement {
 		const chlorValueText = d.chlor != null ? `${d.chlor.toFixed(0)} mV` : "–";
 		const saltValueText = d.salt != null ? `${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)` : "–";
 		const tdsValueText = d.tds != null ? `${d.tds.toFixed(0)} ppm` : "–";
+		const alkValueText = d.alkalinity != null
+			? `${d.alkalinity.toFixed(0)} ppm${d.alkalinityStatusLabel ? ` · ${d.alkalinityStatusLabel}` : ""}`
+			: "–";
 
 		const sanitizerBadge = root.querySelector('[data-role="pc-wq-sanitizer"]');
 		if (sanitizerBadge) {
-			sanitizerBadge.textContent = `${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}`;
+			const mode = d.sanitizerModeLabel || "—";
+			const product = d.sanitizerProductLabel ? ` · ${_t(lang, "ui.sanitizer_product")}: ${d.sanitizerProductLabel}` : "";
+			sanitizerBadge.textContent = `${_t(lang, "ui.sanitizer")}: ${mode}${product}`;
 		}
 
 		const setText = (role, text) => {
@@ -1156,6 +1203,7 @@ class PoolControllerCard extends HTMLElement {
 		setText("pc-wq-chlor-value", chlorValueText);
 		setText("pc-wq-salt-value", saltValueText);
 		setText("pc-wq-tds-value", tdsValueText);
+		setText("pc-wq-alk-value", alkValueText);
 
 		const setTitle = (role, title) => {
 			const el = root.querySelector(`[data-role="${role}"]`);
@@ -1165,6 +1213,7 @@ class PoolControllerCard extends HTMLElement {
 		setTitle("pc-wq-chlor-wrap", chlorValueText);
 		setTitle("pc-wq-salt-wrap", saltValueText);
 		setTitle("pc-wq-tds-wrap", tdsValueText);
+		setTitle("pc-wq-alk-wrap", alkValueText);
 
 		const setMarker = (role, value, min, max) => {
 			const marker = root.querySelector(`[data-role="${role}"]`);
@@ -1180,6 +1229,7 @@ class PoolControllerCard extends HTMLElement {
 		setMarker("pc-wq-chlor-marker", d.chlor, 0, 1200);
 		setMarker("pc-wq-salt-marker", d.salt, 0, 10);
 		setMarker("pc-wq-tds-marker", d.tds, 0, 2000);
+		setMarker("pc-wq-alk-marker", d.alkalinity, 0, 240);
 
 		const hintsHost = root.querySelector('[data-role="pc-wq-hints-host"]');
 		if (hintsHost) {
@@ -1215,6 +1265,9 @@ class PoolControllerCard extends HTMLElement {
 		}
 		if (showMixedHint) {
 			items.push(`<div class="info-badge">${_t(lang, "ui.mixed_chlor_hint")}</div>`);
+		}
+		if (d.alkalinityActionLabel && d.alkalinityAction && d.alkalinityAction !== "none") {
+			items.push(`<div class="info-badge">${d.alkalinityActionLabel}</div>`);
 		}
 		if (!items.length) return "";
 		return `<div class="credit-row">${items.join("")}</div>`;
@@ -1363,16 +1416,40 @@ class PoolControllerCard extends HTMLElement {
 		const saltAddEntityId = c.salt_add_entity || this._derivedEntities?.salt_add_entity || null;
 		const tdsEntityId = c.tds_entity || this._derivedEntities?.tds_entity;
 		const sanitizerModeEntityId = c.sanitizer_mode_entity || this._derivedEntities?.sanitizer_mode_entity || null;
+		const sanitizerProductEntityId = c.sanitizer_product_entity || this._derivedEntities?.sanitizer_product_entity || null;
 		const sanitizerModeRaw = sanitizerModeEntityId ? (h.states[sanitizerModeEntityId]?.state || null) : null;
+		const sanitizerProductRaw = sanitizerProductEntityId ? (h.states[sanitizerProductEntityId]?.state || null) : null;
 		const sanitizerMode = (sanitizerModeRaw && ["chlorine", "saltwater", "mixed"].includes(String(sanitizerModeRaw)))
 			? String(sanitizerModeRaw)
 			: null;
 		const sanitizerModeLabel = sanitizerMode ? this._sanitizerModeLabel(sanitizerMode) : null;
+		const sanitizerProduct = sanitizerProductRaw ? String(sanitizerProductRaw).toLowerCase() : null;
+		const sanitizerProductLabel = sanitizerProduct ? this._sanitizerProductLabel(sanitizerProduct) : null;
 		const salt = saltEntityId ? this._num(h.states[saltEntityId]?.state) : null;
 		const saltAddStateObj = saltAddEntityId ? h.states[saltAddEntityId] : null;
 		const saltAddNum = saltAddStateObj ? this._num(saltAddStateObj.state) : null;
 		const saltAddUnit = saltAddStateObj?.attributes?.unit_of_measurement || 'g';
 		const tds = tdsEntityId ? this._num(h.states[tdsEntityId]?.state) : null;
+		const alkalinityEntityId = c.alkalinity_entity || this._derivedEntities?.alkalinity_entity || null;
+		const alkalinityStatusEntityId = c.alkalinity_status_entity || this._derivedEntities?.alkalinity_status_entity || null;
+		const alkalinityActionEntityId = c.alkalinity_action_entity || this._derivedEntities?.alkalinity_action_entity || null;
+		const alkalinityTargetEntityId = c.alkalinity_target_entity || this._derivedEntities?.alkalinity_target_entity || null;
+		const alkalinityTotalDoseEntityId = c.alkalinity_total_dose_entity || this._derivedEntities?.alkalinity_total_dose_entity || null;
+		const alkalinityStepDoseEntityId = c.alkalinity_step_dose_entity || this._derivedEntities?.alkalinity_step_dose_entity || null;
+		const alkalinityStepsEntityId = c.alkalinity_steps_entity || this._derivedEntities?.alkalinity_steps_entity || null;
+		const alkalinityWaitEntityId = c.alkalinity_wait_entity || this._derivedEntities?.alkalinity_wait_entity || null;
+		const alkalinityWaterChangeEntityId = c.alkalinity_water_change_entity || this._derivedEntities?.alkalinity_water_change_entity || null;
+		const alkalinity = alkalinityEntityId ? this._num(h.states[alkalinityEntityId]?.state) : null;
+		const alkalinityStatus = alkalinityStatusEntityId ? (h.states[alkalinityStatusEntityId]?.state || null) : null;
+		const alkalinityStatusLabel = alkalinityStatus ? this._alkalinityStatusLabel(alkalinityStatus) : null;
+		const alkalinityAction = alkalinityActionEntityId ? (h.states[alkalinityActionEntityId]?.state || null) : null;
+		const alkalinityActionLabel = alkalinityAction ? this._alkalinityActionLabel(alkalinityAction) : null;
+		const alkalinityTarget = alkalinityTargetEntityId ? this._num(h.states[alkalinityTargetEntityId]?.state) : null;
+		const alkalinityTotalDose = alkalinityTotalDoseEntityId ? this._num(h.states[alkalinityTotalDoseEntityId]?.state) : null;
+		const alkalinityStepDose = alkalinityStepDoseEntityId ? this._num(h.states[alkalinityStepDoseEntityId]?.state) : null;
+		const alkalinitySteps = alkalinityStepsEntityId ? this._num(h.states[alkalinityStepsEntityId]?.state) : null;
+		const alkalinityWait = alkalinityWaitEntityId ? this._num(h.states[alkalinityWaitEntityId]?.state) : null;
+		const alkalinityWaterChangePercent = alkalinityWaterChangeEntityId ? this._num(h.states[alkalinityWaterChangeEntityId]?.state) : null;
 
 		// TDS assessment and recommended water change: prefer backend-provided values (entities or attributes),
 		// otherwise fall back to local computation.
@@ -1503,9 +1580,19 @@ class PoolControllerCard extends HTMLElement {
 			auxHeatingSwitchOnEntityId,
 			phEntityId: c.ph_entity || null,
 			chlorEntityId: c.chlorine_value_entity || null,
+			sanitizerProductEntityId,
 			saltEntityId: saltEntityId || null,
 			saltAddEntityId: saltAddEntityId,
 			tdsEntityId: tdsEntityId || null,
+			alkalinityEntityId,
+			alkalinityStatusEntityId,
+			alkalinityActionEntityId,
+			alkalinityTargetEntityId,
+			alkalinityTotalDoseEntityId,
+			alkalinityStepDoseEntityId,
+			alkalinityStepsEntityId,
+			alkalinityWaitEntityId,
+			alkalinityWaterChangeEntityId,
 			frostEntityId: c.frost_entity || null,
 			quietEntityId: c.quiet_entity || null,
 			pvAllowsEntityId: c.pv_entity || null,
@@ -1555,8 +1642,21 @@ class PoolControllerCard extends HTMLElement {
 			mainPower, auxPower, powerVal,
 			displayPower, powerTooltip,
 			ph, chlor, salt, saltAddNum, saltAddUnit, tds,
+			alkalinity,
+			alkalinityStatus,
+			alkalinityStatusLabel,
+			alkalinityAction,
+			alkalinityActionLabel,
+			alkalinityTarget,
+			alkalinityTotalDose,
+			alkalinityStepDose,
+			alkalinitySteps,
+			alkalinityWait,
+			alkalinityWaterChangePercent,
 			sanitizerMode,
 			sanitizerModeLabel,
+			sanitizerProduct,
+			sanitizerProductLabel,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
@@ -1966,9 +2066,12 @@ class PoolControllerCard extends HTMLElement {
 		const chlorValueText = d.chlor != null ? `${d.chlor.toFixed(0)} mV` : "–";
 		const saltValueText = d.salt != null ? `${d.salt.toFixed(2)} g/L (${(d.salt * 0.1).toFixed(2)}%)` : "–";
 		const tdsValueText = d.tds != null ? `${d.tds.toFixed(0)} ppm` : "–";
+		const alkValueText = d.alkalinity != null
+			? `${d.alkalinity.toFixed(0)} ppm${d.alkalinityStatusLabel ? ` · ${d.alkalinityStatusLabel}` : ""}`
+			: "–";
 		const hintsHtml = this._renderWaterqualityHints(d, c, lang);
 		return `<div class="quality" data-role="pc-waterquality-root">
-				${d.sanitizerModeLabel ? `<div class="info-badge" data-role="pc-wq-sanitizer" ${d.sanitizerModeEntityId ? `data-more-info="${d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}</div>` : ""}
+				${d.sanitizerModeLabel ? `<div class="info-badge" data-role="pc-wq-sanitizer" ${(d.sanitizerProductEntityId || d.sanitizerModeEntityId) ? `data-more-info="${d.sanitizerProductEntityId || d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}${d.sanitizerProductLabel ? ` · ${_t(lang, "ui.sanitizer_product")}: ${d.sanitizerProductLabel}` : ""}</div>` : ""}
 				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
 					<div class="scale-title-row" title="${phValueText}">
 						<div class="scale-title">${_t(lang, "ui.ph")}</div>
@@ -2040,6 +2143,23 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 					<div class="scale-labels">
 						<span>0</span><span>500</span><span>1000</span><span>1500</span><span>2000</span>
+					</div>
+				</div>` : ""}
+
+				${(d.alkalinity != null) ? `
+				<div class="scale-container" ${(d.alkalinityEntityId || d.alkalinityStatusEntityId) ? `data-more-info="${d.alkalinityEntityId || d.alkalinityStatusEntityId}"` : ''}>
+					<div class="scale-title-row" title="${alkValueText}">
+						<div class="scale-title">${_t(lang, "ui.alkalinity")}</div>
+						<div class="scale-value" data-role="pc-wq-alk-value">${alkValueText}</div>
+					</div>
+					<div style="position: relative;" data-role="pc-wq-alk-wrap" title="${alkValueText}">
+						<div class="scale-marker-line" data-role="pc-wq-alk-marker" style="left: ${this._pct(d.alkalinity, 0, 240)}%"></div>
+						<div class="scale-bar tds-bar">
+							${[0,60,120,180,240].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
+						</div>
+					</div>
+					<div class="scale-labels">
+						<span>0</span><span>60</span><span>120</span><span>180</span><span>240</span>
 					</div>
 				</div>` : ""}
 				<div data-role="pc-wq-hints-host">${hintsHtml}</div>
@@ -2154,7 +2274,37 @@ class PoolControllerCard extends HTMLElement {
 		const saltAddDisplay = (d.saltAddNum != null && d.saltAddNum > 0)
 			? (d.saltAddNum >= 1000 ? `${Math.round(d.saltAddNum)} ${d.saltAddUnit} (${(d.saltAddNum / 1000).toFixed(2)} kg)` : `${Math.round(d.saltAddNum)} ${d.saltAddUnit}`)
 			: null;
+		const alkalinityEntityForInfo = d.alkalinityActionEntityId || d.alkalinityEntityId || d.alkalinityStatusEntityId || null;
+		const alkalinityDoseLine = (d.alkalinityStepDose != null && d.alkalinityStepDose > 0)
+			? `${Math.round(d.alkalinityStepDose)} g`
+			: (d.alkalinityTotalDose != null && d.alkalinityTotalDose > 0 ? `${Math.round(d.alkalinityTotalDose)} g` : null);
+		const alkalinityStepsLine = (d.alkalinitySteps != null && d.alkalinitySteps > 1)
+			? `${d.alkalinitySteps}`
+			: null;
+		const alkalinityWaitLine = (d.alkalinityWait != null && d.alkalinityWait > 0)
+			? `${d.alkalinityWait} min`
+			: null;
 		const items = [];
+		if (d.alkalinityAction && d.alkalinityAction !== "none" && d.alkalinityActionLabel) {
+			let actionValue = d.alkalinityActionLabel;
+			if (d.alkalinityAction === "raise_stepwise" || d.alkalinityAction === "lower_stepwise") {
+				const parts = [];
+				if (alkalinityDoseLine) parts.push(`${_t(lang, "ui.dose_step")}: ${alkalinityDoseLine}`);
+				if (alkalinityStepsLine) parts.push(`${_t(lang, "ui.dose_steps")}: ${alkalinityStepsLine}`);
+				if (alkalinityWaitLine) parts.push(`${_t(lang, "ui.wait_before_retest")}: ${alkalinityWaitLine}`);
+				if (d.alkalinityTarget != null) parts.push(`${Math.round(d.alkalinityTarget)} ppm`);
+				actionValue = parts.length ? `${actionValue} — ${parts.join(" · ")}` : actionValue;
+			}
+			if (d.alkalinityAction === "water_change_then_adjust") {
+				const parts = [];
+				if (d.alkalinityWaterChangePercent != null && d.alkalinityWaterChangePercent > 0) {
+					parts.push(`${_t(lang, "ui.water_change_before_adjust")}: ${d.alkalinityWaterChangePercent}%`);
+				}
+				if (d.alkalinityTarget != null) parts.push(`${Math.round(d.alkalinityTarget)} ppm`);
+				actionValue = parts.length ? `${actionValue} — ${parts.join(" · ")}` : actionValue;
+			}
+			items.push(`<div class="maintenance-item" ${alkalinityEntityForInfo ? `data-more-info="${alkalinityEntityForInfo}"` : ""}><ha-icon icon="mdi:beaker-check"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.alkalinity")}</div><div class="maintenance-value">${actionValue}</div></div></div>`);
+		}
 		if (d.phPlusNum && d.phPlusNum > 0) items.push(`<div class="maintenance-item" ${d.phPlusEntityId ? `data-more-info="${d.phPlusEntityId}"` : ""}><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_plus")}</div><div class="maintenance-value">${d.phPlusNum} ${d.phPlusUnit}</div></div></div>`);
 		if (saltAddDisplay) items.push(`<div class="maintenance-item" ${d.saltAddEntityId ? `data-more-info="${d.saltAddEntityId}"` : ""}><ha-icon icon="mdi:shaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_salt")}</div><div class="maintenance-value">${saltAddDisplay}</div></div></div>`);
 		if (d.waterChangePercent && d.waterChangePercent > 0) {
@@ -3194,6 +3344,42 @@ class PoolControllerCard extends HTMLElement {
 		return m || null;
 	}
 
+	_sanitizerProductLabel(product) {
+		const lang = _langFromHass(this._hass);
+		const p = String(product || "").toLowerCase();
+		if (!p) return null;
+		if (p === "dichlor") return _t(lang, "ui.sanitizer_product_dichlor");
+		if (p === "trichlor") return _t(lang, "ui.sanitizer_product_trichlor");
+		if (p === "cal_hypo") return _t(lang, "ui.sanitizer_product_cal_hypo");
+		if (p === "liquid_chlorine") return _t(lang, "ui.sanitizer_product_liquid_chlorine");
+		if (p === "salt_cell") return _t(lang, "ui.sanitizer_product_salt_cell");
+		if (p === "other") return _t(lang, "ui.sanitizer_product_other");
+		return p;
+	}
+
+	_alkalinityStatusLabel(status) {
+		const lang = _langFromHass(this._hass);
+		const s = String(status || "").toLowerCase();
+		const labels = {
+			de: { unknown: "Unbekannt", very_low: "Sehr niedrig", low: "Niedrig", optimal: "Optimal", high: "Hoch", critical_high: "Kritisch hoch" },
+			en: { unknown: "Unknown", very_low: "Very low", low: "Low", optimal: "Optimal", high: "High", critical_high: "Critical high" },
+			es: { unknown: "Desconocido", very_low: "Muy bajo", low: "Bajo", optimal: "Óptimo", high: "Alto", critical_high: "Crítico alto" },
+			fr: { unknown: "Inconnu", very_low: "Très bas", low: "Bas", optimal: "Optimal", high: "Élevé", critical_high: "Critique élevé" },
+		};
+		return labels?.[lang]?.[s] || labels.en[s] || s || null;
+	}
+
+	_alkalinityActionLabel(action) {
+		const lang = _langFromHass(this._hass);
+		const a = String(action || "").toLowerCase();
+		if (a === "measure_first") return _t(lang, "ui.action_measure_first");
+		if (a === "none") return _t(lang, "ui.action_none");
+		if (a === "raise_bicarbonate") return _t(lang, "ui.action_raise_bicarbonate");
+		if (a === "lower_ph_minus") return _t(lang, "ui.action_lower_ph_minus");
+		if (a === "water_change_then_adjust") return _t(lang, "ui.action_water_change_then_adjust");
+		return a || null;
+	}
+
 	_runReasonLabel(reason) {
 		const lang = _langFromHass(this._hass);
 		const r = String(reason || "").toLowerCase();
@@ -3546,6 +3732,7 @@ class PoolControllerCard extends HTMLElement {
 			case "waterquality":
 				push(
 					c?.sanitizer_mode_entity,
+					c?.sanitizer_product_entity,
 					c?.ph_entity,
 					c?.chlorine_value_entity,
 					c?.salt_entity,
@@ -3554,6 +3741,15 @@ class PoolControllerCard extends HTMLElement {
 					c?.tds_assessment_entity,
 					c?.water_change_percent_entity,
 					c?.water_change_liters_entity,
+					c?.alkalinity_entity,
+					c?.alkalinity_status_entity,
+					c?.alkalinity_action_entity,
+					c?.alkalinity_target_entity,
+					c?.alkalinity_total_dose_entity,
+					c?.alkalinity_step_dose_entity,
+					c?.alkalinity_steps_entity,
+					c?.alkalinity_wait_entity,
+					c?.alkalinity_water_change_entity,
 					c?.ph_plus_entity,
 					c?.ph_minus_entity,
 					c?.chlor_dose_entity,
@@ -3563,6 +3759,7 @@ class PoolControllerCard extends HTMLElement {
 				push(
 					c?.maintenance_entity,
 					c?.sanitizer_mode_entity,
+					c?.sanitizer_product_entity,
 					c?.ph_entity,
 					c?.chlorine_value_entity,
 					c?.salt_entity,
@@ -3571,6 +3768,15 @@ class PoolControllerCard extends HTMLElement {
 					c?.tds_assessment_entity,
 					c?.water_change_percent_entity,
 					c?.water_change_liters_entity,
+					c?.alkalinity_entity,
+					c?.alkalinity_status_entity,
+					c?.alkalinity_action_entity,
+					c?.alkalinity_target_entity,
+					c?.alkalinity_total_dose_entity,
+					c?.alkalinity_step_dose_entity,
+					c?.alkalinity_steps_entity,
+					c?.alkalinity_wait_entity,
+					c?.alkalinity_water_change_entity,
 					c?.ph_plus_entity,
 					c?.ph_minus_entity,
 					c?.chlor_dose_entity,
@@ -3964,6 +4170,7 @@ class PoolControllerCard extends HTMLElement {
 			power_entity: this._resolvePreferredPowerEntity(c, d),
 			ph_entity: prefer('ph_entity'),
 			chlorine_value_entity: prefer('chlorine_value_entity'),
+			sanitizer_product_entity: prefer('sanitizer_product_entity'),
 			// Config duration sensors
 			filter_duration_entity: prefer('filter_duration_entity'),
 			chlorine_duration_entity: prefer('chlorine_duration_entity'),
@@ -3974,6 +4181,15 @@ class PoolControllerCard extends HTMLElement {
 			tds_assessment_entity: prefer('tds_assessment_entity'),
 			water_change_percent_entity: prefer('water_change_percent_entity'),
 			water_change_liters_entity: prefer('water_change_liters_entity'),
+			alkalinity_entity: prefer('alkalinity_entity'),
+			alkalinity_status_entity: prefer('alkalinity_status_entity'),
+			alkalinity_action_entity: prefer('alkalinity_action_entity'),
+			alkalinity_target_entity: prefer('alkalinity_target_entity'),
+			alkalinity_total_dose_entity: prefer('alkalinity_total_dose_entity'),
+			alkalinity_step_dose_entity: prefer('alkalinity_step_dose_entity'),
+			alkalinity_steps_entity: prefer('alkalinity_steps_entity'),
+			alkalinity_wait_entity: prefer('alkalinity_wait_entity'),
+			alkalinity_water_change_entity: prefer('alkalinity_water_change_entity'),
 			ph_plus_entity: prefer('ph_plus_entity'),
 			ph_minus_entity: prefer('ph_minus_entity'),
 			chlor_dose_entity: prefer('chlor_dose_entity'),
@@ -4134,12 +4350,22 @@ class PoolControllerCard extends HTMLElement {
 			// Water quality
 			ph_entity: this._pickEntity(entries, "sensor", ["ph_val"]) || null,
 			chlorine_value_entity: this._pickEntity(entries, "sensor", ["chlor_val"]) || null,
+			sanitizer_product_entity: this._pickEntity(entries, "sensor", ["sanitizer_product"]) || null,
 			salt_entity: this._pickEntity(entries, "sensor", ["salt_val", "salt"]) || null,
 			salt_add_entity: this._pickEntity(entries, "sensor", ["salt_add_g"]) || null,
 			tds_entity: this._pickEntity(entries, "sensor", ["tds_effective", "tds_val", "tds", "tds_ppm"]) || null,
 			tds_assessment_entity: this._pickEntity(entries, "sensor", ["tds_status", "tds_assessment", "tds_state"]) || null,
 			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
 			water_change_percent_entity: this._pickEntity(entries, "sensor", ["tds_water_change_percent", "water_change_percent"]) || null,
+			alkalinity_entity: this._pickEntity(entries, "sensor", ["alkalinity_estimated_ppm"]) || null,
+			alkalinity_status_entity: this._pickEntity(entries, "sensor", ["alkalinity_status"]) || null,
+			alkalinity_action_entity: this._pickEntity(entries, "sensor", ["alkalinity_action"]) || null,
+			alkalinity_target_entity: this._pickEntity(entries, "sensor", ["alkalinity_target_ppm"]) || null,
+			alkalinity_total_dose_entity: this._pickEntity(entries, "sensor", ["alkalinity_total_dose_g"]) || null,
+			alkalinity_step_dose_entity: this._pickEntity(entries, "sensor", ["alkalinity_step_dose_g"]) || null,
+			alkalinity_steps_entity: this._pickEntity(entries, "sensor", ["alkalinity_steps"]) || null,
+			alkalinity_wait_entity: this._pickEntity(entries, "sensor", ["alkalinity_wait_minutes"]) || null,
+			alkalinity_water_change_entity: this._pickEntity(entries, "sensor", ["alkalinity_water_change_percent"]) || null,
 			ph_plus_entity: this._pickEntity(entries, "sensor", ["ph_plus_g"]) || null,
 			ph_minus_entity: this._pickEntity(entries, "sensor", ["ph_minus_g"]) || null,
 			chlor_dose_entity: this._pickEntity(entries, "sensor", ["chlor_spoons"]) || null,
