@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.6.0";
+const VERSION = "2.6.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -836,6 +836,11 @@ class PoolControllerCard extends HTMLElement {
 				<div style="position: relative;" data-role="pc-wq-tds-wrap" title="--"><div class="scale-marker-line" data-role="pc-wq-tds-marker" style="display:none;"></div><div class="scale-bar tds-bar"><div class="scale-tick major" style="left:0%"></div><div class="scale-tick major" style="left:25%"></div><div class="scale-tick major" style="left:50%"></div><div class="scale-tick major" style="left:75%"></div><div class="scale-tick major" style="left:100%"></div></div></div>
 				<div class="scale-labels"><span>0</span><span>500</span><span>1000</span><span>1500</span><span>2000</span></div>
 			</div>
+			<div class="scale-container">
+				<div class="scale-title-row" title="--"><div class="scale-title">${_t(lang, "ui.alkalinity")}</div><div class="scale-value" data-role="pc-wq-alk-value">--</div></div>
+				<div style="position: relative;" data-role="pc-wq-alk-wrap" title="--"><div class="scale-marker-line" data-role="pc-wq-alk-marker" style="display:none;"></div><div class="scale-bar tds-bar"><div class="scale-tick major" style="left:0%"></div><div class="scale-tick major" style="left:25%"></div><div class="scale-tick major" style="left:50%"></div><div class="scale-tick major" style="left:75%"></div><div class="scale-tick major" style="left:100%"></div></div></div>
+				<div class="scale-labels"><span>0</span><span>60</span><span>120</span><span>180</span><span>240</span></div>
+			</div>
 			<div data-role="pc-wq-hints-host"></div>
 		</div>`;
 	}
@@ -1169,7 +1174,6 @@ class PoolControllerCard extends HTMLElement {
 			hasSanitizerProductLabel: !!d.sanitizerProductLabel,
 			hasSalt: d.salt != null,
 			hasTds: d.tds != null,
-			hasAlkalinity: d.alkalinity != null,
 			sanitizerMode: d.sanitizerMode || "",
 			chlorOkMin: Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min,
 		});
@@ -2146,14 +2150,13 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>` : ""}
 
-				${(d.alkalinity != null) ? `
 				<div class="scale-container" ${(d.alkalinityEntityId || d.alkalinityStatusEntityId) ? `data-more-info="${d.alkalinityEntityId || d.alkalinityStatusEntityId}"` : ''}>
 					<div class="scale-title-row" title="${alkValueText}">
 						<div class="scale-title">${_t(lang, "ui.alkalinity")}</div>
 						<div class="scale-value" data-role="pc-wq-alk-value">${alkValueText}</div>
 					</div>
 					<div style="position: relative;" data-role="pc-wq-alk-wrap" title="${alkValueText}">
-						<div class="scale-marker-line" data-role="pc-wq-alk-marker" style="left: ${this._pct(d.alkalinity, 0, 240)}%"></div>
+						<div class="scale-marker-line" data-role="pc-wq-alk-marker" style="${d.alkalinity != null ? `left: ${this._pct(d.alkalinity, 0, 240)}%` : "display:none;"}"></div>
 						<div class="scale-bar tds-bar">
 							${[0,60,120,180,240].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
 						</div>
@@ -2161,7 +2164,7 @@ class PoolControllerCard extends HTMLElement {
 					<div class="scale-labels">
 						<span>0</span><span>60</span><span>120</span><span>180</span><span>240</span>
 					</div>
-				</div>` : ""}
+				</div>
 				<div data-role="pc-wq-hints-host">${hintsHtml}</div>
 		</div>`;
 	}
