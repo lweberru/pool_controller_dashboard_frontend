@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.7.1";
+const VERSION = "2.7.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1428,7 +1428,7 @@ class PoolControllerCard extends HTMLElement {
 		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
-		const poolVisualOn = !!(
+		const poolVisualOn = !climateOff && !!(
 			mainSwitchOn ||
 			pumpSwitchOn ||
 			auxHeatingSwitchOn ||
