@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.7.2";
+const VERSION = "2.7.3";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -78,7 +78,7 @@ const I18N = {
 			sanitizer_product_salt_cell: "Salzelektrolyse",
 			sanitizer_product_other: "Andere",
 			maintenance_actions: "Handlungsempfehlungen",
-			action_measure_first: "Bitte zuerst manuell messen (TA-Test)",
+			action_measure_first: "Kalibrierung läuft: Bitte warten, bis genügend stabile Samples vorliegen",
 			action_none: "Keine Korrektur nötig",
 			action_raise_bicarbonate: "TA erhöhen mit Natriumhydrogencarbonat (TA+)",
 			action_lower_ph_minus: "TA senken mit pH-",
@@ -266,7 +266,7 @@ const I18N = {
 			sanitizer_product_salt_cell: "Salt chlorinator",
 			sanitizer_product_other: "Other",
 			maintenance_actions: "Action recommendations",
-			action_measure_first: "Please measure first (TA test)",
+			action_measure_first: "Calibration running: please wait for enough stable samples",
 			action_none: "No correction required",
 			action_raise_bicarbonate: "Raise TA with bicarbonate (TA+)",
 			action_lower_ph_minus: "Lower TA with pH-",
@@ -1310,7 +1310,7 @@ class PoolControllerCard extends HTMLElement {
 		if (showMixedHint) {
 			items.push(`<div class="info-badge">${_t(lang, "ui.mixed_chlor_hint")}</div>`);
 		}
-		if (d.alkalinityActionLabel && d.alkalinityAction && d.alkalinityAction !== "none") {
+		if (d.alkalinityActionLabel && d.alkalinityAction && d.alkalinityAction !== "none" && d.alkalinityAction !== "measure_first") {
 			items.push(`<div class="info-badge">${d.alkalinityActionLabel}</div>`);
 		}
 		if (!items.length) return "";
