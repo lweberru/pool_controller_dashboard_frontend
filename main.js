@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.7.0";
+const VERSION = "2.7.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -116,6 +116,8 @@ const I18N = {
 			quiet: "Ruhezeit",
 			event_rain_blocked: "Event entfällt wegen Regen ({pct}%)",
 			additional_heater: "Zusatzheizung",
+			knob_target_tip: "Sollwert: {base}°C (ziehbar)",
+			knob_effective_tip: "Effektiver Sollwert: {effective}°C (Basis {base}°C, Offset {offset}°C)",
 			sanitizer: "Desinfektion",
 			in_short: "in",
 			days_short: "T",
@@ -302,6 +304,8 @@ const I18N = {
 			quiet: "Quiet hours",
 			event_rain_blocked: "Event canceled due to rain ({pct}%)",
 			additional_heater: "Auxiliary heater",
+			knob_target_tip: "Target setpoint: {base}°C (draggable)",
+			knob_effective_tip: "Effective setpoint: {effective}°C (base {base}°C, offset {offset}°C)",
 			in_short: "in",
 			days_short: "d",
 			hours_short: "h",
@@ -1002,9 +1006,22 @@ class PoolControllerCard extends HTMLElement {
 		const RING_R = 44;
 		const DOT_R = RING_R;
 		const RING_START_DEG = 135;
-		const dotCurrentFill = d.climateOff ? "rgba(208,215,222,0.85)" : (d.auxOn ? "rgba(192,57,43,0.45)" : "rgba(138,59,50,0.45)");
+		const lang = _langFromHass(this._hass);
+		const dotCurrentFill = d.poolVisualOn
+			? (d.auxOn ? "rgba(192,57,43,0.6)" : "rgba(192,57,43,0.55)")
+			: "rgba(122,130,138,0.9)";
 		const baseTargetAngle = Number.isFinite(Number(d.targetAngle)) ? Number(d.targetAngle) : Number(d.dialAngle || 0);
 		const effectiveTargetAngle = Number.isFinite(Number(d.effectiveTargetAngle)) ? Number(d.effectiveTargetAngle) : baseTargetAngle;
+		const baseTargetVal = Number.isFinite(Number(d.targetBase)) ? Number(d.targetBase) : (Number.isFinite(Number(d.target)) ? Number(d.target) : null);
+		const effectiveTargetVal = Number.isFinite(Number(d.targetEffective)) ? Number(d.targetEffective) : baseTargetVal;
+		const offsetVal = Number.isFinite(Number(d.targetOffset))
+			? Number(d.targetOffset)
+			: ((baseTargetVal != null && effectiveTargetVal != null) ? (effectiveTargetVal - baseTargetVal) : null);
+		const baseTxt = baseTargetVal != null ? baseTargetVal.toFixed(1) : "–";
+		const effectiveTxt = effectiveTargetVal != null ? effectiveTargetVal.toFixed(1) : "–";
+		const offsetTxt = offsetVal != null ? offsetVal.toFixed(1) : "0.0";
+		const targetTip = _t(lang, "ui.knob_target_tip", { base: baseTxt });
+		const effectiveTip = _t(lang, "ui.knob_effective_tip", { effective: effectiveTxt, base: baseTxt, offset: offsetTxt });
 		const effectiveArcStart = Math.min(baseTargetAngle, effectiveTargetAngle);
 		const effectiveArcSweep = Math.abs(effectiveTargetAngle - baseTargetAngle);
 		const hasEffectiveArc = effectiveArcSweep > 0.01;
@@ -1015,9 +1032,22 @@ class PoolControllerCard extends HTMLElement {
 			${baseTargetAngle > d.dialAngle ? `<path class="ring-highlight" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + d.dialAngle, baseTargetAngle - d.dialAngle)}" />` : ""}
 			${hasEffectiveArc ? `<path class="ring-effective" d="${this._arcPath(RING_CX, RING_CY, RING_R, RING_START_DEG + effectiveArcStart, effectiveArcSweep)}" />` : ""}
 			<circle class="ring-dot-current" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + d.dialAngle) * Math.PI / 180)}" r="1.25" style="fill:${dotCurrentFill};" />
-			<circle class="ring-dot-target" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + baseTargetAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + baseTargetAngle) * Math.PI / 180)}" r="2.5" />
-			<circle class="ring-dot-effective" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + effectiveTargetAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + effectiveTargetAngle) * Math.PI / 180)}" r="2" />
+			<circle class="ring-dot-target" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + baseTargetAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + baseTargetAngle) * Math.PI / 180)}" r="2.5"><title>${targetTip}</title></circle>
+			<circle class="ring-dot-effective" cx="${RING_CX + DOT_R * Math.cos((RING_START_DEG + effectiveTargetAngle) * Math.PI / 180)}" cy="${RING_CY + DOT_R * Math.sin((RING_START_DEG + effectiveTargetAngle) * Math.PI / 180)}" r="2"><title>${effectiveTip}</title></circle>
 		`;
+	}
+
+	_renderTargetWithOffset(d) {
+		const base = Number.isFinite(Number(d.targetBase)) ? Number(d.targetBase) : (Number.isFinite(Number(d.target)) ? Number(d.target) : null);
+		const mainText = base != null ? `${base.toFixed(1)}°C` : "–°C";
+		const profile = String(d.dynamicTargetProfile || "").toLowerCase();
+		const dynamicActive = !!profile && profile !== "off" && profile !== "aus" && profile !== "unknown" && profile !== "unavailable";
+		if (!dynamicActive || !Number.isFinite(Number(d.targetOffset))) {
+			return `<span class="target-main">${mainText}</span>`;
+		}
+		const offset = Number(d.targetOffset);
+		const sign = offset > 0 ? "+" : "";
+		return `<span class="target-main">${mainText}</span><span class="target-offset">${sign}${offset.toFixed(1)}°C</span>`;
 	}
 
 	_patchControllerBlock(host, d, c) {
@@ -1027,15 +1057,16 @@ class PoolControllerCard extends HTMLElement {
 		const f = this._getControllerViewFlags(d, c);
 		const durations = this._getControllerDurations(d, c);
 
-		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
-		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
-		const effectiveAccent = d.climateOff ? "rgba(208,215,222,0.9)" : (d.auxOn ? "rgba(192,57,43,0.65)" : "rgba(138,59,50,0.65)");
+		const accent = d.poolVisualOn ? "#c0392b" : "#9aa4ad";
+		const targetAccent = d.poolVisualOn ? "#c0392b" : "#9aa4ad";
+		const effectiveAccent = d.poolVisualOn ? "#8a3b32" : "#59636e";
 		const dial = root.querySelector('[data-role="pc-dial"]');
 		if (dial) {
 			dial.classList.toggle("disabled", f.disabled);
 			dial.style.setProperty("--accent", accent);
 			dial.style.setProperty("--target-accent", targetAccent);
 			dial.style.setProperty("--effective-accent", effectiveAccent);
+			dial.style.setProperty("--offset-accent", effectiveAccent);
 		}
 
 		const powerTop = root.querySelector('[data-role="pc-power-top"]');
@@ -1091,7 +1122,7 @@ class PoolControllerCard extends HTMLElement {
 		const tempCurrent = root.querySelector('[data-role="pc-temp-current"]');
 		if (tempCurrent) tempCurrent.innerHTML = `${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span>`;
 		const tempTarget = root.querySelector('[data-role="pc-temp-target"]');
-		if (tempTarget) tempTarget.textContent = `${d.targetEffective != null ? d.targetEffective.toFixed(1) : "–"}°C`;
+		if (tempTarget) tempTarget.innerHTML = this._renderTargetWithOffset(d);
 		const tempMid = root.querySelector('[data-role="pc-temp-mid"]');
 		if (tempMid) tempMid.innerHTML = this._renderStatusMidIcon(d);
 		const tempOut = root.querySelector('[data-role="pc-temp-outdoor"]');
@@ -1397,6 +1428,18 @@ class PoolControllerCard extends HTMLElement {
 		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
+		const poolVisualOn = !!(
+			mainSwitchOn ||
+			pumpSwitchOn ||
+			auxHeatingSwitchOn ||
+			auxOn ||
+			hvacAction === "heating" ||
+			bathingState.active ||
+			filterState.active ||
+			chlorState.active ||
+			pauseState.active ||
+			frost
+		);
 		const pvAllows = c.pv_entity ? this._isOn(h.states[c.pv_entity]) : false;
 		const pvPowerEntityId = c.pv_smoothed_entity || null;
 		const outdoorTempEntityId = c.outdoor_temp_entity || this._derivedEntities?.outdoor_temp_entity || null;
@@ -1660,6 +1703,7 @@ class PoolControllerCard extends HTMLElement {
 			shouldMainOn,
 			shouldPumpOn,
 			shouldAuxOn,
+			poolVisualOn,
 			current,
 			target: targetBase,
 			targetBase,
@@ -1786,8 +1830,9 @@ class PoolControllerCard extends HTMLElement {
 			.ring-effective { fill: none; stroke: var(--effective-accent, rgba(138,59,50,0.65)); stroke-width: 6; stroke-linecap: round; }
 			.ring-highlight { fill: none; stroke: var(--accent, #8a3b32); stroke-width: 10; stroke-linecap: round; opacity: 0.4; }
 			.ring-dot-current { fill: var(--accent, #8a3b32); }
-			.ring-dot-target { fill: var(--pc-surface); stroke: var(--pc-border); stroke-width: 2; }
-			.ring-dot-effective { fill: var(--effective-accent, rgba(138,59,50,0.65)); stroke: var(--pc-surface); stroke-width: 1; }
+			.ring-dot-target { fill: var(--pc-surface); stroke: var(--pc-border); stroke-width: 2; cursor: grab; pointer-events: all; }
+			.ring-dot-target:active { cursor: grabbing; }
+			.ring-dot-effective { fill: var(--effective-accent, rgba(138,59,50,0.65)); stroke: var(--pc-surface); stroke-width: 1; cursor: help; pointer-events: all; }
 			
 			.ring::after { content: ""; width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 50%, var(--pc-surface) 68%, transparent 69%); }
 			
@@ -1807,10 +1852,12 @@ class PoolControllerCard extends HTMLElement {
 			.temp-current { font-size: 42px; font-weight: 700; line-height: 1; }
 			.divider { width: 80px; height: 2px; background: var(--pc-border); margin: 4px 0; }
 			.temp-target-row { display: grid; grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-items: center; width: 160px; font-size: 16px; color: var(--secondary-text-color); }
-			.temp-target-left { justify-self: start; }
+			.temp-target-left { justify-self: start; display: grid; grid-template-rows: auto auto; row-gap: 2px; align-items: start; text-align: left; line-height: 1.05; }
 			.temp-target-mid { justify-self: center; display: grid; place-items: center; opacity: 0.9; }
 			.temp-target-right { justify-self: end; }
 			.temp-target-left, .temp-target-right { font-weight: 600; white-space: nowrap; }
+			.target-main { font-weight: 700; }
+			.target-offset { font-size: 11px; font-weight: 600; color: var(--offset-accent, #8a3b32); }
 			.temp-target-row ha-icon { --mdc-icon-size: 18px; }
 
 			.switch-icons-row { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 6px; }
@@ -1831,6 +1878,7 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid var(--pc-border); background: var(--pc-surface); cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
+			.action-btn.power-saving.active { background: #27ae60; border-color: #27ae60; }
 			.action-btn.maintenance.active { background: #c0392b; border-color: #c0392b; }
 			.action-btn.away.active { background: #6c5ce7; border-color: #6c5ce7; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
@@ -1847,7 +1895,7 @@ class PoolControllerCard extends HTMLElement {
 			
 			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid var(--pc-border); border-radius: 10px; background: var(--pc-surface); display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
 			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-			.aux-switch.active { background: #27ae60; color: #fff; border-color: #27ae60; }
+			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
 			.aux-switch.disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 			.aux-switch.disabled:hover { box-shadow: none; }
 			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -1855,7 +1903,7 @@ class PoolControllerCard extends HTMLElement {
 			.toggle { width: 44px; height: 24px; background: var(--pc-border); border-radius: 999px; position: relative; transition: background 200ms ease; }
 			.toggle::after { content: ""; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 200ms ease; }
 			.aux-switch.active .toggle { background: #fff; }
-			.aux-switch.active .toggle::after { left: 23px; background: #27ae60; }
+			.aux-switch.active .toggle::after { left: 23px; background: #c0392b; }
 			
 			.quality { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 20px; }
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pc-muted); margin-bottom: 8px; }
@@ -2013,11 +2061,11 @@ class PoolControllerCard extends HTMLElement {
 		const pvClass = d.powerSavingActive
 			? (d.powerSavingStage === 2 ? "active stage2" : d.powerSavingStage === 1 ? "active stage1" : "")
 			: (d.pvAllows ? "active" : "");
-		const accent = d.climateOff ? "#d0d7de" : (d.auxOn ? "#c0392b" : "#8a3b32");
-		const targetAccent = d.climateOff ? "rgba(208,215,222,0.6)" : (d.auxOn ? "rgba(192,57,43,0.3)" : "rgba(138,59,50,0.3)");
-		const effectiveAccent = d.climateOff ? "rgba(208,215,222,0.9)" : (d.auxOn ? "rgba(192,57,43,0.65)" : "rgba(138,59,50,0.65)");
+		const accent = d.poolVisualOn ? "#c0392b" : "#9aa4ad";
+		const targetAccent = d.poolVisualOn ? "#c0392b" : "#9aa4ad";
+		const effectiveAccent = d.poolVisualOn ? "#8a3b32" : "#59636e";
 		return `<div class="dial-container" data-role="pc-controller-root">
-				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}; --effective-accent:${effectiveAccent}" data-dial data-role="pc-dial">
+				<div class="dial ${disabled ? "disabled" : ""}" style="--accent:${accent}; --target-accent:${targetAccent}; --effective-accent:${effectiveAccent}; --offset-accent:${effectiveAccent}" data-dial data-role="pc-dial">
 					<div class="ring">
 						<div class="power-top" data-role="pc-power-top" ${d.powerTooltip ? `title="${d.powerTooltip}"` : ''} ${d.powerMoreInfoEntityId ? `data-more-info="${d.powerMoreInfoEntityId}"` : ''}>
 							<span class="power-pill" data-role="pc-power-pill" style="${d.displayPower !== null ? "" : "display:none;"}">${d.displayPower !== null ? `${d.displayPower}W` : ""}</span>
@@ -2045,7 +2093,7 @@ class PoolControllerCard extends HTMLElement {
 						<div class="temp-current" data-role="pc-temp-current" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.current != null ? d.current.toFixed(1) : "–"}<span style="font-size:0.55em">°C</span></div>
 						<div class="divider"></div>
 						<div class="temp-target-row">
-							<span class="temp-target-left" data-role="pc-temp-target" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${d.targetEffective != null ? d.targetEffective.toFixed(1) : "–"}°C</span>
+							<span class="temp-target-left" data-role="pc-temp-target" ${d.climateEntityId ? `data-more-info="${d.climateEntityId}"` : ''}>${this._renderTargetWithOffset(d)}</span>
 							<span class="temp-target-mid" data-role="pc-temp-mid">${this._renderStatusMidIcon(d)}</span>
 							<span class="temp-target-right" data-role="pc-temp-outdoor" ${d.outdoorTempEntityId ? `data-more-info="${d.outdoorTempEntityId}"` : ''}>${d.outdoorTemp != null ? `${d.outdoorTemp.toFixed(1)}°C` : ''}</span>
 						</div>
@@ -2616,32 +2664,44 @@ class PoolControllerCard extends HTMLElement {
 		const dial = this.shadowRoot.querySelector("[data-dial]");
 		if (dial && dial.dataset.pcPointerBound !== "1") {
 			dial.dataset.pcPointerBound = "1";
+			dial.style.cursor = "default";
 			const onPointerDown = (ev) => {
 				if (!this._hass || !this._config) return;
 				if (maintenanceActive) return;
 				// Nur primäre Taste/Touch
 				if (ev.pointerType === "mouse" && ev.button !== 0) return;
-				// Nur wenn auf dem Ring gedrückt wurde (nicht in der Mitte).
+				// Nur wenn auf dem Soll-Knubbel gedrückt wurde.
 				const rect = dial.getBoundingClientRect();
-				if (!this._isPointerOnDialRing(ev.clientX, ev.clientY, rect)) return;
+				if (!this._isPointerOnTargetHandle(ev.clientX, ev.clientY, rect)) return;
 				this._isDraggingDial = true;
+				dial.style.cursor = "grabbing";
 				dial.setPointerCapture?.(ev.pointerId);
 				this._updateDialPreviewFromPointer(ev);
 			};
 			const onPointerMove = (ev) => {
-				if (!this._isDraggingDial) return;
+				const rect = dial.getBoundingClientRect();
+				if (!this._isDraggingDial) {
+					dial.style.cursor = this._isPointerOnTargetHandle(ev.clientX, ev.clientY, rect) ? "grab" : "default";
+					return;
+				}
 				this._updateDialPreviewFromPointer(ev);
 			};
 			const onPointerUp = (ev) => {
 				if (!this._isDraggingDial) return;
 				this._isDraggingDial = false;
 				dial.releasePointerCapture?.(ev.pointerId);
+				const rect = dial.getBoundingClientRect();
+				dial.style.cursor = this._isPointerOnTargetHandle(ev.clientX, ev.clientY, rect) ? "grab" : "default";
 				this._commitDialTargetIfAny();
+			};
+			const onPointerLeave = () => {
+				if (!this._isDraggingDial) dial.style.cursor = "default";
 			};
 			dial.addEventListener("pointerdown", onPointerDown);
 			dial.addEventListener("pointermove", onPointerMove);
 			dial.addEventListener("pointerup", onPointerUp);
 			dial.addEventListener("pointercancel", onPointerUp);
+			dial.addEventListener("pointerleave", onPointerLeave);
 		}
 	}
 
@@ -4025,6 +4085,23 @@ class PoolControllerCard extends HTMLElement {
 		return (deg >= 135) ? (deg - 135) : (225 + deg);
 	}
 
+	_isPointerOnTargetHandle(clientX, clientY, rect) {
+		if (!rect || !Number.isFinite(rect.width) || rect.width <= 0) return false;
+		const targetAngle = Number(this._renderData?.targetAngle);
+		if (!Number.isFinite(targetAngle)) return false;
+		const outer = Math.min(rect.width, rect.height) / 2;
+		if (outer <= 0) return false;
+		const cx = rect.left + rect.width / 2;
+		const cy = rect.top + rect.height / 2;
+		const radius = outer * 0.88;
+		const theta = (135 + targetAngle) * Math.PI / 180;
+		const tx = cx + radius * Math.cos(theta);
+		const ty = cy + radius * Math.sin(theta);
+		const dist = Math.hypot(clientX - tx, clientY - ty);
+		const hitRadius = Math.max(10, outer * 0.09);
+		return dist <= hitRadius;
+	}
+
 	_isPointerOnDialRing(clientX, clientY, rect) {
 		if (!rect || !Number.isFinite(rect.width) || rect.width <= 0) return false;
 		const cx = rect.left + rect.width / 2;
@@ -4121,7 +4198,12 @@ class PoolControllerCard extends HTMLElement {
 		}
 		const label = this.shadowRoot?.querySelector(".temp-target-left");
 		if (label) {
-			label.textContent = `${Number(newTemp).toFixed(1)}°C`;
+			const previewData = {
+				...(this._renderData || {}),
+				target: Number(newTemp),
+				targetBase: Number(newTemp),
+			};
+			label.innerHTML = this._renderTargetWithOffset(previewData);
 		}
 	}
 
