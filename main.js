@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.7.4";
+const VERSION = "2.7.5";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -208,6 +208,7 @@ const I18N = {
 			filter: "Filtern",
 			boost: "Boost",
 			heating: "Heizbetrieb",
+			idle: "Leerlauf",
 			off: "Aus"
 		},
 		errors: {
@@ -395,6 +396,7 @@ const I18N = {
 			filter: "Filter",
 			boost: "Boost",
 			heating: "Heating",
+			idle: "Idle",
 			off: "Off"
 		},
 		errors: {
@@ -3325,6 +3327,7 @@ class PoolControllerCard extends HTMLElement {
 		if (chlorinating) return _t(lang, "status.chlorine");
 		if (filtering) return _t(lang, "status.filter");
 		if (hvacAction === "heating" || hvacAction === "heat") return _t(lang, "status.heating");
+		if (hvacAction === "idle") return _t(lang, "status.idle");
 		if (hvac === "off") return _t(lang, "status.off");
 		return hvac || "–";
 	}
