@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.8.0";
+const VERSION = "2.9.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -4331,13 +4331,24 @@ class PoolControllerCard extends HTMLElement {
 
 	_pickEntity(entries, domain, suffixes = []) {
 		const list = Array.isArray(suffixes) ? suffixes.filter(Boolean) : [];
+		const aliasTokens = {
+			pv_smoothed: ["pv_geglattet"],
+			pv_surplus_for_pool: ["pv_uberschuss_fur_pool"],
+			power_saving_pump_threshold: ["stromsparen_schwelle_pumpe"],
+			power_saving_aux_threshold: ["stromsparen_schwelle_zusatzheizung"],
+		};
 		for (const suffix of list) {
 			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && e.unique_id?.endsWith(`_${suffix}`));
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		for (const suffix of list) {
-			const token = String(suffix).toLowerCase();
-			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && String(e.entity_id).toLowerCase().includes(token));
+			const tokens = [String(suffix).toLowerCase(), ...(aliasTokens[String(suffix)] || [])];
+			const hit = entries.find((e) => {
+				if (!e.entity_id?.startsWith(`${domain}.`)) return false;
+				const entityId = String(e.entity_id || "").toLowerCase();
+				const name = String(e.name || e.original_name || "").toLowerCase();
+				return tokens.some((token) => entityId.includes(token) || name.includes(token));
+			});
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		return null;
@@ -4834,13 +4845,24 @@ class PoolControllerCardEditor extends HTMLElement {
 
 	_pickEntity(entries, domain, suffixes = []) {
 		const list = Array.isArray(suffixes) ? suffixes.filter(Boolean) : [];
+		const aliasTokens = {
+			pv_smoothed: ["pv_geglattet"],
+			pv_surplus_for_pool: ["pv_uberschuss_fur_pool"],
+			power_saving_pump_threshold: ["stromsparen_schwelle_pumpe"],
+			power_saving_aux_threshold: ["stromsparen_schwelle_zusatzheizung"],
+		};
 		for (const suffix of list) {
 			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && e.unique_id?.endsWith(`_${suffix}`));
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		for (const suffix of list) {
-			const token = String(suffix).toLowerCase();
-			const hit = entries.find((e) => e.entity_id?.startsWith(`${domain}.`) && String(e.entity_id).toLowerCase().includes(token));
+			const tokens = [String(suffix).toLowerCase(), ...(aliasTokens[String(suffix)] || [])];
+			const hit = entries.find((e) => {
+				if (!e.entity_id?.startsWith(`${domain}.`)) return false;
+				const entityId = String(e.entity_id || "").toLowerCase();
+				const name = String(e.name || e.original_name || "").toLowerCase();
+				return tokens.some((token) => entityId.includes(token) || name.includes(token));
+			});
 			if (hit?.entity_id) return hit.entity_id;
 		}
 		return null;
