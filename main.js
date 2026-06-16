@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.7.5";
+const VERSION = "2.8.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -946,10 +946,10 @@ class PoolControllerCard extends HTMLElement {
 			this._hasService("pool_controller", "stop_away")
 		);
 		const showPowerSavingButton = !!(
-			d.powerSavingActive || d.powerSavingAvailable
-		) && !!(
 			this._hasService("pool_controller", "start_power_saving") ||
 			this._hasService("pool_controller", "stop_power_saving") ||
+			d.powerSavingActiveEntityId ||
+			d.powerSavingAvailableEntityId ||
 			d.climateEntityId
 		);
 		const showAuxSwitch = (() => {
