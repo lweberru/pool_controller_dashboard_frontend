@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.3";
+const VERSION = "2.9.4";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1868,7 +1868,7 @@ class PoolControllerCard extends HTMLElement {
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
-			[data-role="pc-dial-timer-host"] { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 60%; max-width: 200px; z-index: 2; pointer-events: none; }
+			[data-role="pc-dial-timer-host"] { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 40%; max-width: 134px; z-index: 2; pointer-events: none; }
 			[data-role="pc-power-saving-reason"] { position: absolute; left: 50%; bottom: 1.5%; transform: translateX(-50%); width: 74%; max-width: 240px; z-index: 2; text-align: center; margin-top: 0; line-height: 1.15; }
 			.dial-timer { position: relative; margin: 0; width: 100%; z-index: 1; }
 			.dial-timer.idle .timer-bar,
@@ -1948,7 +1948,7 @@ class PoolControllerCard extends HTMLElement {
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 59%; }
-				[data-role="pc-dial-timer-host"] { bottom: 7%; width: 66%; max-width: 180px; }
+				[data-role="pc-dial-timer-host"] { bottom: 7%; width: 44%; max-width: 120px; }
 				[data-role="pc-power-saving-reason"] { bottom: 1%; width: 78%; max-width: 220px; font-size: 10.5px; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
