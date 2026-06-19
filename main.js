@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.4";
+const VERSION = "2.9.5";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -173,6 +173,7 @@ const I18N = {
 			maintenance: "Wartung",
 			away: "Abwesend",
 			power_saving: "Stromsparen",
+			dynamic_target: "Dynamik",
 			bathing: "Baden",
 			filter: "Filtern",
 			chlorine: "Chloren",
@@ -182,6 +183,7 @@ const I18N = {
 		tooltips: {
 			away: { active: "Abwesend — Klick beendet", inactive: "Abwesend-Modus aktivieren" },
 			power_saving: { active: "Stromsparen — Klick beendet", inactive: "Stromsparen aktivieren" },
+			dynamic_target: { active: "Dynamische Zieltemperatur aktiv — Klick deaktiviert", inactive: "Dynamische Zieltemperatur aktivieren" },
 			bathing: { active: "Bade-Modus — verbleibend: {mins} min — Klick beendet", inactive: "Baden für {mins} Minuten starten" },
 			filter: { active: "Filter — verbleibend: {mins} min — Klick beendet", inactive: "Filtern für {mins} Minuten starten" },
 			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
@@ -361,6 +363,7 @@ const I18N = {
 			maintenance: "Maintenance",
 			away: "Away",
 			power_saving: "Power saving",
+			dynamic_target: "Dynamic",
 			bathing: "Bathing",
 			filter: "Filter",
 			chlorine: "Chlorine",
@@ -370,6 +373,7 @@ const I18N = {
 		tooltips: {
 			away: { active: "Away — click to stop", inactive: "Enable away mode" },
 			power_saving: { active: "Power saving — click to stop", inactive: "Enable power saving" },
+			dynamic_target: { active: "Dynamic target enabled — click to disable", inactive: "Enable dynamic target" },
 			bathing: { active: "Bathing — left: {mins} min — click to stop", inactive: "Start bathing for {mins} minutes" },
 			filter: { active: "Filter — left: {mins} min — click to stop", inactive: "Start filter for {mins} minutes" },
 			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
@@ -804,10 +808,8 @@ class PoolControllerCard extends HTMLElement {
 				<button class="action-btn filter" data-mode="filter" data-duration="30" data-start="${c?.filter_start || ""}" data-stop="${c?.filter_stop || ""}" data-active="false"><ha-icon icon="mdi:rotate-right"></ha-icon><span>${_t(lang, "actions.filter")}</span></button>
 				<button class="action-btn chlorine" data-mode="chlorine" data-duration="5" data-start="${c?.chlorine_start || ""}" data-stop="${c?.chlorine_stop || ""}" data-active="false"><ha-icon icon="mdi:fan"></ha-icon><span>${_t(lang, "actions.chlorine")}</span></button>
 				<button class="action-btn" data-mode="pause" data-duration="60" data-start="${c?.pause_start || ""}" data-stop="${c?.pause_stop || ""}" data-active="false"><ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span></button>
-			</div>
-			<div class="aux-switch" data-entity="${c?.aux_entity || ""}">
-				<div class="aux-switch-label"><ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span></div>
-				<div class="toggle"></div>
+				<button class="action-btn aux" data-action="aux-toggle" title="${_t(lang, "tooltips.aux.inactive")}"><ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span></button>
+				<button class="action-btn dynamic-target" data-action="dynamic-target-toggle" title="${_t(lang, "tooltips.dynamic_target.inactive")}"><ha-icon icon="mdi:thermometer-auto"></ha-icon><span>${_t(lang, "actions.dynamic_target")}</span></button>
 			</div>
 		</div>`;
 	}
@@ -952,13 +954,17 @@ class PoolControllerCard extends HTMLElement {
 			d.powerSavingAvailableEntityId ||
 			d.climateEntityId
 		);
-		const showAuxSwitch = (() => {
-			if (c.aux_binary && this._hass.states[c.aux_binary]) {
-				return this._isOn(this._hass.states[c.aux_binary]);
-			}
-			return (c.aux_entity && this._hass.states[c.aux_entity]);
-		})();
-		return { disabled, showAwayButton, showPowerSavingButton, showAuxSwitch };
+		const showAuxButton = !!(
+			(c.aux_entity && this._hass.states[c.aux_entity]) ||
+			(c.aux_binary && this._hass.states[c.aux_binary])
+		);
+		const showDynamicTargetButton = !!(
+			d.climateEntityId && (
+				this._hasService("pool_controller", "set_dynamic_target") ||
+				d.dynamicTargetProfileEntityId
+			)
+		);
+		return { disabled, showAwayButton, showPowerSavingButton, showAuxButton, showDynamicTargetButton };
 	}
 
 	_getControllerDurations(d, c) {
@@ -990,13 +996,16 @@ class PoolControllerCard extends HTMLElement {
 			disabled: f.disabled,
 			showAwayButton: f.showAwayButton,
 			showPowerSavingButton: f.showPowerSavingButton,
-			showAuxSwitch: f.showAuxSwitch,
+			showAuxButton: f.showAuxButton,
+			showDynamicTargetButton: f.showDynamicTargetButton,
 			bathingActive: !!d.bathingState?.active,
 			filterActive: !!d.filterState?.active,
 			chlorActive: !!d.chlorState?.active,
 			pauseActive: !!d.pauseState?.active,
 			awayActive: !!d.awayActive,
 			powerSavingActive: !!d.powerSavingActive,
+			auxOn: !!d.auxOn,
+			dynamicTargetActive: this._isDynamicTargetActive(d.dynamicTargetProfile),
 			maintenanceActive: !!d.maintenanceActive,
 			lang: _langFromHass(this._hass),
 		});
@@ -1042,14 +1051,18 @@ class PoolControllerCard extends HTMLElement {
 	_renderTargetWithOffset(d) {
 		const base = Number.isFinite(Number(d.targetBase)) ? Number(d.targetBase) : (Number.isFinite(Number(d.target)) ? Number(d.target) : null);
 		const mainText = base != null ? `${base.toFixed(1)}°C` : "–°C";
-		const profile = String(d.dynamicTargetProfile || "").toLowerCase();
-		const dynamicActive = !!profile && profile !== "off" && profile !== "aus" && profile !== "unknown" && profile !== "unavailable";
+		const dynamicActive = this._isDynamicTargetActive(d.dynamicTargetProfile);
 		if (!dynamicActive || !Number.isFinite(Number(d.targetOffset))) {
 			return `<span class="target-main">${mainText}</span>`;
 		}
 		const offset = Number(d.targetOffset);
 		const sign = offset > 0 ? "+" : "";
 		return `<span class="target-main">${mainText}</span><span class="target-offset">${sign}${offset.toFixed(1)}°C</span>`;
+	}
+
+	_isDynamicTargetActive(profileRaw) {
+		const profile = String(profileRaw || "").toLowerCase();
+		return !!profile && profile !== "off" && profile !== "aus" && profile !== "unknown" && profile !== "unavailable";
 	}
 
 	_patchControllerBlock(host, d, c) {
@@ -1195,11 +1208,17 @@ class PoolControllerCard extends HTMLElement {
 				: _t(lang, "tooltips.pause.inactive", { mins: durations.pauseDur });
 		}
 
-		const auxSwitch = root.querySelector(".aux-switch");
-		if (auxSwitch) {
-			auxSwitch.classList.toggle("active", !!d.auxOn);
-			auxSwitch.classList.toggle("disabled", !!f.disabled);
-			auxSwitch.title = d.auxOn ? _t(lang, "tooltips.aux.active") : _t(lang, "tooltips.aux.inactive");
+		const auxBtn = root.querySelector('[data-action="aux-toggle"]');
+		if (auxBtn) {
+			auxBtn.classList.toggle("active", !!d.auxOn);
+			auxBtn.title = d.auxOn ? _t(lang, "tooltips.aux.active") : _t(lang, "tooltips.aux.inactive");
+		}
+
+		const dynamicBtn = root.querySelector('[data-action="dynamic-target-toggle"]');
+		if (dynamicBtn) {
+			const dynamicActive = this._isDynamicTargetActive(d.dynamicTargetProfile);
+			dynamicBtn.classList.toggle("active", dynamicActive);
+			dynamicBtn.title = dynamicActive ? _t(lang, "tooltips.dynamic_target.active") : _t(lang, "tooltips.dynamic_target.inactive");
 		}
 
 		root.querySelectorAll(".temp-btn, .action-btn").forEach((el) => {
@@ -1881,8 +1900,8 @@ class PoolControllerCard extends HTMLElement {
 
 			/* right-column styles removed (no dedicated right column in markup) */
 			
-			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; max-width: 300px; }
-			.action-btn { padding: 12px; border-radius: 10px; border: 2px solid var(--pc-border); background: var(--pc-surface); cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+			.action-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; max-width: 300px; }
+			.action-btn { min-height: 42px; padding: 9px 10px; border-radius: 10px; border: 2px solid var(--pc-border); background: var(--pc-surface); cursor: pointer; transition: all 150ms ease; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
 			.action-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); border-color: #8a3b32; }
 			.action-btn.active { background: #8a3b32; color: #fff; border-color: #8a3b32; }
 			.action-btn.power-saving.active { background: #27ae60; border-color: #27ae60; }
@@ -1890,6 +1909,8 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn.away.active { background: #6c5ce7; border-color: #6c5ce7; }
 			.action-btn.filter.active { background: #2a7fdb; border-color: #2a7fdb; }
 			.action-btn.chlorine.active { background: #27ae60; border-color: #27ae60; }
+			.action-btn.aux.active { background: #c0392b; border-color: #c0392b; }
+			.action-btn.dynamic-target.active { background: #1f8e7a; border-color: #1f8e7a; }
 			.action-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
@@ -1900,17 +1921,6 @@ class PoolControllerCard extends HTMLElement {
 			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			
-			.aux-switch { margin-top: 16px; padding: 12px 16px; border: 2px solid var(--pc-border); border-radius: 10px; background: var(--pc-surface); display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; transition: all 150ms ease; max-width: 300px; }
-			.aux-switch:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-			.aux-switch.active { background: #c0392b; color: #fff; border-color: #c0392b; }
-			.aux-switch.disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
-			.aux-switch.disabled:hover { box-shadow: none; }
-			.aux-switch-label { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-			.aux-switch-label ha-icon { --mdc-icon-size: 20px; }
-			.toggle { width: 44px; height: 24px; background: var(--pc-border); border-radius: 999px; position: relative; transition: background 200ms ease; }
-			.toggle::after { content: ""; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 200ms ease; }
-			.aux-switch.active .toggle { background: #fff; }
-			.aux-switch.active .toggle::after { left: 23px; background: #c0392b; }
 			
 			.quality { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 20px; }
 			.section-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pc-muted); margin-bottom: 8px; }
@@ -2052,7 +2062,7 @@ class PoolControllerCard extends HTMLElement {
 
 	_renderControllerBlock(d, c) {
 		const lang = _langFromHass(this._hass);
-		const { disabled, showAwayButton, showPowerSavingButton, showAuxSwitch } = this._getControllerViewFlags(d, c);
+		const { disabled, showAwayButton, showPowerSavingButton, showAuxButton, showDynamicTargetButton } = this._getControllerViewFlags(d, c);
 		const powerSavingReasonText = this._powerSavingReasonText(d);
 		const { finalBathDur, finalFilterDur, finalChlorDur, pauseDur } = this._getControllerDurations(d, c);
 		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
@@ -2112,7 +2122,7 @@ class PoolControllerCard extends HTMLElement {
 							<div class="switch-icon ${d.pumpSwitchOn ? "active" : ""}" data-role="pc-switch-pump" title="${_t(lang, "ui.pump_switch")}" ${d.pumpSwitchOnEntityId ? `data-more-info="${d.pumpSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:pump"></ha-icon>
 							</div>
-							${showAuxSwitch ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" data-role="pc-switch-aux" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
+							${showAuxButton ? `<div class="switch-icon ${d.auxHeatingSwitchOn ? "active" : ""}" data-role="pc-switch-aux" title="${_t(lang, "ui.aux_heater_switch")}" ${d.auxHeatingSwitchOnEntityId ? `data-more-info="${d.auxHeatingSwitchOnEntityId}"` : ""}>
 								<ha-icon icon="mdi:fire"></ha-icon>
 							</div>` : ''}
 						</div>
@@ -2139,15 +2149,9 @@ class PoolControllerCard extends HTMLElement {
 					<button class="action-btn ${d.pauseState.active ? "active" : ""}" data-mode="pause" data-duration="${pauseDur}" data-start="${c.pause_start || ""}" data-stop="${c.pause_stop || ""}" data-active="${d.pauseState.active}" ${disabled ? "disabled" : ""} title="${d.pauseState.active ? _t(lang, 'tooltips.pause.active', { mins: (d.pauseEta != null ? d.pauseEta : pauseDur) }) : _t(lang, 'tooltips.pause.inactive', { mins: pauseDur })}">
 						<ha-icon icon="mdi:pause-circle"></ha-icon><span>${_t(lang, "actions.pause")}</span>
 					</button>
+					${showAuxButton ? `<button class="action-btn aux ${d.auxOn ? "active" : ""}" data-action="aux-toggle" ${disabled ? "disabled" : ""} title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}"><ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span></button>` : ""}
+					${showDynamicTargetButton ? `<button class="action-btn dynamic-target ${this._isDynamicTargetActive(d.dynamicTargetProfile) ? "active" : ""}" data-action="dynamic-target-toggle" ${disabled ? "disabled" : ""} title="${this._isDynamicTargetActive(d.dynamicTargetProfile) ? _t(lang, 'tooltips.dynamic_target.active') : _t(lang, 'tooltips.dynamic_target.inactive')}"><ha-icon icon="mdi:thermometer-auto"></ha-icon><span>${_t(lang, "actions.dynamic_target")}</span></button>` : ""}
 				</div>
-				${showAuxSwitch ? `
-					<div class="aux-switch ${d.auxOn ? "active" : ""} ${disabled ? "disabled" : ""}" data-entity="${c.aux_entity || ""}" title="${d.auxOn ? _t(lang, 'tooltips.aux.active') : _t(lang, 'tooltips.aux.inactive')}">
-						<div class="aux-switch-label">
-							<ha-icon icon="mdi:fire"></ha-icon><span>${_t(lang, "ui.additional_heater")}</span>
-						</div>
-						<div class="toggle"></div>
-					</div>
-				` : ''}
 			</div>`;
 	}
 
@@ -2806,6 +2810,30 @@ class PoolControllerCard extends HTMLElement {
 					});
 					return;
 				}
+				if (action === "aux-toggle") {
+					ev.stopPropagation();
+					if (maintenanceActive) return;
+					const entity = eff.aux_entity;
+					if (entity) {
+						const isOn = this._isOn(this._hass.states[entity]);
+						this._triggerEntity(entity, !isOn);
+						try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
+					}
+					return;
+				}
+				if (action === "dynamic-target-toggle") {
+					ev.stopPropagation();
+					if (maintenanceActive) return;
+					const isActive = this._isDynamicTargetActive(this._renderData?.dynamicTargetProfile);
+					if (this._hasService("pool_controller", "set_dynamic_target")) {
+						this._hass.callService("pool_controller", "set_dynamic_target", {
+							...this._buildTargetObject(),
+							enabled: !isActive,
+						});
+						try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
+					}
+					return;
+				}
 			}
 
 			const tempBtn = target.closest(".temp-btn");
@@ -2831,7 +2859,7 @@ class PoolControllerCard extends HTMLElement {
 			const actionBtn = target.closest(".action-btn");
 			if (actionBtn) {
 				if (actionBtn.disabled) return;
-				if (actionBtn.dataset.action === "maintenance-toggle" || actionBtn.dataset.action === "away-toggle" || actionBtn.dataset.action === "power-saving-toggle") return;
+				if (actionBtn.dataset.action === "maintenance-toggle" || actionBtn.dataset.action === "away-toggle" || actionBtn.dataset.action === "power-saving-toggle" || actionBtn.dataset.action === "aux-toggle" || actionBtn.dataset.action === "dynamic-target-toggle") return;
 				if (maintenanceActive) return;
 				const mode = actionBtn.dataset.mode;
 				const duration = Number(actionBtn.dataset.duration);
@@ -2859,15 +2887,6 @@ class PoolControllerCard extends HTMLElement {
 				return;
 			}
 
-			const auxSwitch = target.closest(".aux-switch");
-			if (auxSwitch) {
-				if (maintenanceActive) return;
-				const entity = auxSwitch.dataset.entity;
-				if (entity && this._hass) {
-					const isOn = this._isOn(this._hass.states[entity]);
-					this._triggerEntity(entity, !isOn);
-				}
-			}
 		});
 	}
 
