@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.2";
+const VERSION = "2.9.3";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -791,8 +791,8 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>
 				<div data-role="pc-dial-timer-host"></div>
+				<div class="timer-text" data-role="pc-power-saving-reason" style="font-weight:600; display:none;"></div>
 			</div>
-			<div class="timer-text" data-role="pc-power-saving-reason" style="margin-top:4px; font-weight:600; display:none;"></div>
 			<div class="temp-controls">
 				<button class="temp-btn" data-action="dec">−</button>
 				<button class="temp-btn" data-action="inc">+</button>
@@ -1869,6 +1869,7 @@ class PoolControllerCard extends HTMLElement {
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
 			[data-role="pc-dial-timer-host"] { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 60%; max-width: 200px; z-index: 2; pointer-events: none; }
+			[data-role="pc-power-saving-reason"] { position: absolute; left: 50%; bottom: 1.5%; transform: translateX(-50%); width: 74%; max-width: 240px; z-index: 2; text-align: center; margin-top: 0; line-height: 1.15; }
 			.dial-timer { position: relative; margin: 0; width: 100%; z-index: 1; }
 			.dial-timer.idle .timer-bar,
 			.dial-timer.idle .timer-text { visibility: hidden; }
@@ -1893,8 +1894,8 @@ class PoolControllerCard extends HTMLElement {
 			.action-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.action-btn ha-icon { --mdc-icon-size: 20px; }
 			
-			.temp-controls { display: grid; grid-template-columns: repeat(2, 64px); gap: 16px; margin-top: 16px; }
-			.temp-btn { height: 64px; border-radius: 50%; border: 2px solid var(--pc-border); background: var(--pc-surface); font-size: 28px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
+			.temp-controls { display: grid; grid-template-columns: repeat(2, 56px); gap: 12px; margin-top: 12px; }
+			.temp-btn { height: 56px; border-radius: 50%; border: 2px solid var(--pc-border); background: var(--pc-surface); font-size: 24px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
 			.temp-btn:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); transform: scale(1.05); border-color: #8a3b32; }
 			.temp-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; border-color: var(--pc-border); }
 			.temp-btn:disabled:hover { box-shadow: none; transform: none; border-color: var(--pc-border); }
@@ -1948,6 +1949,7 @@ class PoolControllerCard extends HTMLElement {
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 59%; }
 				[data-role="pc-dial-timer-host"] { bottom: 7%; width: 66%; max-width: 180px; }
+				[data-role="pc-power-saving-reason"] { bottom: 1%; width: 78%; max-width: 220px; font-size: 10.5px; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
@@ -2116,8 +2118,8 @@ class PoolControllerCard extends HTMLElement {
 						</div>
 					</div>
 					<div data-role="pc-dial-timer-host">${this._renderDialTimer(d)}</div>
+					<div class="timer-text" data-role="pc-power-saving-reason" style="font-weight:600; ${powerSavingReasonText ? "" : "display:none;"}" ${(d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId) ? `data-more-info="${d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId}"` : ""}>${powerSavingReasonText || ""}</div>
 				</div>
-				<div class="timer-text" data-role="pc-power-saving-reason" style="margin-top:4px; font-weight:600; ${powerSavingReasonText ? "" : "display:none;"}" ${(d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId) ? `data-more-info="${d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId}"` : ""}>${powerSavingReasonText || ""}</div>
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
