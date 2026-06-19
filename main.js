@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.0";
+const VERSION = "2.9.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1868,10 +1868,12 @@ class PoolControllerCard extends HTMLElement {
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
-			.dial-timer { position: relative; margin: 12px auto 0; left: auto; bottom: auto; transform: none; width: 60%; max-width: 320px; z-index: 1; }
+			.dial-timer { position: relative; margin: 4px auto 0; left: auto; bottom: auto; transform: none; width: 60%; max-width: 320px; z-index: 1; }
+			.dial-timer.idle .timer-bar,
+			.dial-timer.idle .timer-text { visibility: hidden; }
 			.timer-bar { height: 4px; background: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); border-radius: 999px; overflow: hidden; position: relative; }
 			.timer-fill { height: 100%; border-radius: inherit; transition: width 300ms ease; }
-			.timer-text { font-size: 11px; color: var(--pc-muted); margin-top: 4px; text-align: center; }
+			.timer-text { font-size: 11px; color: var(--pc-muted); margin-top: 2px; text-align: center; }
 			.credit-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
 			.credit-pill { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--primary-text-color); background: color-mix(in srgb, var(--pc-surface) 92%, var(--pc-border) 8%); border: 1px solid var(--pc-border); }
 
@@ -1944,7 +1946,7 @@ class PoolControllerCard extends HTMLElement {
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 59%; }
-				.dial-timer { margin-top: 8px; width: 70%; max-width: 260px; }
+				.dial-timer { margin-top: 3px; width: 70%; max-width: 260px; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
@@ -3607,31 +3609,38 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_renderDialTimer(d) {
-		// Always reserve vertical space so the layout doesn't jump when timers appear/disappear.
 		const lang = _langFromHass(this._hass);
 		const buildBar = (pct, gradient, label, mins) => `
 			<div class="timer-bar"><div class="timer-fill" style="width: ${pct}%; background: ${gradient};"></div></div>
 			<div class="timer-text">${label}: ${mins} min</div>`;
 		let inner = "";
+		let hasVisibleTimer = false;
 		if (d.frostState?.active && d.frostEta != null) {
+			hasVisibleTimer = true;
 			inner = buildBar(d.frostProgress * 100, 'linear-gradient(90deg, #2a7fdb, #5c4ac7)', _t(lang, "ui.frost"), d.frostEta);
 		} else if (d.bathingState?.active && d.bathingEta != null) {
+			hasVisibleTimer = true;
 			inner = buildBar(d.bathingProgress * 100, 'linear-gradient(90deg, #8a3b32, #c0392b)', _t(lang, "actions.bathing"), d.bathingEta);
 		} else if (d.filterState?.active && d.filterEta != null) {
+			hasVisibleTimer = true;
 			inner = buildBar(d.filterProgress * 100, 'linear-gradient(90deg, #2a7fdb, #3498db)', _t(lang, "actions.filter"), d.filterEta);
 		} else if (d.chlorState?.active && d.chlorEta != null) {
+			hasVisibleTimer = true;
 			inner = buildBar(d.chlorProgress * 100, 'linear-gradient(90deg, #27ae60, #2ecc71)', _t(lang, "actions.chlorine"), d.chlorEta);
 		} else if (d.chlorState?.active) {
+			hasVisibleTimer = true;
 			inner = `<div class="timer-text" style="font-weight: 600; color: #27ae60;">${_t(lang, "dial.chlorine_active")}</div>`;
 		} else if (d.pauseState?.active && d.pauseEta != null) {
+			hasVisibleTimer = true;
 			inner = buildBar(d.pauseProgress * 100, 'linear-gradient(90deg, #e67e22, #f39c12)', _t(lang, "actions.pause"), d.pauseEta);
 		} else {
-			// placeholder content (invisible) so the container keeps a consistent height
-			inner = `<div class="timer-bar" aria-hidden="true"><div class="timer-fill" style="width:0%; background:transparent"></div></div><div class="timer-text" aria-hidden="true" style="opacity:0;height:0;margin:0;padding:0">&nbsp;</div>`;
+			inner = "";
 		}
 
-		// Inline min-height ensures the block always occupies the same vertical space
-		return `<div class="dial-timer" style="min-height:48px">${inner}</div>`;
+		if (!hasVisibleTimer) {
+			return `<div class="dial-timer idle" aria-hidden="true"><div class="timer-bar"><div class="timer-fill" style="width: 0%; background: transparent;"></div></div><div class="timer-text">&nbsp;</div></div>`;
+		}
+		return `<div class="dial-timer">${inner}</div>`;
 	}
 
 	_formatEventTime(startTs, endTs) {
