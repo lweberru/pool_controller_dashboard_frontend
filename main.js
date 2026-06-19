@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.1";
+const VERSION = "2.9.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -790,8 +790,8 @@ class PoolControllerCard extends HTMLElement {
 						<div class="switch-icon" data-role="pc-switch-aux" title="${_t(lang, "ui.aux_heater_switch")}"><ha-icon icon="mdi:fire"></ha-icon></div>
 					</div>
 				</div>
+				<div data-role="pc-dial-timer-host"></div>
 			</div>
-			<div data-role="pc-dial-timer-host"></div>
 			<div class="timer-text" data-role="pc-power-saving-reason" style="margin-top:4px; font-weight:600; display:none;"></div>
 			<div class="temp-controls">
 				<button class="temp-btn" data-action="dec">−</button>
@@ -1868,7 +1868,8 @@ class PoolControllerCard extends HTMLElement {
 			.switch-icon.active { background: var(--accent, #8a3b32); color: #fff; border-color: var(--accent, #8a3b32); opacity: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
 			.switch-icon ha-icon { --mdc-icon-size: 16px; }
 			
-			.dial-timer { position: relative; margin: 4px auto 0; left: auto; bottom: auto; transform: none; width: 60%; max-width: 320px; z-index: 1; }
+			[data-role="pc-dial-timer-host"] { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); width: 60%; max-width: 200px; z-index: 2; pointer-events: none; }
+			.dial-timer { position: relative; margin: 0; width: 100%; z-index: 1; }
 			.dial-timer.idle .timer-bar,
 			.dial-timer.idle .timer-text { visibility: hidden; }
 			.timer-bar { height: 4px; background: color-mix(in srgb, var(--pc-border) 70%, transparent 30%); border-radius: 999px; overflow: hidden; position: relative; }
@@ -1946,7 +1947,7 @@ class PoolControllerCard extends HTMLElement {
 				.status-icon { width: 28px; height: 28px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 59%; }
-				.dial-timer { margin-top: 3px; width: 70%; max-width: 260px; }
+				[data-role="pc-dial-timer-host"] { bottom: 7%; width: 66%; max-width: 180px; }
 				.scale-marker { top: 6px; }
 				.marker-value { padding: 5px 8px; font-size: 12px; }
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
@@ -2114,8 +2115,8 @@ class PoolControllerCard extends HTMLElement {
 							</div>` : ''}
 						</div>
 					</div>
+					<div data-role="pc-dial-timer-host">${this._renderDialTimer(d)}</div>
 				</div>
-				<div data-role="pc-dial-timer-host">${this._renderDialTimer(d)}</div>
 				<div class="timer-text" data-role="pc-power-saving-reason" style="margin-top:4px; font-weight:600; ${powerSavingReasonText ? "" : "display:none;"}" ${(d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId) ? `data-more-info="${d.powerSavingAvailableEntityId || d.runReasonEntityId || d.heatReasonEntityId}"` : ""}>${powerSavingReasonText || ""}</div>
 				<div class="temp-controls">
 					<button class="temp-btn" data-action="dec" ${disabled ? "disabled" : ""}>−</button>
