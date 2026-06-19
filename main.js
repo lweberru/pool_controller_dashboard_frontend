@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.5";
+const VERSION = "2.9.6";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1057,7 +1057,8 @@ class PoolControllerCard extends HTMLElement {
 		}
 		const offset = Number(d.targetOffset);
 		const sign = offset > 0 ? "+" : "";
-		return `<span class="target-main">${mainText}</span><span class="target-offset">${sign}${offset.toFixed(1)}°C</span>`;
+		const offsetMoreInfo = d.targetOffsetEntityId ? ` data-more-info="${d.targetOffsetEntityId}"` : "";
+		return `<span class="target-main">${mainText}</span><span class="target-offset"${offsetMoreInfo}>${sign}${offset.toFixed(1)}°C</span>`;
 	}
 
 	_isDynamicTargetActive(profileRaw) {
