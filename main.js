@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.8";
+const VERSION = "2.9.9";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3387,12 +3387,25 @@ class PoolControllerCard extends HTMLElement {
 			},
 		};
 		const L = labels[lang] || labels.en;
+		const heatReasonNorm = String(d.heatReason || "").toLowerCase();
+		const compareTarget = Number.isFinite(Number(d.targetEffective))
+			? Number(d.targetEffective)
+			: (Number.isFinite(Number(d.targetBase)) ? Number(d.targetBase) : Number(d.target));
 		const noHeatDemand = (
 			(d.current != null)
-			&& (d.target != null)
+			&& (compareTarget != null)
 			&& Number.isFinite(Number(d.current))
-			&& Number.isFinite(Number(d.target))
-			&& Number(d.current) >= Number(d.target)
+			&& Number.isFinite(Number(compareTarget))
+			&& Number(d.current) >= Number(compareTarget)
+		);
+		const noHeatDemandByReason = (
+			d.powerSavingAvailable
+			&& !d.maintenanceActive
+			&& !d.pauseState?.active
+			&& !d.awayActive
+			&& !d.quiet
+			&& Number(d.powerSavingStage || 0) === 0
+			&& heatReasonNorm === "off"
 		);
 		let detail = L.waiting;
 		if (!d.powerSavingAvailable) detail = L.sensors_missing;
@@ -3400,7 +3413,7 @@ class PoolControllerCard extends HTMLElement {
 		else if (d.pauseState?.active) detail = L.pause;
 		else if (d.awayActive) detail = L.away;
 		else if (d.quiet) detail = L.quiet;
-		else if (noHeatDemand) detail = L.no_heat_demand;
+		else if (noHeatDemand || noHeatDemandByReason) detail = L.no_heat_demand;
 		else if (d.powerSavingStage === 2) detail = L.stage2;
 		else if (d.powerSavingStage === 1) detail = L.stage1;
 		return `${L.head}: ${detail}`;
