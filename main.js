@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.11.0";
+const VERSION = "2.11.1";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1998,7 +1998,7 @@ class PoolControllerCard extends HTMLElement {
 				.status-icons { top: 22%; gap: 10px; }
 				.power-top { top: 10%; }
 				.power-pill { font-size: 10px; padding: 2px 7px; }
-				.status-icon { width: 28px; height: 28px; }
+				.status-icon { width: 26px; height: 26px; }
 				.status-icon ha-icon { --mdc-icon-size: 16px; }
 				.dial-core { top: 59%; }
 				[data-role="pc-dial-timer-host"] { bottom: 7%; width: 44%; max-width: 120px; }
