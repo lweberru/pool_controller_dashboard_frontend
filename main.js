@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.9.9";
+const VERSION = "2.11.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -59,6 +59,12 @@ const I18N = {
 			now_short: "jetzt",
 			maintenance_mode_title: "Wartungsmodus aktiv",
 			maintenance_mode_text: "Automatik ist deaktiviert. Schalte Wartung aus, um Automatik wieder zu erlauben.",
+			sensor_health_title: "Sensor-Erreichbarkeit gestört",
+			sensor_health_ok: "Messsystem erreichbar",
+			sensor_health_unknown: "Messsystem nicht vollständig konfiguriert",
+			sensor_health_esp32_unreachable: "ESP32 nicht erreichbar",
+			sensor_health_water_sensor_unreachable: "Wassersensor nicht erreichbar",
+			sensor_health_both_unreachable: "ESP32 und Wassersensor nicht erreichbar",
 			maintenance: "Wartung",
 			water_quality: "Wasserqualität",
 			sanitizer: "Desinfektion",
@@ -250,6 +256,12 @@ const I18N = {
 			now_short: "now",
 			maintenance_mode_title: "Maintenance mode active",
 			maintenance_mode_text: "Automation is disabled. Turn off maintenance to resume automation.",
+			sensor_health_title: "Sensor reachability problem",
+			sensor_health_ok: "Measurement system reachable",
+			sensor_health_unknown: "Measurement system not fully configured",
+			sensor_health_esp32_unreachable: "ESP32 unreachable",
+			sensor_health_water_sensor_unreachable: "Water sensor unreachable",
+			sensor_health_both_unreachable: "ESP32 and water sensor unreachable",
 			maintenance: "Maintenance",
 			water_quality: "Water quality",
 			sanitizer: "Sanitizer",
@@ -778,6 +790,7 @@ class PoolControllerCard extends HTMLElement {
 						<div class="status-icon" data-role="pc-status-quiet" title="${_t(lang, "ui.quiet")}"><ha-icon icon="mdi:power-sleep"></ha-icon></div>
 						<div class="status-icon" data-role="pc-status-pv" title="${_t(lang, "ui.pv")}"><ha-icon icon="mdi:solar-power"></ha-icon></div>
 						<div class="status-icon rain" data-role="pc-status-rain" title="${_t(lang, "tooltips.rain", { pct: 0 })}"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
+						<div class="status-icon warn" data-role="pc-status-sensor-health" title="${_t(lang, "ui.sensor_health_ok")}"><ha-icon icon="mdi:access-point-network-off"></ha-icon></div>
 					</div>
 				</div>
 				<div class="dial-core">
@@ -1007,6 +1020,7 @@ class PoolControllerCard extends HTMLElement {
 			auxOn: !!d.auxOn,
 			dynamicTargetActive: this._isDynamicTargetActive(d.dynamicTargetProfile),
 			maintenanceActive: !!d.maintenanceActive,
+			sensorHealthProblem: !!d.sensorHealthProblem,
 			lang: _langFromHass(this._hass),
 		});
 	}
@@ -1133,6 +1147,13 @@ class PoolControllerCard extends HTMLElement {
 		if (rainEl) {
 			rainEl.className = `status-icon rain ${d.eventRainBlocked ? "active" : ""}`;
 			rainEl.setAttribute("title", _t(lang, "tooltips.rain", { pct: rainPct }));
+		}
+		const sensorHealthEl = root.querySelector('[data-role="pc-status-sensor-health"]');
+		if (sensorHealthEl) {
+			sensorHealthEl.className = `status-icon warn ${d.sensorHealthProblem ? "active" : ""}`;
+			sensorHealthEl.setAttribute("title", d.sensorHealthLabel || _t(lang, "ui.sensor_health_ok"));
+			if (d.sensorHealthMoreInfoEntityId) sensorHealthEl.setAttribute("data-more-info", d.sensorHealthMoreInfoEntityId);
+			else sensorHealthEl.removeAttribute("data-more-info");
 		}
 
 		const tempCurrent = root.querySelector('[data-role="pc-temp-current"]');
@@ -1619,6 +1640,16 @@ class PoolControllerCard extends HTMLElement {
 		const eventRainBlockedEntityId = c.event_rain_blocked_entity || this._derivedEntities?.event_rain_blocked_entity || null;
 		const eventRainProbability = eventRainProbabilityEntityId ? this._num(h.states[eventRainProbabilityEntityId]?.state) : null;
 		const eventRainBlocked = eventRainBlockedEntityId ? this._isOn(h.states[eventRainBlockedEntityId]) : false;
+		const sensorHealthProblemEntityId = c.sensor_health_problem_entity || this._derivedEntities?.sensor_health_problem_entity || null;
+		const sensorHealthStatusEntityId = c.sensor_health_status_entity || this._derivedEntities?.sensor_health_status_entity || null;
+		const sensorHealthMessageEntityId = c.sensor_health_message_entity || this._derivedEntities?.sensor_health_message_entity || null;
+		const sensorHealthEsp32EntityId = c.sensor_health_esp32_reachable_entity || this._derivedEntities?.sensor_health_esp32_reachable_entity || null;
+		const sensorHealthWaterSensorEntityId = c.sensor_health_water_sensor_reachable_entity || this._derivedEntities?.sensor_health_water_sensor_reachable_entity || null;
+		const sensorHealthProblem = sensorHealthProblemEntityId ? this._isOn(h.states[sensorHealthProblemEntityId]) : false;
+		const sensorHealthStatus = sensorHealthStatusEntityId ? (h.states[sensorHealthStatusEntityId]?.state || null) : null;
+		const sensorHealthMessage = sensorHealthMessageEntityId ? (h.states[sensorHealthMessageEntityId]?.state || null) : null;
+		const sensorHealthLabel = this._sensorHealthLabel(sensorHealthMessage || sensorHealthStatus, sensorHealthProblem);
+		const sensorHealthMoreInfoEntityId = sensorHealthProblemEntityId || sensorHealthMessageEntityId || sensorHealthStatusEntityId || sensorHealthWaterSensorEntityId || sensorHealthEsp32EntityId || null;
 
 		const dialAngle = this._calcDial(current ?? tc.min_temp, tc.min_temp, tc.max_temp);
 		const targetAngle = this._calcDial(targetBase ?? current ?? tc.min_temp, tc.min_temp, tc.max_temp);
@@ -1695,6 +1726,12 @@ class PoolControllerCard extends HTMLElement {
 			auxPowerEntityId: auxPowerEntityId,
 			eventRainProbabilityEntityId,
 			eventRainBlockedEntityId,
+			sensorHealthProblemEntityId,
+			sensorHealthStatusEntityId,
+			sensorHealthMessageEntityId,
+			sensorHealthEsp32EntityId,
+			sensorHealthWaterSensorEntityId,
+			sensorHealthMoreInfoEntityId,
 			shouldMainOnEntityId,
 			shouldPumpOnEntityId,
 			shouldAuxOnEntityId,
@@ -1760,6 +1797,10 @@ class PoolControllerCard extends HTMLElement {
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
 			eventRainProbability, eventRainBlocked,
+			sensorHealthProblem,
+			sensorHealthStatus,
+			sensorHealthMessage,
+			sensorHealthLabel,
 			nextStartMinsEntityId: c.next_start_entity || null,
 			nextFilterMinsEntityId: c.next_filter_in || null,
 			nextEventEntityId: c.next_event_entity || null,
@@ -1869,6 +1910,7 @@ class PoolControllerCard extends HTMLElement {
 			.status-icon.stage2.active { background: #27ae60; border-color: #27ae60; box-shadow: 0 2px 8px rgba(39,174,96,0.3); }
 			.status-icon.frost.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
 			.status-icon.rain.active { background: #2a7fdb; border-color: #2a7fdb; box-shadow: 0 2px 8px rgba(42,127,219,0.3); }
+			.status-icon.warn.active { background: #c0392b; border-color: #c0392b; box-shadow: 0 2px 8px rgba(192,57,43,0.3); }
 			.status-icon ha-icon { --mdc-icon-size: 18px; }
 			
 			.dial-core { position: absolute; top: 57.5%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: 6px; place-items: center; text-align: center; z-index: 1; }
@@ -2103,9 +2145,12 @@ class PoolControllerCard extends HTMLElement {
 							<div class="status-icon ${pvClass}" data-role="pc-status-pv" title="${pvTitle}" ${(d.pvPowerEntityId || d.pvAllowsEntityId) ? `data-more-info="${d.pvPowerEntityId || d.pvAllowsEntityId}"` : ''}>
 								<ha-icon icon="mdi:solar-power"></ha-icon>
 							</div>
-								<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" data-role="pc-status-rain" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
-									<ha-icon icon="mdi:weather-rainy"></ha-icon>
-								</div>
+							<div class="status-icon rain ${d.eventRainBlocked ? "active" : ""}" data-role="pc-status-rain" title="${rainTooltip}" ${(d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId) ? `data-more-info="${d.eventRainBlockedEntityId || d.eventRainProbabilityEntityId}"` : ''}>
+								<ha-icon icon="mdi:weather-rainy"></ha-icon>
+							</div>
+							<div class="status-icon warn ${d.sensorHealthProblem ? "active" : ""}" data-role="pc-status-sensor-health" title="${d.sensorHealthLabel || _t(lang, "ui.sensor_health_ok")}" ${d.sensorHealthMoreInfoEntityId ? `data-more-info="${d.sensorHealthMoreInfoEntityId}"` : ''}>
+								<ha-icon icon="mdi:access-point-network-off"></ha-icon>
+							</div>
 						</div>
 					</div>
 					<div class="dial-core">
@@ -2408,6 +2453,7 @@ class PoolControllerCard extends HTMLElement {
 		}
 		if (d.phMinusNum && d.phMinusNum > 0) items.push(`<div class="maintenance-item" ${d.phMinusEntityId ? `data-more-info="${d.phMinusEntityId}"` : ""}><ha-icon icon="mdi:ph"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_ph_minus")}</div><div class="maintenance-value">${d.phMinusNum} ${d.phMinusUnit}</div></div></div>`);
 		if (d.chlorDoseNum && d.chlorDoseNum > 0) items.push(`<div class="maintenance-item" ${d.chlorDoseEntityId ? `data-more-info="${d.chlorDoseEntityId}"` : ""}><ha-icon icon="mdi:beaker"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.add_chlorine")}</div><div class="maintenance-value">${d.chlorDoseNum} ${d.chlorDoseUnit}</div></div></div>`);
+		if (d.sensorHealthProblem) items.unshift(`<div class="maintenance-item" ${d.sensorHealthMoreInfoEntityId ? `data-more-info="${d.sensorHealthMoreInfoEntityId}"` : ""}><ha-icon icon="mdi:access-point-network-off"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.sensor_health_title")}</div><div class="maintenance-value">${d.sensorHealthLabel || _t(lang, "ui.sensor_health_unknown")}</div></div></div>`);
 		if (items.length === 0) items.push(`<div class="maintenance-item" ${d.maintenanceEntityId ? `data-more-info="${d.maintenanceEntityId}"` : ""}><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.maintenance")}</div><div class="maintenance-value">${_t(lang, "ui.no_actions_needed") || '—'}</div></div></div>`);
 
 		return `<div class="maintenance-block">
@@ -3357,6 +3403,17 @@ class PoolControllerCard extends HTMLElement {
 		return hvac || "–";
 	}
 
+	_sensorHealthLabel(code, problem) {
+		const lang = _langFromHass(this._hass);
+		const normalized = String(code || "").toLowerCase();
+		if (normalized === "esp32_and_water_sensor_unreachable") return _t(lang, "ui.sensor_health_both_unreachable");
+		if (normalized === "esp32_unreachable") return _t(lang, "ui.sensor_health_esp32_unreachable");
+		if (normalized === "water_sensor_unreachable") return _t(lang, "ui.sensor_health_water_sensor_unreachable");
+		if (normalized === "ok") return _t(lang, "ui.sensor_health_ok");
+		if (normalized === "unknown" || normalized === "not_configured") return _t(lang, "ui.sensor_health_unknown");
+		return problem ? _t(lang, "ui.sensor_health_title") : _t(lang, "ui.sensor_health_ok");
+	}
+
 	_powerSavingReasonText(d) {
 		if (!d?.powerSavingActive) return "";
 		const lang = _langFromHass(this._hass);
@@ -3808,6 +3865,11 @@ class PoolControllerCard extends HTMLElement {
 					c?.power_saving_available_entity,
 					c?.outdoor_temp_entity,
 					c?.maintenance_entity,
+					c?.sensor_health_problem_entity,
+					c?.sensor_health_status_entity,
+					c?.sensor_health_message_entity,
+					c?.sensor_health_esp32_reachable_entity,
+					c?.sensor_health_water_sensor_reachable_entity,
 					c?.heat_reason_entity,
 					c?.run_reason_entity,
 					c?.run_credit_source_entity,
@@ -3901,6 +3963,11 @@ class PoolControllerCard extends HTMLElement {
 			case "maintenance":
 				push(
 					c?.maintenance_entity,
+					c?.sensor_health_problem_entity,
+					c?.sensor_health_status_entity,
+					c?.sensor_health_message_entity,
+					c?.sensor_health_esp32_reachable_entity,
+					c?.sensor_health_water_sensor_reachable_entity,
 					c?.sanitizer_mode_entity,
 					c?.sanitizer_product_entity,
 					c?.ph_entity,
@@ -3950,6 +4017,11 @@ class PoolControllerCard extends HTMLElement {
 			this._config.outdoor_temp_entity,
 			this._config.next_frost_mins_entity,
 			this._config.maintenance_entity,
+			this._config.sensor_health_problem_entity,
+			this._config.sensor_health_status_entity,
+			this._config.sensor_health_message_entity,
+			this._config.sensor_health_esp32_reachable_entity,
+			this._config.sensor_health_water_sensor_reachable_entity,
 			this._config.heat_reason_entity,
 			this._config.run_reason_entity,
 			this._config.run_credit_source_entity,
@@ -4284,6 +4356,11 @@ class PoolControllerCard extends HTMLElement {
 			should_pump_on_entity: prefer('should_pump_on_entity'),
 			should_aux_on_entity: prefer('should_aux_on_entity'),
 			maintenance_entity: prefer('maintenance_entity'),
+			sensor_health_problem_entity: prefer('sensor_health_problem_entity'),
+			sensor_health_status_entity: prefer('sensor_health_status_entity'),
+			sensor_health_message_entity: prefer('sensor_health_message_entity'),
+			sensor_health_esp32_reachable_entity: prefer('sensor_health_esp32_reachable_entity'),
+			sensor_health_water_sensor_reachable_entity: prefer('sensor_health_water_sensor_reachable_entity'),
 			heat_reason_entity: prefer('heat_reason_entity'),
 			run_reason_entity: prefer('run_reason_entity'),
 			run_credit_source_entity: prefer('run_credit_source_entity'),
@@ -4461,6 +4538,11 @@ class PoolControllerCard extends HTMLElement {
 
 			// Maintenance (hard lockout)
 			maintenance_entity: this._pickEntity(entries, "binary_sensor", ["maintenance_active"]) || null,
+			sensor_health_problem_entity: this._pickEntity(entries, "binary_sensor", ["sensor_health_problem"]) || null,
+			sensor_health_esp32_reachable_entity: this._pickEntity(entries, "binary_sensor", ["sensor_health_esp32_reachable"]) || null,
+			sensor_health_water_sensor_reachable_entity: this._pickEntity(entries, "binary_sensor", ["sensor_health_water_sensor_reachable"]) || null,
+			sensor_health_status_entity: this._pickEntity(entries, "sensor", ["sensor_health_status"]) || null,
+			sensor_health_message_entity: this._pickEntity(entries, "sensor", ["sensor_health_message"]) || null,
 			away_start_button: this._pickEntity(entries, "button", ["away_start"]) || null,
 			away_stop_button: this._pickEntity(entries, "button", ["away_stop"]) || null,
 
