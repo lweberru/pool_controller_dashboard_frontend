@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.11.1";
+const VERSION = "2.12.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -184,7 +184,8 @@ const I18N = {
 			filter: "Filtern",
 			chlorine: "Chloren",
 			pause: "Pause",
-			boost: "Boost"
+			boost: "Boost",
+			read_blueriiot: "Jetzt messen"
 		},
 		tooltips: {
 			away: { active: "Abwesend — Klick beendet", inactive: "Abwesend-Modus aktivieren" },
@@ -195,7 +196,8 @@ const I18N = {
 			chlorine: { active: "Stoßchlorung — verbleibend: {mins} min — Klick beendet", inactive: "Stoßchlorung für {mins} Minuten starten" },
 			pause: { active: "Pause — verbleibend: {mins} min — Klick beendet", inactive: "Pause für {mins} Minuten starten" },
 			aux: { active: "Zusatzheizung erlauben an", inactive: "Zusatzheizung erlauben aus" },
-			rain: "Regenwahrscheinlichkeit: {pct}%"
+			rain: "Regenwahrscheinlichkeit: {pct}%",
+			read_blueriiot: "BlueRiiot jetzt auslesen"
 		},
 		dial: {
 			bathing_left: "Baden — verbleibend: {mins} min",
@@ -380,7 +382,8 @@ const I18N = {
 			filter: "Filter",
 			chlorine: "Chlorine",
 			pause: "Pause",
-			boost: "Boost"
+			boost: "Boost",
+			read_blueriiot: "Measure now"
 		},
 		tooltips: {
 			away: { active: "Away — click to stop", inactive: "Enable away mode" },
@@ -391,7 +394,8 @@ const I18N = {
 			chlorine: { active: "Quick chlorine — left: {mins} min — click to stop", inactive: "Start quick chlorine for {mins} minutes" },
 			pause: { active: "Pause — left: {mins} min — click to stop", inactive: "Start pause for {mins} minutes" },
 			aux: { active: "Allow auxiliary heater on", inactive: "Allow auxiliary heater off" },
-			rain: "Rain probability: {pct}%"
+			rain: "Rain probability: {pct}%",
+			read_blueriiot: "Read BlueRiiot now"
 		},
 		dial: {
 			bathing_left: "Bathing — left: {mins} min",
@@ -2106,6 +2110,7 @@ class PoolControllerCard extends HTMLElement {
 	_renderControllerBlock(d, c) {
 		const lang = _langFromHass(this._hass);
 		const { disabled, showAwayButton, showPowerSavingButton, showAuxButton, showDynamicTargetButton } = this._getControllerViewFlags(d, c);
+		const showBlueRiiotReadButton = Boolean(c.blueriiot_read_button);
 		const powerSavingReasonText = this._powerSavingReasonText(d);
 		const { finalBathDur, finalFilterDur, finalChlorDur, pauseDur } = this._getControllerDurations(d, c);
 		const rainPct = Number.isFinite(Number(d.eventRainProbability)) ? Math.round(Number(d.eventRainProbability)) : 0;
@@ -2183,6 +2188,7 @@ class PoolControllerCard extends HTMLElement {
 				<div class="action-buttons">
 					${showPowerSavingButton ? `<button class="action-btn power-saving ${d.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" ${disabled ? "disabled" : ""} title="${d.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}"><ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span></button>` : ""}
 					${showAwayButton ? `<button class="action-btn away ${d.awayActive ? "active" : ""}" data-action="away-toggle" ${disabled ? "disabled" : ""} title="${d.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}"><ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span></button>` : ""}
+					${showBlueRiiotReadButton ? `<button class="action-btn" data-action="blueriiot-read" ${disabled ? "disabled" : ""} title="${_t(lang, "tooltips.read_blueriiot")}"><ha-icon icon="mdi:bluetooth-connect"></ha-icon><span>${_t(lang, "actions.read_blueriiot")}</span></button>` : ""}
 					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active', { mins: (d.bathingEta != null ? d.bathingEta : finalBathDur) }) : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
@@ -2803,6 +2809,17 @@ class PoolControllerCard extends HTMLElement {
 						if (graphHost) graphHost.removeAttribute("data-rendered-key");
 					} catch (_e) {}
 					setTimeout(() => this._attachCostGraph(), 0);
+					return;
+				}
+				if (action === "blueriiot-read") {
+					ev.stopPropagation();
+					if (eff.blueriiot_read_button) {
+						this._triggerEntity(eff.blueriiot_read_button, true);
+						return;
+					}
+					if (this._hasService("pool_controller", "read_blueriiot")) {
+						this._hass.callService("pool_controller", "read_blueriiot", this._buildTargetObject());
+					}
 					return;
 				}
 				if (action === "maintenance-toggle") {
@@ -4346,6 +4363,7 @@ class PoolControllerCard extends HTMLElement {
 			power_saving_available_entity: prefer('power_saving_available_entity'),
 			away_start_button: prefer('away_start_button'),
 			away_stop_button: prefer('away_stop_button'),
+			blueriiot_read_button: prefer('blueriiot_read_button'),
 			outdoor_temp_entity: prefer('outdoor_temp_entity'),
 			next_frost_mins_entity: prefer('next_frost_mins_entity'),
 			sanitizer_mode_entity: prefer('sanitizer_mode_entity'),
@@ -4545,6 +4563,7 @@ class PoolControllerCard extends HTMLElement {
 			sensor_health_message_entity: this._pickEntity(entries, "sensor", ["sensor_health_message"]) || null,
 			away_start_button: this._pickEntity(entries, "button", ["away_start"]) || null,
 			away_stop_button: this._pickEntity(entries, "button", ["away_stop"]) || null,
+			blueriiot_read_button: this._pickEntity(entries, "button", ["read_blueriiot"]) || null,
 
 			// Transparency
 			heat_reason_entity: this._pickEntity(entries, "sensor", ["heat_reason"]) || null,
