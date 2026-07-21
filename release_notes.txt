@@ -1,3 +1,7 @@
+## v2.12.1
+
+- UX: Entfernt die redundante PV-Bänder-Option; Schwellenbereiche bleiben direkt im PV-Chart sichtbar.
+
 ## v1.5.53
 
 - UX: Heat-Reasons zeigen "Thermostat" sauber an (statt rohem Wert).

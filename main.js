@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.12.0";
+const VERSION = "2.14.0";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -17,7 +17,6 @@ const DEFAULTS = {
 	pv_show_pool_load: true,
 	pv_show_house_load: true,
 	pv_show_surplus: true,
-	pv_show_bands: false,
 	pv_show_pump_threshold: true,
 	pv_show_aux_threshold: true,
 	pv_legend_show_pv_group: true,
@@ -146,7 +145,6 @@ const I18N = {
 			pv_show_pool_load: "Pool-Last",
 			pv_show_house_load: "Hauslast",
 			pv_show_surplus: "PV-Überschuss Pool",
-			pv_show_bands: "PV-Bänder (nur ohne PV)",
 			pv_show_pump_threshold: "Schwelle Pumpe",
 			pv_show_aux_threshold: "Schwelle Zusatzheizung",
 			pv_legend: "PV-Legende",
@@ -344,7 +342,6 @@ const I18N = {
 			pv_show_pool_load: "Pool load",
 			pv_show_house_load: "House load",
 			pv_show_surplus: "PV surplus pool",
-			pv_show_bands: "PV bands (only without PV)",
 			pv_show_pump_threshold: "Pump threshold",
 			pv_show_aux_threshold: "Aux threshold",
 			pv_legend: "PV legend",
@@ -564,7 +561,6 @@ class PoolControllerCard extends HTMLElement {
 			pv_show_pool_load: config.pv_show_pool_load ?? DEFAULTS.pv_show_pool_load,
 			pv_show_house_load: config.pv_show_house_load ?? DEFAULTS.pv_show_house_load,
 			pv_show_surplus: config.pv_show_surplus ?? DEFAULTS.pv_show_surplus,
-			pv_show_bands: config.pv_show_bands ?? DEFAULTS.pv_show_bands,
 			pv_show_pump_threshold: config.pv_show_pump_threshold ?? DEFAULTS.pv_show_pump_threshold,
 			pv_show_aux_threshold: config.pv_show_aux_threshold ?? DEFAULTS.pv_show_aux_threshold,
 			pv_legend_show_pv_group: config.pv_legend_show_pv_group ?? DEFAULTS.pv_legend_show_pv_group,
@@ -2520,16 +2516,11 @@ class PoolControllerCard extends HTMLElement {
 		const surplusEntity = c.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = c.power_saving_pump_threshold_entity || "";
 		const auxThresholdEntity = c.power_saving_aux_threshold_entity || "";
-		const bandLowEntity = c.pv_band_low_entity || "";
-		const bandMidOffEntity = c.pv_band_mid_off_entity || "";
-		const bandMidOnEntity = c.pv_band_mid_on_entity || "";
-		const bandHighEntity = c.pv_band_high_entity || "";
 		const range = (c.pv_timerange || DEFAULTS.pv_timerange || "day").toString().trim();
 		const showPv = c.pv_show_pv !== false;
 		const showPoolLoad = c.pv_show_pool_load !== false;
 		const showHouseLoad = c.pv_show_house_load !== false;
 		const showSurplus = c.pv_show_surplus !== false;
-		const showBands = c.pv_show_bands !== false;
 		const showPumpThreshold = c.pv_show_pump_threshold !== false;
 		const showAuxThreshold = c.pv_show_aux_threshold !== false;
 
@@ -2548,7 +2539,6 @@ class PoolControllerCard extends HTMLElement {
 				data-show-pool-load="${showPoolLoad ? "1" : "0"}"
 				data-show-house-load="${showHouseLoad ? "1" : "0"}"
 				data-show-surplus="${showSurplus ? "1" : "0"}"
-				data-show-bands="${showBands ? "1" : "0"}"
 				data-show-pump-threshold="${showPumpThreshold ? "1" : "0"}"
 				data-show-aux-threshold="${showAuxThreshold ? "1" : "0"}"
 				data-pv-smoothed-entity="${smoothedEntity}"
@@ -2556,11 +2546,7 @@ class PoolControllerCard extends HTMLElement {
 				data-pv-house-load-entity="${houseLoadEntity}"
 				data-pv-surplus-entity="${surplusEntity}"
 				data-pump-threshold-entity="${pumpThresholdEntity}"
-				data-aux-threshold-entity="${auxThresholdEntity}"
-				data-pv-band-low-entity="${bandLowEntity}"
-				data-pv-band-mid-off-entity="${bandMidOffEntity}"
-				data-pv-band-mid-on-entity="${bandMidOnEntity}"
-				data-pv-band-high-entity="${bandHighEntity}"></div>
+				data-aux-threshold-entity="${auxThresholdEntity}"></div>
 			${this._renderPvLegend(d, c)}
 		</div>`;
 	}
@@ -2577,10 +2563,8 @@ class PoolControllerCard extends HTMLElement {
 		const showPoolLoad = c.pv_show_pool_load !== false;
 		const showHouseLoad = c.pv_show_house_load !== false;
 		const showSurplus = c.pv_show_surplus !== false;
-		const showBands = c.pv_show_bands !== false;
 		const showPumpThreshold = c.pv_show_pump_threshold !== false;
 		const showAuxThreshold = c.pv_show_aux_threshold !== false;
-		const showBandsEffective = showBands && !showPv;
 
 		const legendPvGroup = c.pv_legend_show_pv_group !== false;
 		const legendPoolLoad = c.pv_legend_show_pool_load !== false;
@@ -2630,7 +2614,7 @@ class PoolControllerCard extends HTMLElement {
 		const L = labels[lang] || labels.en;
 
 		const items = [];
-		if (legendPvGroup && (showPv || showBandsEffective)) {
+		if (legendPvGroup && showPv) {
 			items.push(`<div class="pv-legend-item" ${smoothedEntity ? `data-more-info="${smoothedEntity}"` : ""}><span class="pv-legend-dot pv-legend-dot-pv-group"></span><span>${L.pv}: <strong>${fmtW(pvNow)}</strong></span></div>`);
 		}
 		if (legendPoolLoad && showPoolLoad) {
@@ -3114,8 +3098,6 @@ class PoolControllerCard extends HTMLElement {
 		const showPoolLoad = host.getAttribute("data-show-pool-load") !== "0";
 		const showHouseLoad = host.getAttribute("data-show-house-load") !== "0";
 		const showSurplus = host.getAttribute("data-show-surplus") !== "0";
-		const showBands = host.getAttribute("data-show-bands") !== "0";
-		const showBandsEffective = showBands && !showPv;
 		const showPumpThreshold = host.getAttribute("data-show-pump-threshold") !== "0";
 		const showAuxThreshold = host.getAttribute("data-show-aux-threshold") !== "0";
 
@@ -3125,10 +3107,6 @@ class PoolControllerCard extends HTMLElement {
 		const surplusEntity = host.getAttribute("data-pv-surplus-entity") || "";
 		const pumpThresholdEntity = host.getAttribute("data-pump-threshold-entity") || "";
 		const auxThresholdEntity = host.getAttribute("data-aux-threshold-entity") || "";
-		const bandLowEntity = host.getAttribute("data-pv-band-low-entity") || "";
-		const bandMidOffEntity = host.getAttribute("data-pv-band-mid-off-entity") || "";
-		const bandMidOnEntity = host.getAttribute("data-pv-band-mid-on-entity") || "";
-		const bandHighEntity = host.getAttribute("data-pv-band-high-entity") || "";
 		const eff = this._withDerivedConfig(this._config || {});
 		const powerSavingActiveEntityId = eff?.power_saving_active_entity || null;
 		const powerSavingActive = powerSavingActiveEntityId ? this._isOn(this._hass?.states?.[powerSavingActiveEntityId]) : false;
@@ -3140,7 +3118,6 @@ class PoolControllerCard extends HTMLElement {
 			showPoolLoad ? "1" : "0",
 			showHouseLoad ? "1" : "0",
 			showSurplus ? "1" : "0",
-			showBandsEffective ? "1" : "0",
 			showPumpThreshold ? "1" : "0",
 			showAuxThreshold ? "1" : "0",
 			smoothedEntity,
@@ -3149,10 +3126,6 @@ class PoolControllerCard extends HTMLElement {
 			surplusEntity,
 			pumpThresholdEntity,
 			auxThresholdEntity,
-			bandLowEntity,
-			bandMidOffEntity,
-			bandMidOnEntity,
-			bandHighEntity,
 		].join("|");
 
 		if (!key.replace(/\|/g, "")) return;
@@ -3189,18 +3162,6 @@ class PoolControllerCard extends HTMLElement {
 		if (showSurplus && surplusEntity) {
 			series.push({ entity: surplusEntity, name: "PV Überschuss Pool", color: "#00897b", stroke_width: 2, opacity: 0.7 });
 		}
-		if (showBandsEffective && bandLowEntity) {
-			series.push({ entity: bandLowEntity, name: "PV low", color: "#a5d6a7", stroke_width: 2, opacity: 0.55 });
-		}
-		if (showBandsEffective && bandMidOffEntity) {
-			series.push({ entity: bandMidOffEntity, name: "PV mid (off)", color: "#81c784", stroke_width: 2, opacity: 0.6 });
-		}
-		if (showBandsEffective && bandMidOnEntity) {
-			series.push({ entity: bandMidOnEntity, name: "PV mid (on)", color: "#66bb6a", stroke_width: 2, opacity: 0.65 });
-		}
-		if (showBandsEffective && bandHighEntity) {
-			series.push({ entity: bandHighEntity, name: "PV high", color: "#43a047", stroke_width: 2, opacity: 0.75 });
-		}
 		if (showPumpThreshold && pumpThresholdEntity) {
 			series.push({ entity: pumpThresholdEntity, name: "Stromsparen Schwelle Pumpe", color: "#2e7d32", stroke_width: 2, opacity: 0.9, stroke_dash: 6 });
 		}
@@ -3222,8 +3183,6 @@ class PoolControllerCard extends HTMLElement {
 			stateNum(poolLoadEntity),
 			stateNum(houseLoadEntity),
 			stateNum(surplusEntity),
-			stateNum(bandLowEntity),
-			stateNum(bandHighEntity),
 			pumpThreshold,
 			auxThreshold,
 		].filter((v) => Number.isFinite(v) && v >= 0);
@@ -3868,10 +3827,6 @@ class PoolControllerCard extends HTMLElement {
 					c?.pv_surplus_for_pool_entity,
 					c?.power_saving_pump_threshold_entity,
 					c?.power_saving_aux_threshold_entity,
-					c?.pv_band_low_entity,
-					c?.pv_band_mid_off_entity,
-					c?.pv_band_mid_on_entity,
-					c?.pv_band_high_entity,
 				);
 				break;
 			case "controller":
@@ -4078,10 +4033,6 @@ class PoolControllerCard extends HTMLElement {
 			this._config.pv_surplus_for_pool_entity,
 			this._config.power_saving_pump_threshold_entity,
 			this._config.power_saving_aux_threshold_entity,
-			this._config.pv_band_low_entity,
-			this._config.pv_band_mid_off_entity,
-			this._config.pv_band_mid_on_entity,
-			this._config.pv_band_high_entity,
 			this._config.should_main_on_entity,
 			this._config.should_pump_on_entity,
 			this._config.should_aux_on_entity,
@@ -4421,10 +4372,6 @@ class PoolControllerCard extends HTMLElement {
 			pv_surplus_for_pool_entity: prefer('pv_surplus_for_pool_entity'),
 			power_saving_pump_threshold_entity: prefer('power_saving_pump_threshold_entity'),
 			power_saving_aux_threshold_entity: prefer('power_saving_aux_threshold_entity'),
-			pv_band_low_entity: prefer('pv_band_low_entity'),
-			pv_band_mid_off_entity: prefer('pv_band_mid_off_entity'),
-			pv_band_mid_on_entity: prefer('pv_band_mid_on_entity'),
-			pv_band_high_entity: prefer('pv_band_high_entity'),
 			main_power_entity: prefer('main_power_entity'),
 			aux_power_entity: prefer('aux_power_entity'),
 			power_entity: this._resolvePreferredPowerEntity(c, d),
@@ -4620,10 +4567,6 @@ class PoolControllerCard extends HTMLElement {
 			pv_surplus_for_pool_entity: this._pickEntity(entries, "sensor", ["pv_surplus_for_pool"]) || null,
 			power_saving_pump_threshold_entity: this._pickEntity(entries, "sensor", ["power_saving_pump_threshold"]) || null,
 			power_saving_aux_threshold_entity: this._pickEntity(entries, "sensor", ["power_saving_aux_threshold"]) || null,
-			pv_band_low_entity: this._pickEntity(entries, "sensor", ["pv_band_low"]) || null,
-			pv_band_mid_off_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_off"]) || null,
-			pv_band_mid_on_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_on"]) || null,
-			pv_band_high_entity: this._pickEntity(entries, "sensor", ["pv_band_high"]) || null,
 			main_power_entity: this._pickEntity(entries, "sensor", ["main_power"]) || null,
 			aux_power_entity: this._pickEntity(entries, "sensor", ["aux_power"]) || null,
 			power_entity: this._pickEntityExactSuffix(entries, "sensor", ["power"]) || null,
@@ -4773,7 +4716,6 @@ class PoolControllerCardEditor extends HTMLElement {
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-pool-load" type="checkbox" /><span>${_t(lang, "editor.pv_show_pool_load")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-house-load" type="checkbox" /><span>${_t(lang, "editor.pv_show_house_load")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-surplus" type="checkbox" /><span>${_t(lang, "editor.pv_show_surplus")}</span></label>
-					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-bands" type="checkbox" /><span>${_t(lang, "editor.pv_show_bands")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-pump-threshold" type="checkbox" /><span>${_t(lang, "editor.pv_show_pump_threshold")}</span></label>
 					<label style="display:flex;align-items:center;gap:8px;"><input id="pv-show-aux-threshold" type="checkbox" /><span>${_t(lang, "editor.pv_show_aux_threshold")}</span></label>
 				</div>
@@ -4869,7 +4811,6 @@ class PoolControllerCardEditor extends HTMLElement {
 				const pvShowPoolLoad = this.shadowRoot.querySelector('#pv-show-pool-load');
 				const pvShowHouseLoad = this.shadowRoot.querySelector('#pv-show-house-load');
 				const pvShowSurplus = this.shadowRoot.querySelector('#pv-show-surplus');
-				const pvShowBands = this.shadowRoot.querySelector('#pv-show-bands');
 				const pvShowPumpThreshold = this.shadowRoot.querySelector('#pv-show-pump-threshold');
 				const pvShowAuxThreshold = this.shadowRoot.querySelector('#pv-show-aux-threshold');
 				const pvLegendShowPvGroup = this.shadowRoot.querySelector('#pv-legend-show-pv-group');
@@ -4886,7 +4827,6 @@ class PoolControllerCardEditor extends HTMLElement {
 				if (pvShowPoolLoad) pvShowPoolLoad.checked = this._config?.pv_show_pool_load !== false;
 				if (pvShowHouseLoad) pvShowHouseLoad.checked = this._config?.pv_show_house_load !== false;
 				if (pvShowSurplus) pvShowSurplus.checked = this._config?.pv_show_surplus !== false;
-				if (pvShowBands) pvShowBands.checked = this._config?.pv_show_bands !== false;
 				if (pvShowPumpThreshold) pvShowPumpThreshold.checked = this._config?.pv_show_pump_threshold !== false;
 				if (pvShowAuxThreshold) pvShowAuxThreshold.checked = this._config?.pv_show_aux_threshold !== false;
 				if (pvLegendShowPvGroup) pvLegendShowPvGroup.checked = this._config?.pv_legend_show_pv_group !== false;
@@ -4933,9 +4873,6 @@ class PoolControllerCardEditor extends HTMLElement {
 				}
 				if (pvShowSurplus) {
 					pvShowSurplus.onchange = (e) => { this._updateConfig({ pv_show_surplus: !!e.target.checked }); };
-				}
-				if (pvShowBands) {
-					pvShowBands.onchange = (e) => { this._updateConfig({ pv_show_bands: !!e.target.checked }); };
 				}
 				if (pvShowPumpThreshold) {
 					pvShowPumpThreshold.onchange = (e) => { this._updateConfig({ pv_show_pump_threshold: !!e.target.checked }); };
@@ -5111,10 +5048,6 @@ class PoolControllerCardEditor extends HTMLElement {
 			pv_surplus_for_pool_entity: this._pickEntity(entries, "sensor", ["pv_surplus_for_pool"]) || null,
 			power_saving_pump_threshold_entity: this._pickEntity(entries, "sensor", ["power_saving_pump_threshold"]) || null,
 			power_saving_aux_threshold_entity: this._pickEntity(entries, "sensor", ["power_saving_aux_threshold"]) || null,
-			pv_band_low_entity: this._pickEntity(entries, "sensor", ["pv_band_low"]) || null,
-			pv_band_mid_off_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_off"]) || null,
-			pv_band_mid_on_entity: this._pickEntity(entries, "sensor", ["pv_band_mid_on"]) || null,
-			pv_band_high_entity: this._pickEntity(entries, "sensor", ["pv_band_high"]) || null,
 		};
 		this._pvDerivedEditorEntities = derived;
 		return derived;
@@ -5134,17 +5067,10 @@ class PoolControllerCardEditor extends HTMLElement {
 		const surplusEntity = merged.pv_surplus_for_pool_entity || derived.pv_surplus_for_pool_entity || "";
 		const pumpThresholdEntity = merged.power_saving_pump_threshold_entity || derived.power_saving_pump_threshold_entity || "";
 		const auxThresholdEntity = merged.power_saving_aux_threshold_entity || derived.power_saving_aux_threshold_entity || "";
-		const bandLowEntity = merged.pv_band_low_entity || derived.pv_band_low_entity || "";
-		const bandMidOffEntity = merged.pv_band_mid_off_entity || derived.pv_band_mid_off_entity || "";
-		const bandMidOnEntity = merged.pv_band_mid_on_entity || derived.pv_band_mid_on_entity || "";
-		const bandHighEntity = merged.pv_band_high_entity || derived.pv_band_high_entity || "";
-
 		const showPv = merged.pv_show_pv !== false;
 		const showPoolLoad = merged.pv_show_pool_load !== false;
 		const showHouseLoad = merged.pv_show_house_load !== false;
 		const showSurplus = merged.pv_show_surplus !== false;
-		const showBands = merged.pv_show_bands !== false;
-		const showBandsEffective = showBands && !showPv;
 		const showPumpThreshold = merged.pv_show_pump_threshold !== false;
 		const showAuxThreshold = merged.pv_show_aux_threshold !== false;
 
@@ -5153,10 +5079,6 @@ class PoolControllerCardEditor extends HTMLElement {
 		if (showPoolLoad && poolLoadEntity) series.push({ entity: poolLoadEntity, name: "Pool Last", color: "#8a3b32", stroke_width: 2, opacity: 0.85, curve: "stepline" });
 		if (showHouseLoad && houseLoadEntity) series.push({ entity: houseLoadEntity, name: "Hauslast", color: "#1565c0", stroke_width: 2, opacity: 0.85 });
 		if (showSurplus && surplusEntity) series.push({ entity: surplusEntity, name: "PV Überschuss Pool", color: "#00897b", stroke_width: 2, opacity: 0.7 });
-		if (showBandsEffective && bandLowEntity) series.push({ entity: bandLowEntity, name: "PV low", color: "#a5d6a7", stroke_width: 2, opacity: 0.55 });
-		if (showBandsEffective && bandMidOffEntity) series.push({ entity: bandMidOffEntity, name: "PV mid (off)", color: "#81c784", stroke_width: 2, opacity: 0.6 });
-		if (showBandsEffective && bandMidOnEntity) series.push({ entity: bandMidOnEntity, name: "PV mid (on)", color: "#66bb6a", stroke_width: 2, opacity: 0.65 });
-		if (showBandsEffective && bandHighEntity) series.push({ entity: bandHighEntity, name: "PV high", color: "#43a047", stroke_width: 2, opacity: 0.75 });
 		if (showPumpThreshold && pumpThresholdEntity) series.push({ entity: pumpThresholdEntity, name: "Stromsparen Schwelle Pumpe", color: "#2e7d32", stroke_width: 2, opacity: 0.9, stroke_dash: 6 });
 		if (showAuxThreshold && auxThresholdEntity) series.push({ entity: auxThresholdEntity, name: "Stromsparen Schwelle Zusatzheizung", color: "#6a1b9a", stroke_width: 2, opacity: 0.95, stroke_dash: 6 });
 
@@ -5171,8 +5093,6 @@ class PoolControllerCardEditor extends HTMLElement {
 			stateNum(poolLoadEntity),
 			stateNum(houseLoadEntity),
 			stateNum(surplusEntity),
-			stateNum(bandLowEntity),
-			stateNum(bandHighEntity),
 			pumpThreshold,
 			auxThreshold,
 		].filter((v) => Number.isFinite(v) && v >= 0);
@@ -5349,7 +5269,6 @@ class PoolControllerCardEditor extends HTMLElement {
 			pv_show_pool_load: merged.pv_show_pool_load ?? DEFAULTS.pv_show_pool_load,
 			pv_show_house_load: merged.pv_show_house_load ?? DEFAULTS.pv_show_house_load,
 			pv_show_surplus: merged.pv_show_surplus ?? DEFAULTS.pv_show_surplus,
-			pv_show_bands: merged.pv_show_bands ?? DEFAULTS.pv_show_bands,
 			pv_show_pump_threshold: merged.pv_show_pump_threshold ?? DEFAULTS.pv_show_pump_threshold,
 			pv_show_aux_threshold: merged.pv_show_aux_threshold ?? DEFAULTS.pv_show_aux_threshold,
 			pv_legend_show_pv_group: merged.pv_legend_show_pv_group ?? DEFAULTS.pv_legend_show_pv_group,
