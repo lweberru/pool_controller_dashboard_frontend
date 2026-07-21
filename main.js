@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.0";
+const VERSION = "2.14.2";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -102,6 +102,13 @@ const I18N = {
 			add_salt: "Salz hinzufügen",
 			add_chlorine: "Chlor hinzufügen",
 			low_chlorine: "Niedriger Chlorgehalt",
+			water_safety_critical: "Kritisches Wasser-kippt-Risiko",
+			water_safety_warning: "Erhöhtes Wasser-kippt-Risiko",
+			water_safety_ok: "Entwarnung: pH und ORP wieder stabil",
+			water_safety_reason_very_low_orp: "Desinfektion sehr schwach",
+			water_safety_reason_high_ph_low_orp: "Hoher pH macht niedrigen ORP besonders kritisch",
+			water_safety_reason_low_orp: "ORP-/Chlorwert zu niedrig",
+			water_safety_reason_ph_out_of_range: "pH außerhalb Komfortbereich",
 			mixed_chlor_hint: "Im Mischbetrieb: Chlor-Generator prüfen",
 			saltwater_chlor_hint: "Salzwasser: Elektrolyse prüfen statt man. Zugabe",
 			change_water: "Wasser wechseln",
@@ -300,6 +307,13 @@ const I18N = {
 			add_salt: "Add salt",
 			add_chlorine: "Add chlorine",
 			low_chlorine: "Low chlorine",
+			water_safety_critical: "Critical water spoilage risk",
+			water_safety_warning: "Elevated water spoilage risk",
+			water_safety_ok: "All clear: pH and ORP stable again",
+			water_safety_reason_very_low_orp: "Sanitizing power very low",
+			water_safety_reason_high_ph_low_orp: "High pH makes low ORP especially critical",
+			water_safety_reason_low_orp: "ORP/chlorine too low",
+			water_safety_reason_ph_out_of_range: "pH outside comfort range",
 			mixed_chlor_hint: "Mixed mode: check chlorinator",
 			saltwater_chlor_hint: "Saltwater: use chlorinator instead of manual dosing",
 			change_water: "Change water",
@@ -1340,6 +1354,10 @@ class PoolControllerCard extends HTMLElement {
 		const showSaltwaterHint = isSaltwater && chlorLow && !saltAddNeeded;
 		const showMixedHint = isMixed && chlorLow && !saltAddNeeded;
 		const items = [];
+		const waterSafetyText = this._waterSafetyMessage(d);
+		if (waterSafetyText) {
+			items.push(`<div class="info-badge">${waterSafetyText}</div>`);
+		}
 
 		if (saltAddDisplay) {
 			items.push(`<div class="info-badge">${_t(lang, "ui.add_salt")}: <strong>${saltAddDisplay}</strong></div>`);
@@ -1533,6 +1551,14 @@ class PoolControllerCard extends HTMLElement {
 		const sanitizerModeLabel = sanitizerMode ? this._sanitizerModeLabel(sanitizerMode) : null;
 		const sanitizerProduct = sanitizerProductRaw ? String(sanitizerProductRaw).toLowerCase() : null;
 		const sanitizerProductLabel = sanitizerProduct ? this._sanitizerProductLabel(sanitizerProduct) : null;
+		const waterSafetyRiskEntityId = c.water_safety_risk_entity || this._derivedEntities?.water_safety_risk_entity || null;
+		const waterSafetyStatusEntityId = c.water_safety_status_entity || this._derivedEntities?.water_safety_status_entity || null;
+		const waterSafetyReasonEntityId = c.water_safety_reason_entity || this._derivedEntities?.water_safety_reason_entity || null;
+		const waterSafetyRisk = waterSafetyRiskEntityId ? this._isOn(h.states[waterSafetyRiskEntityId]) : false;
+		const waterSafetyStatus = waterSafetyStatusEntityId ? (h.states[waterSafetyStatusEntityId]?.state || null) : null;
+		const waterSafetyReason = waterSafetyReasonEntityId ? (h.states[waterSafetyReasonEntityId]?.state || null) : null;
+		const waterSafetyStatusLabel = this._waterSafetyStatusLabel(waterSafetyStatus);
+		const waterSafetyReasonLabel = this._waterSafetyReasonLabel(waterSafetyReason);
 		const salt = saltEntityId ? this._num(h.states[saltEntityId]?.state) : null;
 		const saltAddStateObj = saltAddEntityId ? h.states[saltAddEntityId] : null;
 		const saltAddNum = saltAddStateObj ? this._num(saltAddStateObj.state) : null;
@@ -1716,6 +1742,9 @@ class PoolControllerCard extends HTMLElement {
 			alkalinityStepsEntityId,
 			alkalinityWaitEntityId,
 			alkalinityWaterChangeEntityId,
+			waterSafetyRiskEntityId,
+			waterSafetyStatusEntityId,
+			waterSafetyReasonEntityId,
 			frostEntityId: c.frost_entity || null,
 			quietEntityId: c.quiet_entity || null,
 			pvAllowsEntityId: c.pv_entity || null,
@@ -1793,6 +1822,11 @@ class PoolControllerCard extends HTMLElement {
 			sanitizerModeLabel,
 			sanitizerProduct,
 			sanitizerProductLabel,
+			waterSafetyRisk,
+			waterSafetyStatus,
+			waterSafetyReason,
+			waterSafetyStatusLabel,
+			waterSafetyReasonLabel,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
 			phPlusNum, phPlusUnit, phMinusNum, phMinusUnit, chlorDoseNum, chlorDoseUnit,
 			nextStartMins, nextFilterMins, nextEventStart, nextEventEnd, nextEventSummary,
@@ -2427,6 +2461,14 @@ class PoolControllerCard extends HTMLElement {
 			? `${d.alkalinityWait} min`
 			: null;
 		const items = [];
+		const waterSafetyEntityForInfo = d.waterSafetyRiskEntityId || d.waterSafetyStatusEntityId || d.waterSafetyReasonEntityId || d.chlorEntityId || d.phEntityId || null;
+		const waterSafetyStatus = String(d.waterSafetyStatus || "").toLowerCase();
+		const waterSafetyMessage = this._waterSafetyMessage(d);
+		if (waterSafetyMessage && (waterSafetyStatus === "critical" || waterSafetyStatus === "warning" || d.waterSafetyRisk)) {
+			items.unshift(`<div class="maintenance-item" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:alert-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${waterSafetyMessage}</div></div></div>`);
+		} else if (waterSafetyStatus === "ok") {
+			items.push(`<div class="maintenance-item" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:check-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${_t(lang, "ui.water_safety_ok")}</div></div></div>`);
+		}
 		if (d.alkalinityAction && d.alkalinityAction !== "none" && d.alkalinityActionLabel) {
 			let actionValue = d.alkalinityActionLabel;
 			if (d.alkalinityAction === "raise_stepwise" || d.alkalinityAction === "lower_stepwise") {
@@ -3390,6 +3432,34 @@ class PoolControllerCard extends HTMLElement {
 		return problem ? _t(lang, "ui.sensor_health_title") : _t(lang, "ui.sensor_health_ok");
 	}
 
+	_waterSafetyStatusLabel(status) {
+		const lang = _langFromHass(this._hass);
+		const normalized = String(status || "").toLowerCase();
+		if (normalized === "critical") return _t(lang, "ui.water_safety_critical");
+		if (normalized === "warning") return _t(lang, "ui.water_safety_warning");
+		if (normalized === "ok") return _t(lang, "ui.water_safety_ok");
+		return null;
+	}
+
+	_waterSafetyReasonLabel(reason) {
+		const lang = _langFromHass(this._hass);
+		const normalized = String(reason || "").toLowerCase();
+		if (normalized === "very_low_orp") return _t(lang, "ui.water_safety_reason_very_low_orp");
+		if (normalized === "high_ph_low_orp") return _t(lang, "ui.water_safety_reason_high_ph_low_orp");
+		if (normalized === "low_orp") return _t(lang, "ui.water_safety_reason_low_orp");
+		if (normalized === "ph_out_of_range") return _t(lang, "ui.water_safety_reason_ph_out_of_range");
+		return null;
+	}
+
+	_waterSafetyMessage(d) {
+		const status = String(d?.waterSafetyStatus || "").toLowerCase();
+		if (!status || status === "unknown") return "";
+		const label = d.waterSafetyStatusLabel || this._waterSafetyStatusLabel(status);
+		const reason = d.waterSafetyReasonLabel || this._waterSafetyReasonLabel(d.waterSafetyReason);
+		if (status === "ok") return label || "";
+		return reason ? `${label}: ${reason}` : (label || "");
+	}
+
 	_powerSavingReasonText(d) {
 		if (!d?.powerSavingActive) return "";
 		const lang = _langFromHass(this._hass);
@@ -3916,6 +3986,9 @@ class PoolControllerCard extends HTMLElement {
 					c?.salt_add_entity,
 					c?.tds_entity,
 					c?.tds_assessment_entity,
+					c?.water_safety_risk_entity,
+					c?.water_safety_status_entity,
+					c?.water_safety_reason_entity,
 					c?.water_change_percent_entity,
 					c?.water_change_liters_entity,
 					c?.alkalinity_entity,
@@ -3948,6 +4021,9 @@ class PoolControllerCard extends HTMLElement {
 					c?.salt_add_entity,
 					c?.tds_entity,
 					c?.tds_assessment_entity,
+					c?.water_safety_risk_entity,
+					c?.water_safety_status_entity,
+					c?.water_safety_reason_entity,
 					c?.water_change_percent_entity,
 					c?.water_change_liters_entity,
 					c?.alkalinity_entity,
@@ -4386,6 +4462,9 @@ class PoolControllerCard extends HTMLElement {
 			salt_add_entity: prefer('salt_add_entity'),
 			tds_entity: prefer('tds_entity'),
 			tds_assessment_entity: prefer('tds_assessment_entity'),
+			water_safety_risk_entity: prefer('water_safety_risk_entity'),
+			water_safety_status_entity: prefer('water_safety_status_entity'),
+			water_safety_reason_entity: prefer('water_safety_reason_entity'),
 			water_change_percent_entity: prefer('water_change_percent_entity'),
 			water_change_liters_entity: prefer('water_change_liters_entity'),
 			alkalinity_entity: prefer('alkalinity_entity'),
@@ -4579,6 +4658,9 @@ class PoolControllerCard extends HTMLElement {
 			salt_add_entity: this._pickEntity(entries, "sensor", ["salt_add_g"]) || null,
 			tds_entity: this._pickEntity(entries, "sensor", ["tds_effective", "tds_val", "tds", "tds_ppm"]) || null,
 			tds_assessment_entity: this._pickEntity(entries, "sensor", ["tds_status", "tds_assessment", "tds_state"]) || null,
+			water_safety_risk_entity: this._pickEntity(entries, "binary_sensor", ["water_safety_risk"]) || null,
+			water_safety_status_entity: this._pickEntity(entries, "sensor", ["water_safety_status"]) || null,
+			water_safety_reason_entity: this._pickEntity(entries, "sensor", ["water_safety_reason"]) || null,
 			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
 			water_change_percent_entity: this._pickEntity(entries, "sensor", ["tds_water_change_percent", "water_change_percent"]) || null,
 			alkalinity_entity: this._pickEntity(entries, "sensor", ["alkalinity_estimated_ppm"]) || null,
