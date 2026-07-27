@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.3";
+const VERSION = "2.14.4";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -2938,9 +2938,14 @@ class PoolControllerCard extends HTMLElement {
 				const step = Number(tc.step || 0.5);
 				const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
 				const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
-				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
+				const pendingTarget = this._optimisticActions?.get("temperature");
+				const currentTarget = (
+					pendingTarget?.expiresAt > Date.now() && Number.isFinite(Number(pendingTarget.value))
+				)
+					? Number(pendingTarget.value)
+					: (this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp);
 				const next = tempBtn.dataset.action === "inc" ? currentTarget + step : currentTarget - step;
-				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
+				const newTemp = this._clamp(Math.round(next / step) * step, tc.min_temp, tc.max_temp);
 				this._runOptimisticAction("temperature", newTemp, () => this._hass.callService("climate", "set_temperature", { entity_id: climateEntityId, temperature: newTemp }));
 				return;
 			}
