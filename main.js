@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.2";
+const VERSION = "2.14.3";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -717,7 +717,7 @@ class PoolControllerCard extends HTMLElement {
 		}
 
 		// Daten vorbereiten
-		const data = this._prepareData(h, effectiveConfig, climate);
+		const data = this._applyOptimisticActions(this._prepareData(h, effectiveConfig, climate));
 		this._renderData = data;
 
 		// Dynamisches Rendering in statische Shell
@@ -1206,6 +1206,8 @@ class PoolControllerCard extends HTMLElement {
 			awayBtn.classList.toggle("active", !!d.awayActive);
 			awayBtn.title = d.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive");
 		}
+		const blueriiotBtn = root.querySelector('[data-action="blueriiot-read"]');
+		if (blueriiotBtn) blueriiotBtn.classList.toggle("active", !!d.blueriiotReadPending);
 
 		const bathingBtn = root.querySelector('[data-mode="bathing"]');
 		if (bathingBtn) {
@@ -2218,7 +2220,7 @@ class PoolControllerCard extends HTMLElement {
 				<div class="action-buttons">
 					${showPowerSavingButton ? `<button class="action-btn power-saving ${d.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" ${disabled ? "disabled" : ""} title="${d.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}"><ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span></button>` : ""}
 					${showAwayButton ? `<button class="action-btn away ${d.awayActive ? "active" : ""}" data-action="away-toggle" ${disabled ? "disabled" : ""} title="${d.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}"><ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span></button>` : ""}
-					${showBlueRiiotReadButton ? `<button class="action-btn" data-action="blueriiot-read" ${disabled ? "disabled" : ""} title="${_t(lang, "tooltips.read_blueriiot")}"><ha-icon icon="mdi:bluetooth-connect"></ha-icon><span>${_t(lang, "actions.read_blueriiot")}</span></button>` : ""}
+					${showBlueRiiotReadButton ? `<button class="action-btn ${d.blueriiotReadPending ? "active" : ""}" data-action="blueriiot-read" ${disabled ? "disabled" : ""} title="${_t(lang, "tooltips.read_blueriiot")}"><ha-icon icon="mdi:bluetooth-connect"></ha-icon><span>${_t(lang, "actions.read_blueriiot")}</span></button>` : ""}
 					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active', { mins: (d.bathingEta != null ? d.bathingEta : finalBathDur) }) : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
 						<ha-icon icon="mdi:pool"></ha-icon><span>${_t(lang, "actions.bathing")}</span>
 					</button>
@@ -2839,27 +2841,30 @@ class PoolControllerCard extends HTMLElement {
 				}
 				if (action === "blueriiot-read") {
 					ev.stopPropagation();
+					this._runOptimisticAction("blueriiot-read", true, () => {
 					if (eff.blueriiot_read_button) {
 						this._triggerEntity(eff.blueriiot_read_button, true);
-						return;
+						return Promise.resolve();
 					}
 					if (this._hasService("pool_controller", "read_blueriiot")) {
-						this._hass.callService("pool_controller", "read_blueriiot", this._buildTargetObject());
+						return this._hass.callService("pool_controller", "read_blueriiot", this._buildTargetObject());
 					}
+					return Promise.resolve();
+					}, 15000);
 					return;
 				}
 				if (action === "maintenance-toggle") {
 					ev.stopPropagation();
 					const svc = maintenanceActive ? "stop_maintenance" : "start_maintenance";
 					if (this._hasService("pool_controller", svc)) {
-						this._hass.callService("pool_controller", svc, this._buildTargetObject());
+						this._runOptimisticAction("maintenance", !maintenanceActive, () => this._hass.callService("pool_controller", svc, this._buildTargetObject()));
 						return;
 					}
 					const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-					this._hass.callService("climate", "set_hvac_mode", {
+					this._runOptimisticAction("maintenance", !maintenanceActive, () => this._hass.callService("climate", "set_hvac_mode", {
 						entity_id: climateEntityId,
 						hvac_mode: maintenanceActive ? "heat" : "off",
-					});
+					}));
 					return;
 				}
 				if (action === "away-toggle") {
@@ -2867,7 +2872,7 @@ class PoolControllerCard extends HTMLElement {
 					const isAway = !!this._renderData?.awayActive;
 					const svc = isAway ? "stop_away" : "start_away";
 					if (this._hasService("pool_controller", svc)) {
-						this._hass.callService("pool_controller", svc, this._buildTargetObject());
+						this._runOptimisticAction("away", !isAway, () => this._hass.callService("pool_controller", svc, this._buildTargetObject()));
 						return;
 					}
 					if (isAway && eff.away_stop_button) {
@@ -2879,10 +2884,10 @@ class PoolControllerCard extends HTMLElement {
 						return;
 					}
 					const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-					this._hass.callService("climate", "set_preset_mode", {
+					this._runOptimisticAction("away", !isAway, () => this._hass.callService("climate", "set_preset_mode", {
 						entity_id: climateEntityId,
 						preset_mode: isAway ? "Auto" : "Abwesend",
-					});
+					}));
 					return;
 				}
 				if (action === "power-saving-toggle") {
@@ -2890,14 +2895,14 @@ class PoolControllerCard extends HTMLElement {
 					const isActive = !!this._renderData?.powerSavingActive;
 					const svc = isActive ? "stop_power_saving" : "start_power_saving";
 					if (this._hasService("pool_controller", svc)) {
-						this._hass.callService("pool_controller", svc, this._buildTargetObject());
+						this._runOptimisticAction("power-saving", !isActive, () => this._hass.callService("pool_controller", svc, this._buildTargetObject()));
 						return;
 					}
 					const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-					this._hass.callService("climate", "set_preset_mode", {
+					this._runOptimisticAction("power-saving", !isActive, () => this._hass.callService("climate", "set_preset_mode", {
 						entity_id: climateEntityId,
 						preset_mode: isActive ? "Auto" : "Stromsparen",
-					});
+					}));
 					return;
 				}
 				if (action === "aux-toggle") {
@@ -2906,7 +2911,7 @@ class PoolControllerCard extends HTMLElement {
 					const entity = eff.aux_entity;
 					if (entity) {
 						const isOn = this._isOn(this._hass.states[entity]);
-						this._triggerEntity(entity, !isOn);
+						this._runOptimisticAction("aux", !isOn, () => this._triggerEntity(entity, !isOn));
 						try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 					}
 					return;
@@ -2916,10 +2921,10 @@ class PoolControllerCard extends HTMLElement {
 					if (maintenanceActive) return;
 					const isActive = this._isDynamicTargetActive(this._renderData?.dynamicTargetProfile);
 					if (this._hasService("pool_controller", "set_dynamic_target")) {
-						this._hass.callService("pool_controller", "set_dynamic_target", {
+						this._runOptimisticAction("dynamic-target", !isActive, () => this._hass.callService("pool_controller", "set_dynamic_target", {
 							...this._buildTargetObject(),
 							enabled: !isActive,
-						});
+						}));
 						try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 					}
 					return;
@@ -2936,13 +2941,7 @@ class PoolControllerCard extends HTMLElement {
 				const currentTarget = this._num(climate?.attributes?.temperature) ?? this._num(climate?.attributes?.target_temp) ?? tc.min_temp;
 				const next = tempBtn.dataset.action === "inc" ? currentTarget + step : currentTarget - step;
 				const newTemp = this._clamp(next, tc.min_temp, tc.max_temp);
-				if (climate) {
-					const optimisticState = { ...climate };
-					optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-					this._hass.states[climateEntityId] = optimisticState;
-					this._render();
-				}
-				this._hass.callService("climate", "set_temperature", { entity_id: climateEntityId, temperature: newTemp });
+				this._runOptimisticAction("temperature", newTemp, () => this._hass.callService("climate", "set_temperature", { entity_id: climateEntityId, temperature: newTemp }));
 				return;
 			}
 
@@ -2960,18 +2959,18 @@ class PoolControllerCard extends HTMLElement {
 					const svc = active ? `stop_${mode}` : `start_${mode}`;
 					const targetObj = this._buildTargetObject();
 					const data = active ? targetObj : { ...targetObj, duration_minutes: Number.isFinite(duration) ? duration : undefined };
-					this._hass.callService("pool_controller", svc, data);
+					this._runOptimisticAction(`mode:${mode}`, !active, () => this._hass.callService("pool_controller", svc, data));
 					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 					return;
 				}
 				if (active && stop) {
-					this._triggerEntity(stop, false);
+					this._runOptimisticAction(`mode:${mode}`, false, () => this._triggerEntity(stop, false));
 					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 				} else if (!active && start) {
-					this._triggerEntity(start, true);
+					this._runOptimisticAction(`mode:${mode}`, true, () => this._triggerEntity(start, true));
 					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 				} else if (active && mode && this._hasService("pool_controller", `stop_${mode}`)) {
-					this._hass.callService("pool_controller", `stop_${mode}`, this._buildTargetObject());
+					this._runOptimisticAction(`mode:${mode}`, false, () => this._hass.callService("pool_controller", `stop_${mode}`, this._buildTargetObject()));
 					try { this._requestBackendEntityRefresh(eff); } catch (_e) {}
 				}
 				return;
@@ -3331,18 +3330,90 @@ class PoolControllerCard extends HTMLElement {
 		if (!entityId || !this._hass) return;
 		const [domain] = entityId.split(".");
 		if (domain === "button") {
-			this._hass.callService("button", "press", { entity_id: entityId });
-			return;
+			return this._hass.callService("button", "press", { entity_id: entityId });
 		}
 		if (domain === "switch") {
-			this._hass.callService("switch", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
-			return;
+			return this._hass.callService("switch", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
 		}
 		if (domain === "input_boolean") {
-			this._hass.callService("input_boolean", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
-			return;
+			return this._hass.callService("input_boolean", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
 		}
-		this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
+		return this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
+	}
+
+	_runOptimisticAction(key, value, execute, timeout = 12000) {
+		if (!this._optimisticActions) this._optimisticActions = new Map();
+		const expiresAt = Date.now() + timeout;
+		this._optimisticActions.set(key, { value, expiresAt });
+		this._render();
+		window.setTimeout(() => {
+			const pending = this._optimisticActions?.get(key);
+			if (pending && pending.expiresAt <= Date.now()) {
+				this._optimisticActions.delete(key);
+				this._render();
+			}
+		}, timeout + 50);
+		try {
+			Promise.resolve(execute()).catch(() => {
+				this._optimisticActions?.delete(key);
+				this._render();
+			});
+		} catch (_e) {
+			this._optimisticActions.delete(key);
+			this._render();
+		}
+	}
+
+	_applyOptimisticActions(data) {
+		const pendingActions = this._optimisticActions;
+		if (!pendingActions?.size) return data;
+		const next = { ...data };
+		const states = {
+			maintenance: () => next.maintenanceActive,
+			away: () => next.awayActive,
+			"power-saving": () => next.powerSavingActive,
+			aux: () => next.auxOn,
+			"dynamic-target": () => this._isDynamicTargetActive(next.dynamicTargetProfile),
+			"mode:bathing": () => next.bathingState.active,
+			"mode:filter": () => next.filterState.active,
+			"mode:chlorine": () => next.chlorState.active,
+			"mode:pause": () => next.pauseState.active,
+			temperature: () => next.targetBase,
+		};
+		for (const [key, pending] of pendingActions) {
+			if (pending.expiresAt <= Date.now()) {
+				pendingActions.delete(key);
+				continue;
+			}
+			if (key === "blueriiot-read") {
+				next.blueriiotReadPending = true;
+				continue;
+			}
+			const current = states[key]?.();
+			if (current === pending.value) {
+				pendingActions.delete(key);
+				continue;
+			}
+			switch (key) {
+				case "maintenance": next.maintenanceActive = pending.value; break;
+				case "away": next.awayActive = pending.value; break;
+				case "power-saving": next.powerSavingActive = pending.value; break;
+				case "aux": next.auxOn = pending.value; break;
+				case "dynamic-target": next.dynamicTargetProfile = pending.value ? "optimistic" : "off"; break;
+				case "mode:bathing": next.bathingState = { ...next.bathingState, active: pending.value }; break;
+				case "mode:filter": next.filterState = { ...next.filterState, active: pending.value }; break;
+				case "mode:chlorine": next.chlorState = { ...next.chlorState, active: pending.value }; break;
+				case "mode:pause": next.pauseState = { ...next.pauseState, active: pending.value }; break;
+				case "temperature":
+					next.target = pending.value;
+					next.targetBase = pending.value;
+					next.targetEffective = pending.value;
+					next.targetAngle = this._calcDial(pending.value, this._effectiveTempConfig().min_temp, this._effectiveTempConfig().max_temp);
+					next.effectiveTargetAngle = next.targetAngle;
+					break;
+			}
+		}
+		return next;
 	}
 
 	_hasService(domain, service) {
@@ -4220,17 +4291,10 @@ class PoolControllerCard extends HTMLElement {
 		const newTemp = this._dialDragTemp;
 		this._dialDragTemp = null;
 		const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
-		const climate = climateEntityId ? this._hass.states[climateEntityId] : null;
-		if (climate) {
-			const optimisticState = { ...climate };
-			optimisticState.attributes = { ...climate.attributes, temperature: newTemp };
-			this._hass.states[climateEntityId] = optimisticState;
-			this._render();
-		}
-		this._hass.callService("climate", "set_temperature", {
+		this._runOptimisticAction("temperature", newTemp, () => this._hass.callService("climate", "set_temperature", {
 			entity_id: climateEntityId,
 			temperature: newTemp,
-		});
+		}));
 	}
 
 	_dialProgressFromClientXY(clientX, clientY, rect) {
