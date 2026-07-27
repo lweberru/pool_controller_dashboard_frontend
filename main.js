@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.4";
+const VERSION = "2.14.5";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3409,13 +3409,18 @@ class PoolControllerCard extends HTMLElement {
 				case "mode:filter": next.filterState = { ...next.filterState, active: pending.value }; break;
 				case "mode:chlorine": next.chlorState = { ...next.chlorState, active: pending.value }; break;
 				case "mode:pause": next.pauseState = { ...next.pauseState, active: pending.value }; break;
-				case "temperature":
+				case "temperature": {
+					const targetOffset = Number.isFinite(Number(next.targetOffset))
+						? Number(next.targetOffset)
+						: (Number(next.targetEffective) - Number(next.targetBase) || 0);
+					const tempConfig = this._effectiveTempConfig();
 					next.target = pending.value;
 					next.targetBase = pending.value;
-					next.targetEffective = pending.value;
-					next.targetAngle = this._calcDial(pending.value, this._effectiveTempConfig().min_temp, this._effectiveTempConfig().max_temp);
-					next.effectiveTargetAngle = next.targetAngle;
+					next.targetEffective = pending.value + targetOffset;
+					next.targetAngle = this._calcDial(pending.value, tempConfig.min_temp, tempConfig.max_temp);
+					next.effectiveTargetAngle = this._calcDial(next.targetEffective, tempConfig.min_temp, tempConfig.max_temp);
 					break;
+				}
 			}
 		}
 		return next;
