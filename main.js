@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.5";
+const VERSION = "2.14.6";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -104,7 +104,7 @@ const I18N = {
 			low_chlorine: "Niedriger Chlorgehalt",
 			water_safety_critical: "Kritisches Wasser-kippt-Risiko",
 			water_safety_warning: "Erhöhtes Wasser-kippt-Risiko",
-			water_safety_ok: "Entwarnung: pH und ORP wieder stabil",
+			water_safety_ok: "Alle Wasserwerte liegen im optimalen Bereich",
 			water_safety_reason_very_low_orp: "Desinfektion sehr schwach",
 			water_safety_reason_high_ph_low_orp: "Hoher pH macht niedrigen ORP besonders kritisch",
 			water_safety_reason_low_orp: "ORP-/Chlorwert zu niedrig",
@@ -309,7 +309,7 @@ const I18N = {
 			low_chlorine: "Low chlorine",
 			water_safety_critical: "Critical water spoilage risk",
 			water_safety_warning: "Elevated water spoilage risk",
-			water_safety_ok: "All clear: pH and ORP stable again",
+			water_safety_ok: "All water values are in the optimal range",
 			water_safety_reason_very_low_orp: "Sanitizing power very low",
 			water_safety_reason_high_ph_low_orp: "High pH makes low ORP especially critical",
 			water_safety_reason_low_orp: "ORP/chlorine too low",
@@ -1358,7 +1358,8 @@ class PoolControllerCard extends HTMLElement {
 		const items = [];
 		const waterSafetyText = this._waterSafetyMessage(d);
 		if (waterSafetyText) {
-			items.push(`<div class="info-badge">${waterSafetyText}</div>`);
+			const waterSafetyOk = String(d?.waterSafetyStatus || "").toLowerCase() === "ok";
+			items.push(`<div class="info-badge${waterSafetyOk ? " ok" : ""}">${waterSafetyText}</div>`);
 		}
 
 		if (saltAddDisplay) {
@@ -2044,15 +2045,19 @@ class PoolControllerCard extends HTMLElement {
 				.marker-value::after { bottom: -7px; border-left-width: 4px; border-right-width: 4px; border-top-width: 9px; }
 			}
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); font-size: 13px; border: 1px solid var(--pc-border); font-weight: 500; }
+			.info-badge.ok { background: color-mix(in srgb, var(--pc-surface) 82%, #2e7d32 18%); border-color: color-mix(in srgb, var(--pc-border) 45%, #2e7d32 55%); color: var(--primary-text-color); }
 			
 			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: color-mix(in srgb, var(--pc-surface) 90%, #f3c2a2 10%); margin-top: 16px; }
 			.maintenance .section-title { color: #c0392b; }
 			.maintenance-items { display: grid; gap: 12px; margin-top: 12px; }
 			.maintenance-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: var(--pc-surface); border: 1px solid #f3c2a2; }
+			.maintenance-item.ok { background: color-mix(in srgb, var(--pc-surface) 88%, #2e7d32 12%); border-color: color-mix(in srgb, var(--pc-border) 35%, #2e7d32 65%); }
 			.maintenance-item ha-icon { --mdc-icon-size: 24px; color: #c0392b; }
+			.maintenance-item.ok ha-icon { color: #2e7d32; }
 			.maintenance-text { flex: 1; }
 			.maintenance-label { font-weight: 600; color: #8a3b32; }
 			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
+			.maintenance-item.ok .maintenance-label, .maintenance-item.ok .maintenance-value { color: #2e7d32; }
 			
 			.calendar { border: 1px solid var(--pc-border); border-radius: 12px; padding: 16px; background: var(--pc-surface); display: grid; gap: 10px; margin-top: 16px; }
 			.event { padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 92%, var(--pc-border) 8%); border: 1px solid var(--pc-border); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -2469,7 +2474,7 @@ class PoolControllerCard extends HTMLElement {
 		if (waterSafetyMessage && (waterSafetyStatus === "critical" || waterSafetyStatus === "warning" || d.waterSafetyRisk)) {
 			items.unshift(`<div class="maintenance-item" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:alert-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${waterSafetyMessage}</div></div></div>`);
 		} else if (waterSafetyStatus === "ok") {
-			items.push(`<div class="maintenance-item" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:check-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${_t(lang, "ui.water_safety_ok")}</div></div></div>`);
+			items.push(`<div class="maintenance-item ok" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:check-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${_t(lang, "ui.water_safety_ok")}</div></div></div>`);
 		}
 		if (d.alkalinityAction && d.alkalinityAction !== "none" && d.alkalinityActionLabel) {
 			let actionValue = d.alkalinityActionLabel;
