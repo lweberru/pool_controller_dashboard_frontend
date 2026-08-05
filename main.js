@@ -223,6 +223,7 @@ const I18N = {
 			filter: "Filtern",
 			boost: "Boost",
 			heating: "Heizbetrieb",
+   cooling: "Kühlbetrieb",
 			idle: "Leerlauf",
 			off: "Aus"
 		},
@@ -427,6 +428,7 @@ const I18N = {
 			filter: "Filter",
 			boost: "Boost",
 			heating: "Heating",
+   cooling: "Cooling",
 			idle: "Idle",
 			off: "Off"
 		},
@@ -1047,7 +1049,7 @@ class PoolControllerCard extends HTMLElement {
 		const RING_START_DEG = 135;
 		const lang = _langFromHass(this._hass);
 		const dotCurrentFill = d.poolVisualOn
-			? (d.auxOn ? "rgba(192,57,43,0.6)" : "rgba(192,57,43,0.55)")
+			? (d.isCool ? "rgba(41,128,185,0.6)" : (d.auxOn ? "rgba(192,57,43,0.6)" : "rgba(192,57,43,0.55)"))
 			: "rgba(122,130,138,0.9)";
 		const baseTargetAngle = Number.isFinite(Number(d.targetAngle)) ? Number(d.targetAngle) : Number(d.dialAngle || 0);
 		const effectiveTargetAngle = Number.isFinite(Number(d.effectiveTargetAngle)) ? Number(d.effectiveTargetAngle) : baseTargetAngle;
@@ -1101,8 +1103,8 @@ class PoolControllerCard extends HTMLElement {
 		const f = this._getControllerViewFlags(d, c);
 		const durations = this._getControllerDurations(d, c);
 
-		const accent = d.poolVisualOn ? "#c0392b" : "#9aa4ad";
-		const targetAccent = d.poolVisualOn ? "#c0392b" : "#9aa4ad";
+		const accent = d.poolVisualOn ? (d.isCool ? "#2980b9" : "#c0392b") : "#9aa4ad";
+		const targetAccent = d.poolVisualOn ? (d.isCool ? "#2980b9" : "#c0392b") : "#9aa4ad";
 		const effectiveAccent = d.poolVisualOn ? "#8a3b32" : "#59636e";
 		const dial = root.querySelector('[data-role="pc-dial"]');
 		if (dial) {
@@ -1492,7 +1494,7 @@ class PoolControllerCard extends HTMLElement {
 		
 		const frost = c.frost_entity ? this._isOn(h.states[c.frost_entity]) : false;
 		const quiet = c.quiet_entity ? this._isOn(h.states[c.quiet_entity]) : false;
-		const climateHeat = hvac === "heat";
+		const climateHeat = hvac === "heat" || hvac === "cool";
 		const poolVisualOn = climateHeat || (!climateOff && !!(
 			mainSwitchOn ||
 			pumpSwitchOn ||
@@ -1796,6 +1798,7 @@ class PoolControllerCard extends HTMLElement {
 			shouldPumpOn,
 			shouldAuxOn,
 			poolVisualOn,
+    isCool: hvac === "cool",
 			current,
 			target: targetBase,
 			targetBase,
@@ -3501,7 +3504,8 @@ class PoolControllerCard extends HTMLElement {
 		if (bathing) return _t(lang, "status.bathing");
 		if (chlorinating) return _t(lang, "status.chlorine");
 		if (filtering) return _t(lang, "status.filter");
-		if (hvacAction === "heating" || hvacAction === "heat") return _t(lang, "status.heating");
+		if (hvacAction === "cooling" || hvacAction === "cool") return _t(lang, "status.cooling");
+  if (hvacAction === "heating" || hvacAction === "heat") return _t(lang, "status.heating");
 		if (hvacAction === "idle") return _t(lang, "status.idle");
 		if (hvac === "off") return _t(lang, "status.off");
 		return hvac || "–";
@@ -3818,9 +3822,9 @@ class PoolControllerCard extends HTMLElement {
 			if (showKey === "pause") return `<span ${moreInfo}><ha-icon icon="mdi:pause-circle" title="${tip}"></ha-icon></span>`;
 			if (showKey === "frost") return `<span ${moreInfo}><ha-icon icon="mdi:snowflake" title="${tip}"></ha-icon></span>`;
 			if (showKey === "maintenance") return `<span ${moreInfo}><ha-icon icon="mdi:tools" title="${tip}"></ha-icon></span>`;
-			if (showKey === "disabled") return `<span ${moreInfo}><ha-icon icon="mdi:radiator-off" title="${tip}"></ha-icon></span>`;
+			if (showKey === "disabled") return `<span ${moreInfo}><ha-icon icon="${d.hvac === 'cool' ? 'mdi:snowflake-off' : 'mdi:radiator-off'}" title="${tip}"></ha-icon></span>`;
 			// Unknown value: show radiator with the raw label.
-			return `<span ${moreInfo}><ha-icon icon="mdi:radiator" title="${tip}"></ha-icon></span>`;
+			return `<span ${moreInfo}><ha-icon icon="${d.hvac === 'cool' ? 'mdi:snowflake' : 'mdi:radiator'}" title="${tip}"></ha-icon></span>`;
 		}
 
 		// Legacy fallback: infer from UI state (still clickable; fallback to climate entity)
@@ -3828,7 +3832,8 @@ class PoolControllerCard extends HTMLElement {
 		if (d.bathingState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:pool" title="${title}" style="color:#8a3b32"></ha-icon></span>`;
 		if (d.chlorState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:fan" title="${title}" style="color:#27ae60"></ha-icon></span>`;
 		if (d.filterState?.active) return `<span ${moreInfo}><ha-icon icon="mdi:rotate-right" title="${title}" style="color:#2a7fdb"></ha-icon></span>`;
-		if (d.hvacAction === "heating" || d.hvacAction === "heat") return `<span ${moreInfo}><ha-icon icon="mdi:radiator" title="${title}" style="color:#c0392b"></ha-icon></span>`;
+		if (d.hvacAction === "cooling" || d.hvacAction === "cool") return `<span ${moreInfo}><ha-icon icon="mdi:snowflake" title="${title}" style="color:#2980b9"></ha-icon></span>`;
+  if (d.hvacAction === "heating" || d.hvacAction === "heat") return `<span ${moreInfo}><ha-icon icon="mdi:radiator" title="${title}" style="color:#c0392b"></ha-icon></span>`;
 		if (d.hvac === "off") return `<span ${moreInfo}><ha-icon icon="mdi:power" title="${title}" style="color:var(--secondary-text-color)"></ha-icon></span>`;
 		return `<span ${moreInfo}><ha-icon icon="mdi:thermometer" title="${title}" style="color:var(--secondary-text-color)"></ha-icon></span>`;
 	}
