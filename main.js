@@ -2226,7 +2226,8 @@ class PoolControllerCard extends HTMLElement {
 					<button class="temp-btn" data-action="inc" ${disabled ? "disabled" : ""}>+</button>
 				</div>
 				<div class="action-buttons">
-					${showPowerSavingButton ? `<button class="action-btn power-saving ${d.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" ${disabled ? "disabled" : ""} title="${d.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}"><ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span></button>` : ""}
+					<button class="action-btn heat-cool" data-action="heat-cool-toggle" ${disabled ? "disabled" : ""} style="${d.isCool ? "background:#2980b9;border-color:#2980b9;color:#fff;" : d.poolVisualOn ? "background:#c0392b;border-color:#c0392b;color:#fff;" : ""}" title="Tap to switch heating / cooling"><ha-icon icon="${d.isCool ? "mdi:snowflake" : d.poolVisualOn ? "mdi:fire" : "mdi:sun-snowflake-variant"}" style="${d.isCool || d.poolVisualOn ? "color:#fff;" : ""}"></ha-icon><span>${d.isCool ? "Cooling" : d.poolVisualOn ? "Heating" : "Heat / Cool"}</span></button>
+			 ${showPowerSavingButton ? `<button class="action-btn power-saving ${d.powerSavingActive ? "active" : ""}" data-action="power-saving-toggle" ${disabled ? "disabled" : ""} title="${d.powerSavingActive ? _t(lang, "tooltips.power_saving.active") : _t(lang, "tooltips.power_saving.inactive")}"><ha-icon icon="mdi:leaf"></ha-icon><span>${_t(lang, "actions.power_saving")}</span></button>` : ""}
 					${showAwayButton ? `<button class="action-btn away ${d.awayActive ? "active" : ""}" data-action="away-toggle" ${disabled ? "disabled" : ""} title="${d.awayActive ? _t(lang, "tooltips.away.active") : _t(lang, "tooltips.away.inactive")}"><ha-icon icon="mdi:home-export-outline"></ha-icon><span>${_t(lang, "actions.away")}</span></button>` : ""}
 					${showBlueRiiotReadButton ? `<button class="action-btn ${d.blueriiotReadPending ? "active" : ""}" data-action="blueriiot-read" ${disabled ? "disabled" : ""} title="${_t(lang, "tooltips.read_blueriiot")}"><ha-icon icon="mdi:bluetooth-connect"></ha-icon><span>${_t(lang, "actions.read_blueriiot")}</span></button>` : ""}
 					<button class="action-btn ${d.bathingState.active ? "active" : ""}" data-mode="bathing" data-duration="${finalBathDur}" data-start="${c.bathing_start || ""}" data-stop="${c.bathing_stop || ""}" data-active="${d.bathingState.active}" ${disabled ? "disabled" : ""} title="${d.bathingState.active ? _t(lang, 'tooltips.bathing.active', { mins: (d.bathingEta != null ? d.bathingEta : finalBathDur) }) : _t(lang, 'tooltips.bathing.inactive', { mins: finalBathDur })}">
@@ -2838,6 +2839,16 @@ class PoolControllerCard extends HTMLElement {
 			if (actionEl) {
 				if (actionEl.disabled || !this._hass) return;
 				const action = actionEl.getAttribute("data-action");
+    if (action === "heat-cool-toggle") {
+     ev.stopPropagation();
+     const climateEntityId = this._renderData?.climateEntityId || this._config?.climate_entity;
+     if (climateEntityId) {
+      const cur = this._hass.states[climateEntityId]?.state;
+      const next = cur === "cool" ? "heat" : "cool";
+      this._hass.callService("climate", "set_hvac_mode", { entity_id: climateEntityId, hvac_mode: next });
+     }
+     return;
+    }
 				if (action === "cost-debug-refresh") {
 					ev.stopPropagation();
 					try {
@@ -2961,7 +2972,7 @@ class PoolControllerCard extends HTMLElement {
 			const actionBtn = target.closest(".action-btn");
 			if (actionBtn) {
 				if (actionBtn.disabled) return;
-				if (actionBtn.dataset.action === "maintenance-toggle" || actionBtn.dataset.action === "away-toggle" || actionBtn.dataset.action === "power-saving-toggle" || actionBtn.dataset.action === "aux-toggle" || actionBtn.dataset.action === "dynamic-target-toggle") return;
+				if (actionBtn.dataset.action === "maintenance-toggle" || actionBtn.dataset.action === "away-toggle" || actionBtn.dataset.action === "power-saving-toggle" || actionBtn.dataset.action === "aux-toggle" || actionBtn.dataset.action === "dynamic-target-toggle" || actionBtn.dataset.action === "heat-cool-toggle") return;
 				if (maintenanceActive) return;
 				const mode = actionBtn.dataset.mode;
 				const duration = Number(actionBtn.dataset.duration);
