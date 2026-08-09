@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.8";
+const VERSION = "2.14.11";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -116,6 +116,8 @@ const I18N = {
 			water_safety_ok: "Alle Wasserwerte liegen im optimalen Bereich",
 			warning_short: "Warnung",
 			critical_short: "Kritisch",
+			ph_warning_lower: "Warnung unterhalb",
+			ph_warning_upper: "Warnung oberhalb",
 			water_safety_reason_very_low_orp: "Desinfektion sehr schwach",
 			water_safety_reason_high_ph_low_orp: "Hoher pH macht niedrigen ORP besonders kritisch",
 			water_safety_reason_low_orp: "ORP-/Chlorwert zu niedrig",
@@ -334,6 +336,8 @@ const I18N = {
 			water_safety_ok: "All water values are in the optimal range",
 			warning_short: "Warning",
 			critical_short: "Critical",
+			ph_warning_lower: "Warning below",
+			ph_warning_upper: "Warning above",
 			water_safety_reason_very_low_orp: "Sanitizing power very low",
 			water_safety_reason_high_ph_low_orp: "High pH makes low ORP especially critical",
 			water_safety_reason_low_orp: "ORP/chlorine too low",
@@ -2384,8 +2388,8 @@ class PoolControllerCard extends HTMLElement {
 			max: settings.phMax,
 			decimals: 1,
 			thresholds: [
-				{ value: settings.phWarningMin, kind: "warning", label: _t(lang, "ui.warning_short") },
-				{ value: settings.phWarningMax, kind: "warning", label: _t(lang, "ui.warning_short") },
+				{ value: settings.phWarningMin, kind: "warning", label: _t(lang, "ui.ph_warning_lower") },
+				{ value: settings.phWarningMax, kind: "warning", label: _t(lang, "ui.ph_warning_upper") },
 			],
 		});
 		const orpScale = this._renderWaterqualityScale({
