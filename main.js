@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.6";
+const VERSION = "2.14.8";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -24,6 +24,15 @@ const DEFAULTS = {
 	pv_legend_show_house_load: true,
 	pv_legend_show_surplus: true,
 	pv_legend_show_thresholds: false,
+	waterquality_show_ph: true,
+	waterquality_show_orp: true,
+	waterquality_show_salt: true,
+	waterquality_show_tds: true,
+	waterquality_show_alkalinity: true,
+	waterquality_ph_min: 6.8,
+	waterquality_ph_max: 8.2,
+	waterquality_orp_min: 300,
+	waterquality_orp_max: 800,
 };
 
 const I18N = {
@@ -105,6 +114,8 @@ const I18N = {
 			water_safety_critical: "Kritisches Wasser-kippt-Risiko",
 			water_safety_warning: "Erhöhtes Wasser-kippt-Risiko",
 			water_safety_ok: "Alle Wasserwerte liegen im optimalen Bereich",
+			warning_short: "Warnung",
+			critical_short: "Kritisch",
 			water_safety_reason_very_low_orp: "Desinfektion sehr schwach",
 			water_safety_reason_high_ph_low_orp: "Hoher pH macht niedrigen ORP besonders kritisch",
 			water_safety_reason_low_orp: "ORP-/Chlorwert zu niedrig",
@@ -146,6 +157,17 @@ const I18N = {
 			content: "Angezeigter Inhalt",
 			cost_view: "Kosten-Zeitraum",
 			cost_debug: "Kosten-Debug anzeigen",
+			waterquality_bars: "Wasserqualitäts-Balken",
+			waterquality_show_ph: "pH",
+			waterquality_show_orp: "ORP / Chlor",
+			waterquality_show_salt: "Salz",
+			waterquality_show_tds: "TDS",
+			waterquality_show_alkalinity: "Alkalinität",
+			waterquality_ranges: "Sichtbereich der Skalen",
+			waterquality_ph_min: "pH von",
+			waterquality_ph_max: "pH bis",
+			waterquality_orp_min: "ORP von (mV)",
+			waterquality_orp_max: "ORP bis (mV)",
 			pv_timerange: "PV-Zeitraum",
 			pv_series: "PV-Reihen",
 			pv_show_pv: "PV",
@@ -310,6 +332,8 @@ const I18N = {
 			water_safety_critical: "Critical water spoilage risk",
 			water_safety_warning: "Elevated water spoilage risk",
 			water_safety_ok: "All water values are in the optimal range",
+			warning_short: "Warning",
+			critical_short: "Critical",
 			water_safety_reason_very_low_orp: "Sanitizing power very low",
 			water_safety_reason_high_ph_low_orp: "High pH makes low ORP especially critical",
 			water_safety_reason_low_orp: "ORP/chlorine too low",
@@ -350,6 +374,17 @@ const I18N = {
 			content: "Displayed content",
 			cost_view: "Cost period",
 			cost_debug: "Show cost debug",
+			waterquality_bars: "Water-quality bars",
+			waterquality_show_ph: "pH",
+			waterquality_show_orp: "ORP / chlorine",
+			waterquality_show_salt: "Salt",
+			waterquality_show_tds: "TDS",
+			waterquality_show_alkalinity: "Alkalinity",
+			waterquality_ranges: "Scale display range",
+			waterquality_ph_min: "pH from",
+			waterquality_ph_max: "pH to",
+			waterquality_orp_min: "ORP from (mV)",
+			waterquality_orp_max: "ORP to (mV)",
 			pv_timerange: "PV time range",
 			pv_series: "PV series",
 			pv_show_pv: "PV",
@@ -582,6 +617,15 @@ class PoolControllerCard extends HTMLElement {
 			pv_legend_show_house_load: config.pv_legend_show_house_load ?? DEFAULTS.pv_legend_show_house_load,
 			pv_legend_show_surplus: config.pv_legend_show_surplus ?? DEFAULTS.pv_legend_show_surplus,
 			pv_legend_show_thresholds: config.pv_legend_show_thresholds ?? DEFAULTS.pv_legend_show_thresholds,
+			waterquality_show_ph: config.waterquality_show_ph ?? DEFAULTS.waterquality_show_ph,
+			waterquality_show_orp: config.waterquality_show_orp ?? DEFAULTS.waterquality_show_orp,
+			waterquality_show_salt: config.waterquality_show_salt ?? DEFAULTS.waterquality_show_salt,
+			waterquality_show_tds: config.waterquality_show_tds ?? DEFAULTS.waterquality_show_tds,
+			waterquality_show_alkalinity: config.waterquality_show_alkalinity ?? DEFAULTS.waterquality_show_alkalinity,
+			waterquality_ph_min: config.waterquality_ph_min ?? DEFAULTS.waterquality_ph_min,
+			waterquality_ph_max: config.waterquality_ph_max ?? DEFAULTS.waterquality_ph_max,
+			waterquality_orp_min: config.waterquality_orp_min ?? DEFAULTS.waterquality_orp_min,
+			waterquality_orp_max: config.waterquality_orp_max ?? DEFAULTS.waterquality_orp_max,
 		};
 		if (config.device_id) {
 			next.device_id = config.device_id;
@@ -1267,15 +1311,62 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_getWaterqualityStructureSignature(d, c) {
+		const settings = this._getWaterqualitySettings(d, c);
 		return JSON.stringify({
 			lang: _langFromHass(this._hass),
 			hasSanitizerLabel: !!d.sanitizerModeLabel,
 			hasSanitizerProductLabel: !!d.sanitizerProductLabel,
-			hasSalt: d.salt != null,
-			hasTds: d.tds != null,
 			sanitizerMode: d.sanitizerMode || "",
 			chlorOkMin: Number.isFinite(Number(c?.chlor_ok_min)) ? Number(c.chlor_ok_min) : DEFAULTS.chlor_ok_min,
+			settings,
 		});
+	}
+
+	_getWaterqualitySettings(d, c) {
+		const configuredNumber = (key, fallback, min, max) => {
+			const value = Number(c?.[key]);
+			return Number.isFinite(value) && value >= min && value <= max ? value : fallback;
+		};
+		let phMin = configuredNumber("waterquality_ph_min", DEFAULTS.waterquality_ph_min, 0, 14);
+		let phMax = configuredNumber("waterquality_ph_max", DEFAULTS.waterquality_ph_max, 0, 14);
+		let orpMin = configuredNumber("waterquality_orp_min", DEFAULTS.waterquality_orp_min, 0, 2000);
+		let orpMax = configuredNumber("waterquality_orp_max", DEFAULTS.waterquality_orp_max, 0, 2000);
+		if (phMax - phMin < 0.2) [phMin, phMax] = [DEFAULTS.waterquality_ph_min, DEFAULTS.waterquality_ph_max];
+		if (orpMax - orpMin < 50) [orpMin, orpMax] = [DEFAULTS.waterquality_orp_min, DEFAULTS.waterquality_orp_max];
+		return {
+			showPh: c?.waterquality_show_ph !== false,
+			showOrp: c?.waterquality_show_orp !== false,
+			showSalt: c?.waterquality_show_salt !== false,
+			showTds: c?.waterquality_show_tds !== false,
+			showAlkalinity: c?.waterquality_show_alkalinity !== false,
+			phMin,
+			phMax,
+			orpMin,
+			orpMax,
+			phWarningMin: Number.isFinite(Number(d?.waterSafetyPhMin)) ? Number(d.waterSafetyPhMin) : 7.0,
+			phWarningMax: Number.isFinite(Number(d?.waterSafetyPhMax)) ? Number(d.waterSafetyPhMax) : 7.8,
+			orpWarning: Number.isFinite(Number(d?.waterSafetyOrpWarning)) ? Number(d.waterSafetyOrpWarning) : 550,
+			orpCritical: Number.isFinite(Number(d?.waterSafetyOrpCritical)) ? Number(d.waterSafetyOrpCritical) : 400,
+		};
+	}
+
+	_renderWaterqualityScale({ entityId, title, value, valueText, wrapRole, markerRole, valueRole, barClass, min, max, decimals = 0, thresholds = [] }) {
+		const format = (number) => Number(number).toFixed(decimals).replace(/\.0$/, "");
+		const ticks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index / 4));
+		const visibleThresholds = thresholds.filter(({ value: threshold }) => Number.isFinite(Number(threshold)) && threshold >= min && threshold <= max);
+		return `<div class="scale-container" ${entityId ? `data-more-info="${entityId}"` : ""}>
+			<div class="scale-title-row" title="${valueText}">
+				<div class="scale-title">${title}</div>
+				<div class="scale-value" data-role="${valueRole}">${valueText}</div>
+			</div>
+			<div style="position: relative;" data-role="${wrapRole}" title="${valueText}">
+				<div class="scale-marker-line" data-role="${markerRole}" style="${value != null ? `left: ${this._pct(value, min, max)}%` : "display:none;"}"></div>
+				${visibleThresholds.map(({ value: threshold, kind }) => `<div class="scale-threshold ${kind}" style="left:${this._pct(threshold, min, max)}%"></div>`).join("")}
+				<div class="scale-bar ${barClass}">${ticks.map((_, index) => `<div class="scale-tick major" style="left:${(index / 4) * 100}%"></div>`).join("")}</div>
+			</div>
+			<div class="scale-labels">${ticks.map((tick) => `<span>${format(tick)}</span>`).join("")}</div>
+			${visibleThresholds.length ? `<div class="scale-threshold-legend">${visibleThresholds.map(({ value: threshold, kind, label }) => `<span class="${kind}">${label}: ${format(threshold)}${decimals === 0 ? " mV" : ""}</span>`).join("")}</div>` : ""}
+		</div>`;
 	}
 
 	_patchWaterqualityBlock(host, d, c) {
@@ -1318,6 +1409,7 @@ class PoolControllerCard extends HTMLElement {
 		setTitle("pc-wq-tds-wrap", tdsValueText);
 		setTitle("pc-wq-alk-wrap", alkValueText);
 
+		const settings = this._getWaterqualitySettings(d, c);
 		const setMarker = (role, value, min, max) => {
 			const marker = root.querySelector(`[data-role="${role}"]`);
 			if (!marker) return;
@@ -1328,8 +1420,8 @@ class PoolControllerCard extends HTMLElement {
 			marker.style.display = "block";
 			marker.style.left = `${this._pct(value, min, max)}%`;
 		};
-		setMarker("pc-wq-ph-marker", d.ph, 0, 14);
-		setMarker("pc-wq-chlor-marker", d.chlor, 0, 1200);
+		setMarker("pc-wq-ph-marker", d.ph, settings.phMin, settings.phMax);
+		setMarker("pc-wq-chlor-marker", d.chlor, settings.orpMin, settings.orpMax);
 		setMarker("pc-wq-salt-marker", d.salt, 0, 10);
 		setMarker("pc-wq-tds-marker", d.tds, 0, 2000);
 		setMarker("pc-wq-alk-marker", d.alkalinity, 0, 240);
@@ -1358,8 +1450,9 @@ class PoolControllerCard extends HTMLElement {
 		const items = [];
 		const waterSafetyText = this._waterSafetyMessage(d);
 		if (waterSafetyText) {
-			const waterSafetyOk = String(d?.waterSafetyStatus || "").toLowerCase() === "ok";
-			items.push(`<div class="info-badge${waterSafetyOk ? " ok" : ""}">${waterSafetyText}</div>`);
+			const waterSafetyStatus = String(d?.waterSafetyStatus || "").toLowerCase();
+			const waterSafetyClass = ["ok", "warning", "critical"].includes(waterSafetyStatus) ? ` ${waterSafetyStatus}` : "";
+			items.push(`<div class="info-badge water-safety${waterSafetyClass}">${waterSafetyText}</div>`);
 		}
 
 		if (saltAddDisplay) {
@@ -1557,9 +1650,17 @@ class PoolControllerCard extends HTMLElement {
 		const waterSafetyRiskEntityId = c.water_safety_risk_entity || this._derivedEntities?.water_safety_risk_entity || null;
 		const waterSafetyStatusEntityId = c.water_safety_status_entity || this._derivedEntities?.water_safety_status_entity || null;
 		const waterSafetyReasonEntityId = c.water_safety_reason_entity || this._derivedEntities?.water_safety_reason_entity || null;
+		const waterSafetyOrpWarningEntityId = c.water_safety_orp_warning_entity || this._derivedEntities?.water_safety_orp_warning_entity || null;
+		const waterSafetyOrpCriticalEntityId = c.water_safety_orp_critical_entity || this._derivedEntities?.water_safety_orp_critical_entity || null;
+		const waterSafetyPhMinEntityId = c.water_safety_ph_min_entity || this._derivedEntities?.water_safety_ph_min_entity || null;
+		const waterSafetyPhMaxEntityId = c.water_safety_ph_max_entity || this._derivedEntities?.water_safety_ph_max_entity || null;
 		const waterSafetyRisk = waterSafetyRiskEntityId ? this._isOn(h.states[waterSafetyRiskEntityId]) : false;
 		const waterSafetyStatus = waterSafetyStatusEntityId ? (h.states[waterSafetyStatusEntityId]?.state || null) : null;
 		const waterSafetyReason = waterSafetyReasonEntityId ? (h.states[waterSafetyReasonEntityId]?.state || null) : null;
+		const waterSafetyOrpWarning = waterSafetyOrpWarningEntityId ? this._num(h.states[waterSafetyOrpWarningEntityId]?.state) : null;
+		const waterSafetyOrpCritical = waterSafetyOrpCriticalEntityId ? this._num(h.states[waterSafetyOrpCriticalEntityId]?.state) : null;
+		const waterSafetyPhMin = waterSafetyPhMinEntityId ? this._num(h.states[waterSafetyPhMinEntityId]?.state) : null;
+		const waterSafetyPhMax = waterSafetyPhMaxEntityId ? this._num(h.states[waterSafetyPhMaxEntityId]?.state) : null;
 		const waterSafetyStatusLabel = this._waterSafetyStatusLabel(waterSafetyStatus);
 		const waterSafetyReasonLabel = this._waterSafetyReasonLabel(waterSafetyReason);
 		const salt = saltEntityId ? this._num(h.states[saltEntityId]?.state) : null;
@@ -1828,6 +1929,10 @@ class PoolControllerCard extends HTMLElement {
 			waterSafetyRisk,
 			waterSafetyStatus,
 			waterSafetyReason,
+			waterSafetyOrpWarning,
+			waterSafetyOrpCritical,
+			waterSafetyPhMin,
+			waterSafetyPhMax,
 			waterSafetyStatusLabel,
 			waterSafetyReasonLabel,
 			tdsAssessment, waterChangePercent, waterChangeLiters,
@@ -2025,6 +2130,12 @@ class PoolControllerCard extends HTMLElement {
 			.scale-label-abs { position: absolute; bottom: 0; transform: translateX(-50%); white-space: nowrap; }
 			.scale-label-abs.first { transform: translateX(0); }
 			.scale-label-abs.last { transform: translateX(-100%); }
+			.scale-threshold { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); z-index: 2; pointer-events: none; }
+			.scale-threshold.warning { background: #f9a825; }
+			.scale-threshold.critical { background: #c62828; width: 3px; }
+			.scale-threshold-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; font-size: 11px; font-weight: 700; }
+			.scale-threshold-legend .warning { color: #a85d00; }
+			.scale-threshold-legend .critical { color: #c62828; }
 			/* Marker sollen im Balken sitzen (nicht über der Überschrift). */
 			.scale-marker { position: absolute; top: 8px; transform: translateX(-50%); z-index: 1; }
 			.marker-value { background: #0b132b; color: #fff; padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; white-space: nowrap; position: relative; }
@@ -2046,6 +2157,8 @@ class PoolControllerCard extends HTMLElement {
 			}
 			.info-badge { padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--pc-surface) 85%, var(--pc-border) 15%); font-size: 13px; border: 1px solid var(--pc-border); font-weight: 500; }
 			.info-badge.ok { background: color-mix(in srgb, var(--pc-surface) 82%, #2e7d32 18%); border-color: color-mix(in srgb, var(--pc-border) 45%, #2e7d32 55%); color: var(--primary-text-color); }
+			.info-badge.water-safety.warning { background: color-mix(in srgb, var(--pc-surface) 82%, #f9a825 18%); border-color: color-mix(in srgb, var(--pc-border) 40%, #f9a825 60%); }
+			.info-badge.water-safety.critical { background: color-mix(in srgb, var(--pc-surface) 82%, #c62828 18%); border-color: color-mix(in srgb, var(--pc-border) 40%, #c62828 60%); }
 			
 			.maintenance { border: 1px solid #f3c2a2; border-radius: 12px; padding: 16px; background: color-mix(in srgb, var(--pc-surface) 90%, #f3c2a2 10%); margin-top: 16px; }
 			.maintenance .section-title { color: #c0392b; }
@@ -2054,6 +2167,10 @@ class PoolControllerCard extends HTMLElement {
 			.maintenance-item.ok { background: color-mix(in srgb, var(--pc-surface) 88%, #2e7d32 12%); border-color: color-mix(in srgb, var(--pc-border) 35%, #2e7d32 65%); }
 			.maintenance-item ha-icon { --mdc-icon-size: 24px; color: #c0392b; }
 			.maintenance-item.ok ha-icon { color: #2e7d32; }
+			.maintenance-item.water-safety.warning { background: color-mix(in srgb, var(--pc-surface) 86%, #f9a825 14%); border-color: color-mix(in srgb, var(--pc-border) 35%, #f9a825 65%); }
+			.maintenance-item.water-safety.critical { background: color-mix(in srgb, var(--pc-surface) 86%, #c62828 14%); border-color: color-mix(in srgb, var(--pc-border) 35%, #c62828 65%); }
+			.maintenance-item.water-safety.warning ha-icon, .maintenance-item.water-safety.warning .maintenance-label, .maintenance-item.water-safety.warning .maintenance-value { color: #b26a00; }
+			.maintenance-item.water-safety.critical ha-icon, .maintenance-item.water-safety.critical .maintenance-label, .maintenance-item.water-safety.critical .maintenance-value { color: #c62828; }
 			.maintenance-text { flex: 1; }
 			.maintenance-label { font-weight: 600; color: #8a3b32; }
 			.maintenance-value { font-size: 18px; font-weight: 700; color: #c0392b; margin-top: 2px; }
@@ -2253,47 +2370,47 @@ class PoolControllerCard extends HTMLElement {
 		const alkValueText = d.alkalinity != null
 			? `${d.alkalinity.toFixed(0)} ppm${d.alkalinityStatusLabel ? ` · ${d.alkalinityStatusLabel}` : ""}`
 			: "–";
+		const settings = this._getWaterqualitySettings(d, c);
+		const phScale = this._renderWaterqualityScale({
+			entityId: d.phEntityId,
+			title: _t(lang, "ui.ph"),
+			value: d.ph,
+			valueText: phValueText,
+			wrapRole: "pc-wq-ph-wrap",
+			markerRole: "pc-wq-ph-marker",
+			valueRole: "pc-wq-ph-value",
+			barClass: "ph-bar",
+			min: settings.phMin,
+			max: settings.phMax,
+			decimals: 1,
+			thresholds: [
+				{ value: settings.phWarningMin, kind: "warning", label: _t(lang, "ui.warning_short") },
+				{ value: settings.phWarningMax, kind: "warning", label: _t(lang, "ui.warning_short") },
+			],
+		});
+		const orpScale = this._renderWaterqualityScale({
+			entityId: d.chlorEntityId,
+			title: _t(lang, "ui.chlorine"),
+			value: d.chlor,
+			valueText: chlorValueText,
+			wrapRole: "pc-wq-chlor-wrap",
+			markerRole: "pc-wq-chlor-marker",
+			valueRole: "pc-wq-chlor-value",
+			barClass: "chlor-bar",
+			min: settings.orpMin,
+			max: settings.orpMax,
+			thresholds: [
+				{ value: settings.orpCritical, kind: "critical", label: _t(lang, "ui.critical_short") },
+				{ value: settings.orpWarning, kind: "warning", label: _t(lang, "ui.warning_short") },
+			],
+		});
 		const hintsHtml = this._renderWaterqualityHints(d, c, lang);
 		return `<div class="quality" data-role="pc-waterquality-root">
 				${d.sanitizerModeLabel ? `<div class="info-badge" data-role="pc-wq-sanitizer" ${(d.sanitizerProductEntityId || d.sanitizerModeEntityId) ? `data-more-info="${d.sanitizerProductEntityId || d.sanitizerModeEntityId}"` : ''}>${_t(lang, "ui.sanitizer")}: ${d.sanitizerModeLabel}${d.sanitizerProductLabel ? ` · ${_t(lang, "ui.sanitizer_product")}: ${d.sanitizerProductLabel}` : ""}</div>` : ""}
-				<div class="scale-container" ${d.phEntityId ? `data-more-info="${d.phEntityId}"` : ''}>
-					<div class="scale-title-row" title="${phValueText}">
-						<div class="scale-title">${_t(lang, "ui.ph")}</div>
-						<div class="scale-value" data-role="pc-wq-ph-value">${phValueText}</div>
-					</div>
-					<div style="position: relative;" data-role="pc-wq-ph-wrap" title="${phValueText}">
-						<div class="scale-marker-line" data-role="pc-wq-ph-marker" style="${d.ph != null ? `left: ${this._pct(d.ph, 0, 14)}%` : "display:none;"}"></div>
-						<div class="scale-bar ph-bar">
-							${Array.from({length: 15}, (_, i) => `<div class="scale-tick major" style="left: ${(i / 14) * 100}%"></div>`).join("")}
-							${Array.from({length: 14}, (_, i) => `<div class="scale-tick minor" style="left: ${((i + 0.5) / 14) * 100}%"></div>`).join("")}
-						</div>
-					</div>
-					<div class="scale-labels-abs">
-						${Array.from({ length: 15 }, (_, i) => {
-							const cls = `scale-label-abs${i === 0 ? " first" : ""}${i === 14 ? " last" : ""}`;
-							return `<span class="${cls}" style="left: ${(i / 14) * 100}%">${i}</span>`;
-						}).join("")}
-					</div>
-				</div>
+				${settings.showPh ? phScale : ""}
+				${settings.showOrp ? orpScale : ""}
 				
-				<div class="scale-container" ${d.chlorEntityId ? `data-more-info="${d.chlorEntityId}"` : ''}>
-					<div class="scale-title-row" title="${chlorValueText}">
-						<div class="scale-title">${_t(lang, "ui.chlorine")}</div>
-						<div class="scale-value" data-role="pc-wq-chlor-value">${chlorValueText}</div>
-					</div>
-					<div style="position: relative;" data-role="pc-wq-chlor-wrap" title="${chlorValueText}">
-						<div class="scale-marker-line" data-role="pc-wq-chlor-marker" style="${d.chlor != null ? `left: ${this._pct(d.chlor, 0, 1200)}%` : "display:none;"}"></div>
-						<div class="scale-bar chlor-bar">
-							${[0, 300, 600, 900, 1200].map((n, i) => `<div class="scale-tick major" style="left: ${(i / 4) * 100}%"></div>`).join("")}
-							${[1, 2, 3].map(i => `<div class="scale-tick minor" style="left: ${((i - 0.5) / 4) * 100}%"></div>`).join("")}
-						</div>
-					</div>
-					<div class="scale-labels">
-						<span>0</span><span>300</span><span>600</span><span>900</span><span>1200</span>
-					</div>
-				</div>
-				
-				${(d.salt != null) ? `
+				${settings.showSalt ? `
 				<div class="scale-container" ${d.saltEntityId ? `data-more-info="${d.saltEntityId}"` : ''}>
 					<div class="scale-title-row" title="${saltValueText}">
 						<div class="scale-title">${_t(lang, "ui.salt")}</div>
@@ -2313,7 +2430,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>` : ""}
 
-				${(d.tds != null) ? `
+				${settings.showTds ? `
 				<div class="scale-container" ${d.tdsEntityId ? `data-more-info="${d.tdsEntityId}"` : ''}>
 					<div class="scale-title-row" title="${tdsValueText}">
 						<div class="scale-title">${_t(lang, "ui.tds")}</div>
@@ -2330,7 +2447,7 @@ class PoolControllerCard extends HTMLElement {
 					</div>
 				</div>` : ""}
 
-				<div class="scale-container" ${(d.alkalinityEntityId || d.alkalinityStatusEntityId) ? `data-more-info="${d.alkalinityEntityId || d.alkalinityStatusEntityId}"` : ''}>
+				${settings.showAlkalinity ? `<div class="scale-container" ${(d.alkalinityEntityId || d.alkalinityStatusEntityId) ? `data-more-info="${d.alkalinityEntityId || d.alkalinityStatusEntityId}"` : ''}>
 					<div class="scale-title-row" title="${alkValueText}">
 						<div class="scale-title">${_t(lang, "ui.alkalinity")}</div>
 						<div class="scale-value" data-role="pc-wq-alk-value">${alkValueText}</div>
@@ -2344,7 +2461,7 @@ class PoolControllerCard extends HTMLElement {
 					<div class="scale-labels">
 						<span>0</span><span>60</span><span>120</span><span>180</span><span>240</span>
 					</div>
-				</div>
+				</div>` : ""}
 				<div data-role="pc-wq-hints-host">${hintsHtml}</div>
 		</div>`;
 	}
@@ -2472,7 +2589,8 @@ class PoolControllerCard extends HTMLElement {
 		const waterSafetyStatus = String(d.waterSafetyStatus || "").toLowerCase();
 		const waterSafetyMessage = this._waterSafetyMessage(d);
 		if (waterSafetyMessage && (waterSafetyStatus === "critical" || waterSafetyStatus === "warning" || d.waterSafetyRisk)) {
-			items.unshift(`<div class="maintenance-item" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:alert-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${waterSafetyMessage}</div></div></div>`);
+			const waterSafetyIcon = waterSafetyStatus === "critical" ? "mdi:alert-octagon" : "mdi:alert";
+			items.unshift(`<div class="maintenance-item water-safety ${waterSafetyStatus}" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="${waterSafetyIcon}"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${waterSafetyMessage}</div></div></div>`);
 		} else if (waterSafetyStatus === "ok") {
 			items.push(`<div class="maintenance-item ok" ${waterSafetyEntityForInfo ? `data-more-info="${waterSafetyEntityForInfo}"` : ""}><ha-icon icon="mdi:check-decagram"></ha-icon><div class="maintenance-text"><div class="maintenance-label">${_t(lang, "ui.water_quality")}</div><div class="maintenance-value">${_t(lang, "ui.water_safety_ok")}</div></div></div>`);
 		}
@@ -4075,6 +4193,14 @@ class PoolControllerCard extends HTMLElement {
 					c?.water_safety_risk_entity,
 					c?.water_safety_status_entity,
 					c?.water_safety_reason_entity,
+					c?.water_safety_orp_warning_entity,
+					c?.water_safety_orp_critical_entity,
+					c?.water_safety_ph_min_entity,
+					c?.water_safety_ph_max_entity,
+					this._derivedEntities?.water_safety_orp_warning_entity,
+					this._derivedEntities?.water_safety_orp_critical_entity,
+					this._derivedEntities?.water_safety_ph_min_entity,
+					this._derivedEntities?.water_safety_ph_max_entity,
 					c?.water_change_percent_entity,
 					c?.water_change_liters_entity,
 					c?.alkalinity_entity,
@@ -4544,6 +4670,10 @@ class PoolControllerCard extends HTMLElement {
 			water_safety_risk_entity: prefer('water_safety_risk_entity'),
 			water_safety_status_entity: prefer('water_safety_status_entity'),
 			water_safety_reason_entity: prefer('water_safety_reason_entity'),
+			water_safety_orp_warning_entity: prefer('water_safety_orp_warning_entity'),
+			water_safety_orp_critical_entity: prefer('water_safety_orp_critical_entity'),
+			water_safety_ph_min_entity: prefer('water_safety_ph_min_entity'),
+			water_safety_ph_max_entity: prefer('water_safety_ph_max_entity'),
 			water_change_percent_entity: prefer('water_change_percent_entity'),
 			water_change_liters_entity: prefer('water_change_liters_entity'),
 			alkalinity_entity: prefer('alkalinity_entity'),
@@ -4740,6 +4870,10 @@ class PoolControllerCard extends HTMLElement {
 			water_safety_risk_entity: this._pickEntity(entries, "binary_sensor", ["water_safety_risk"]) || null,
 			water_safety_status_entity: this._pickEntity(entries, "sensor", ["water_safety_status"]) || null,
 			water_safety_reason_entity: this._pickEntity(entries, "sensor", ["water_safety_reason"]) || null,
+			water_safety_orp_warning_entity: this._pickEntity(entries, "sensor", ["water_safety_orp_warning_mv"]) || null,
+			water_safety_orp_critical_entity: this._pickEntity(entries, "sensor", ["water_safety_orp_critical_mv"]) || null,
+			water_safety_ph_min_entity: this._pickEntity(entries, "sensor", ["water_safety_ph_min"]) || null,
+			water_safety_ph_max_entity: this._pickEntity(entries, "sensor", ["water_safety_ph_max"]) || null,
 			water_change_liters_entity: this._pickEntity(entries, "sensor", ["tds_water_change_liters", "water_change_liters"]) || null,
 			water_change_percent_entity: this._pickEntity(entries, "sensor", ["tds_water_change_percent", "water_change_percent"]) || null,
 			alkalinity_entity: this._pickEntity(entries, "sensor", ["alkalinity_estimated_ppm"]) || null,
@@ -4859,6 +4993,25 @@ class PoolControllerCardEditor extends HTMLElement {
 					<span>${_t(lang, "editor.cost_debug")}</span>
 				</label>
 			</div>
+			<div class="row" id="waterquality-bars-row" style="display:none;">
+				<label>${_t(lang, "editor.waterquality_bars")}</label>
+				<div class="grid2">
+					<label style="display:flex;align-items:center;gap:8px;"><input id="waterquality-show-ph" type="checkbox" /><span>${_t(lang, "editor.waterquality_show_ph")}</span></label>
+					<label style="display:flex;align-items:center;gap:8px;"><input id="waterquality-show-orp" type="checkbox" /><span>${_t(lang, "editor.waterquality_show_orp")}</span></label>
+					<label style="display:flex;align-items:center;gap:8px;"><input id="waterquality-show-salt" type="checkbox" /><span>${_t(lang, "editor.waterquality_show_salt")}</span></label>
+					<label style="display:flex;align-items:center;gap:8px;"><input id="waterquality-show-tds" type="checkbox" /><span>${_t(lang, "editor.waterquality_show_tds")}</span></label>
+					<label style="display:flex;align-items:center;gap:8px;"><input id="waterquality-show-alkalinity" type="checkbox" /><span>${_t(lang, "editor.waterquality_show_alkalinity")}</span></label>
+				</div>
+			</div>
+			<div class="row" id="waterquality-ranges-row" style="display:none;">
+				<label>${_t(lang, "editor.waterquality_ranges")}</label>
+				<div class="grid2">
+					<label class="row">${_t(lang, "editor.waterquality_ph_min")}<input id="waterquality-ph-min" type="number" min="0" max="14" step="0.1" /></label>
+					<label class="row">${_t(lang, "editor.waterquality_ph_max")}<input id="waterquality-ph-max" type="number" min="0" max="14" step="0.1" /></label>
+					<label class="row">${_t(lang, "editor.waterquality_orp_min")}<input id="waterquality-orp-min" type="number" min="0" max="2000" step="10" /></label>
+					<label class="row">${_t(lang, "editor.waterquality_orp_max")}<input id="waterquality-orp-max" type="number" min="0" max="2000" step="10" /></label>
+				</div>
+			</div>
 			<div class="row" id="pv-range-row" style="display:none;">
 				<label>${_t(lang, "editor.pv_timerange")}</label>
 				<select id="pv-range-select" style="padding:8px; border:1px solid #d0d7de; border-radius:8px; background:#fff;">
@@ -4963,6 +5116,17 @@ class PoolControllerCardEditor extends HTMLElement {
 				const costDebugRow = this.shadowRoot.querySelector('#cost-debug-row');
 				const costSelect = this.shadowRoot.querySelector('#cost-view-select');
 				const costDebugToggle = this.shadowRoot.querySelector('#cost-debug-toggle');
+				const waterqualityBarsRow = this.shadowRoot.querySelector('#waterquality-bars-row');
+				const waterqualityRangesRow = this.shadowRoot.querySelector('#waterquality-ranges-row');
+				const waterqualityShowPh = this.shadowRoot.querySelector('#waterquality-show-ph');
+				const waterqualityShowOrp = this.shadowRoot.querySelector('#waterquality-show-orp');
+				const waterqualityShowSalt = this.shadowRoot.querySelector('#waterquality-show-salt');
+				const waterqualityShowTds = this.shadowRoot.querySelector('#waterquality-show-tds');
+				const waterqualityShowAlkalinity = this.shadowRoot.querySelector('#waterquality-show-alkalinity');
+				const waterqualityPhMin = this.shadowRoot.querySelector('#waterquality-ph-min');
+				const waterqualityPhMax = this.shadowRoot.querySelector('#waterquality-ph-max');
+				const waterqualityOrpMin = this.shadowRoot.querySelector('#waterquality-orp-min');
+				const waterqualityOrpMax = this.shadowRoot.querySelector('#waterquality-orp-max');
 				const pvRangeRow = this.shadowRoot.querySelector('#pv-range-row');
 				const pvSeriesRow = this.shadowRoot.querySelector('#pv-series-row');
 				const pvLegendRow = this.shadowRoot.querySelector('#pv-legend-row');
@@ -4983,6 +5147,15 @@ class PoolControllerCardEditor extends HTMLElement {
 				const pvCopyStatus = this.shadowRoot.querySelector('#pv-copy-status');
 				if (costSelect && this._config && this._config.cost_view) costSelect.value = this._config.cost_view;
 				if (costDebugToggle) costDebugToggle.checked = !!this._config?.debug_cost;
+				if (waterqualityShowPh) waterqualityShowPh.checked = this._config?.waterquality_show_ph !== false;
+				if (waterqualityShowOrp) waterqualityShowOrp.checked = this._config?.waterquality_show_orp !== false;
+				if (waterqualityShowSalt) waterqualityShowSalt.checked = this._config?.waterquality_show_salt !== false;
+				if (waterqualityShowTds) waterqualityShowTds.checked = this._config?.waterquality_show_tds !== false;
+				if (waterqualityShowAlkalinity) waterqualityShowAlkalinity.checked = this._config?.waterquality_show_alkalinity !== false;
+				if (waterqualityPhMin) waterqualityPhMin.value = String(this._config?.waterquality_ph_min ?? DEFAULTS.waterquality_ph_min);
+				if (waterqualityPhMax) waterqualityPhMax.value = String(this._config?.waterquality_ph_max ?? DEFAULTS.waterquality_ph_max);
+				if (waterqualityOrpMin) waterqualityOrpMin.value = String(this._config?.waterquality_orp_min ?? DEFAULTS.waterquality_orp_min);
+				if (waterqualityOrpMax) waterqualityOrpMax.value = String(this._config?.waterquality_orp_max ?? DEFAULTS.waterquality_orp_max);
 				if (pvRangeSelect) pvRangeSelect.value = (this._config?.pv_timerange || DEFAULTS.pv_timerange);
 				if (pvShowPv) pvShowPv.checked = this._config?.pv_show_pv !== false;
 				if (pvShowPoolLoad) pvShowPoolLoad.checked = this._config?.pv_show_pool_load !== false;
@@ -4998,6 +5171,8 @@ class PoolControllerCardEditor extends HTMLElement {
 				const toggleExtraRows = (val) => {
 					if (costRow) costRow.style.display = (val === 'cost') ? 'grid' : 'none';
 					if (costDebugRow) costDebugRow.style.display = (val === 'cost') ? 'grid' : 'none';
+					if (waterqualityBarsRow) waterqualityBarsRow.style.display = (val === 'waterquality') ? 'grid' : 'none';
+					if (waterqualityRangesRow) waterqualityRangesRow.style.display = (val === 'waterquality') ? 'grid' : 'none';
 					if (pvRangeRow) pvRangeRow.style.display = (val === 'pv') ? 'grid' : 'none';
 					if (pvSeriesRow) pvSeriesRow.style.display = (val === 'pv') ? 'grid' : 'none';
 					if (pvLegendRow) pvLegendRow.style.display = (val === 'pv') ? 'grid' : 'none';
@@ -5020,6 +5195,22 @@ class PoolControllerCardEditor extends HTMLElement {
 				if (costDebugToggle) {
 					costDebugToggle.onchange = (e) => { this._updateConfig({ debug_cost: !!e.target.checked }); };
 				}
+				if (waterqualityShowPh) waterqualityShowPh.onchange = (e) => this._updateConfig({ waterquality_show_ph: !!e.target.checked });
+				if (waterqualityShowOrp) waterqualityShowOrp.onchange = (e) => this._updateConfig({ waterquality_show_orp: !!e.target.checked });
+				if (waterqualityShowSalt) waterqualityShowSalt.onchange = (e) => this._updateConfig({ waterquality_show_salt: !!e.target.checked });
+				if (waterqualityShowTds) waterqualityShowTds.onchange = (e) => this._updateConfig({ waterquality_show_tds: !!e.target.checked });
+				if (waterqualityShowAlkalinity) waterqualityShowAlkalinity.onchange = (e) => this._updateConfig({ waterquality_show_alkalinity: !!e.target.checked });
+				const updateWaterqualityNumber = (key, input) => {
+					if (!input) return;
+					input.onchange = () => {
+						const value = Number(input.value);
+						if (Number.isFinite(value)) this._updateConfig({ [key]: value });
+					};
+				};
+				updateWaterqualityNumber('waterquality_ph_min', waterqualityPhMin);
+				updateWaterqualityNumber('waterquality_ph_max', waterqualityPhMax);
+				updateWaterqualityNumber('waterquality_orp_min', waterqualityOrpMin);
+				updateWaterqualityNumber('waterquality_orp_max', waterqualityOrpMax);
 				if (pvRangeSelect) {
 					pvRangeSelect.onchange = (e) => { this._updateConfig({ pv_timerange: e.target.value }); };
 				}
@@ -5437,6 +5628,15 @@ class PoolControllerCardEditor extends HTMLElement {
 			pv_legend_show_house_load: merged.pv_legend_show_house_load ?? DEFAULTS.pv_legend_show_house_load,
 			pv_legend_show_surplus: merged.pv_legend_show_surplus ?? DEFAULTS.pv_legend_show_surplus,
 			pv_legend_show_thresholds: merged.pv_legend_show_thresholds ?? DEFAULTS.pv_legend_show_thresholds,
+			waterquality_show_ph: merged.waterquality_show_ph ?? DEFAULTS.waterquality_show_ph,
+			waterquality_show_orp: merged.waterquality_show_orp ?? DEFAULTS.waterquality_show_orp,
+			waterquality_show_salt: merged.waterquality_show_salt ?? DEFAULTS.waterquality_show_salt,
+			waterquality_show_tds: merged.waterquality_show_tds ?? DEFAULTS.waterquality_show_tds,
+			waterquality_show_alkalinity: merged.waterquality_show_alkalinity ?? DEFAULTS.waterquality_show_alkalinity,
+			waterquality_ph_min: merged.waterquality_ph_min ?? DEFAULTS.waterquality_ph_min,
+			waterquality_ph_max: merged.waterquality_ph_max ?? DEFAULTS.waterquality_ph_max,
+			waterquality_orp_min: merged.waterquality_orp_min ?? DEFAULTS.waterquality_orp_min,
+			waterquality_orp_max: merged.waterquality_orp_max ?? DEFAULTS.waterquality_orp_max,
 		};
 		if (merged.device_id) {
 			next.device_id = merged.device_id;
