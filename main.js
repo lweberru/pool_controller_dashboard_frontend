@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.11";
+const VERSION = "2.14.12";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -1354,7 +1354,61 @@ class PoolControllerCard extends HTMLElement {
 		};
 	}
 
-	_renderWaterqualityScale({ entityId, title, value, valueText, wrapRole, markerRole, valueRole, barClass, min, max, decimals = 0, thresholds = [] }) {
+	_getOrpGradient(min, max, critLow = 400, warnLow = 550) {
+		const safeCritLow = Number.isFinite(critLow) ? critLow : 400;
+		const safeWarnLow = Number.isFinite(warnLow) ? Math.max(warnLow, safeCritLow + 20) : Math.max(550, safeCritLow + 20);
+		const optHigh = 760;
+		const warnHigh = 810;
+		const critHigh = 880;
+
+		const span = Math.max(1, max - min);
+		const pct = (v) => Math.max(0, Math.min(100, ((v - min) / span) * 100));
+
+		const red = "#d7263d";
+		const yellow = "#f5a524";
+		const green = "#1bbc63";
+
+		const t1 = safeCritLow;
+		const t2 = safeCritLow + Math.min(50, (safeWarnLow - safeCritLow) * 0.4);
+		const t3 = safeWarnLow;
+		const t4 = safeWarnLow + Math.min(70, Math.max(30, (optHigh - safeWarnLow) * 0.35));
+		const t5 = Math.max(t4 + 20, optHigh);
+		const t6 = Math.max(t5 + 20, warnHigh);
+		const t7 = Math.max(t6 + 30, critHigh);
+
+		const rawStops = [
+			{ p: pct(min), c: red },
+			{ p: pct(t1), c: red },
+			{ p: pct(t2), c: yellow },
+			{ p: pct(t3), c: yellow },
+			{ p: pct(t4), c: green },
+			{ p: pct(t5), c: green },
+			{ p: pct(t6), c: yellow },
+			{ p: pct(t7), c: red },
+			{ p: pct(max), c: red }
+		];
+
+		rawStops.sort((a, b) => a.p - b.p);
+
+		const cleanStops = [];
+		for (let i = 0; i < rawStops.length; i++) {
+			const s = rawStops[i];
+			if (cleanStops.length > 0 && Math.abs(cleanStops[cleanStops.length - 1].p - s.p) < 0.1) {
+				continue;
+			}
+			cleanStops.push(s);
+		}
+		if (cleanStops.length === 0 || cleanStops[0].p > 0) {
+			cleanStops.unshift({ p: 0, c: rawStops[0]?.c || red });
+		}
+		if (cleanStops[cleanStops.length - 1].p < 100) {
+			cleanStops.push({ p: 100, c: rawStops[rawStops.length - 1]?.c || red });
+		}
+
+		return `linear-gradient(90deg, ${cleanStops.map(s => `${s.c} ${s.p.toFixed(1)}%`).join(", ")})`;
+	}
+
+	_renderWaterqualityScale({ entityId, title, value, valueText, wrapRole, markerRole, valueRole, barClass, barStyle = "", min, max, decimals = 0, thresholds = [] }) {
 		const format = (number) => Number(number).toFixed(decimals).replace(/\.0$/, "");
 		const ticks = Array.from({ length: 5 }, (_, index) => min + ((max - min) * index / 4));
 		const visibleThresholds = thresholds.filter(({ value: threshold }) => Number.isFinite(Number(threshold)) && threshold >= min && threshold <= max);
@@ -1366,7 +1420,7 @@ class PoolControllerCard extends HTMLElement {
 			<div style="position: relative;" data-role="${wrapRole}" title="${valueText}">
 				<div class="scale-marker-line" data-role="${markerRole}" style="${value != null ? `left: ${this._pct(value, min, max)}%` : "display:none;"}"></div>
 				${visibleThresholds.map(({ value: threshold, kind }) => `<div class="scale-threshold ${kind}" style="left:${this._pct(threshold, min, max)}%"></div>`).join("")}
-				<div class="scale-bar ${barClass}">${ticks.map((_, index) => `<div class="scale-tick major" style="left:${(index / 4) * 100}%"></div>`).join("")}</div>
+				<div class="scale-bar ${barClass}" style="${barStyle}">${ticks.map((_, index) => `<div class="scale-tick major" style="left:${(index / 4) * 100}%"></div>`).join("")}</div>
 			</div>
 			<div class="scale-labels">${ticks.map((tick) => `<span>${format(tick)}</span>`).join("")}</div>
 			${visibleThresholds.length ? `<div class="scale-threshold-legend">${visibleThresholds.map(({ value: threshold, kind, label }) => `<span class="${kind}">${label}: ${format(threshold)}${decimals === 0 ? " mV" : ""}</span>`).join("")}</div>` : ""}
@@ -1414,6 +1468,11 @@ class PoolControllerCard extends HTMLElement {
 		setTitle("pc-wq-alk-wrap", alkValueText);
 
 		const settings = this._getWaterqualitySettings(d, c);
+		const chlorBar = root.querySelector('[data-role="pc-wq-chlor-wrap"] .scale-bar');
+		if (chlorBar) {
+			chlorBar.style.background = this._getOrpGradient(settings.orpMin, settings.orpMax, settings.orpCritical, settings.orpWarning);
+		}
+
 		const setMarker = (role, value, min, max) => {
 			const marker = root.querySelector(`[data-role="${role}"]`);
 			if (!marker) return;
@@ -2121,7 +2180,7 @@ class PoolControllerCard extends HTMLElement {
 			.scale-bar { height: 50px; border-radius: 10px; position: relative; overflow: visible; }
 			.scale-marker-line { position: absolute; top: 0; bottom: 0; width: 2px; background: #0b132b; transform: translateX(-50%); z-index: 1; }
 			.ph-bar { background: linear-gradient(90deg, #d7263d 0%, #e45a2a 7%, #fbb13c 14%, #f6d32b 21%, #8bd448 35%, #27ae60 50%, #1abc9c 65%, #1c9ed8 78%, #2a7fdb 85%, #5c4ac7 100%); }
-			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #f5a524 25%, #1bbc63 50%, #1bbc63 75%, #f5a524 87%, #d7263d 100%); }
+			.chlor-bar { background: linear-gradient(90deg, #d7263d 0%, #d7263d 30%, #f5a524 45%, #1bbc63 60%, #1bbc63 80%, #f5a524 90%, #d7263d 100%); }
 			.salt-bar { background: linear-gradient(90deg, #e6f7ff 0%, #7fd1ff 50%, #0a84ff 100%); }
 			.tds-bar { background: linear-gradient(90deg, #2ecc71 0%, #f1c40f 50%, #e74c3c 100%); }
 			.scale-tick { position: absolute; bottom: 0; width: 2px; background: rgba(255,255,255,0.4); height: 50%; pointer-events: none; }
@@ -2401,6 +2460,7 @@ class PoolControllerCard extends HTMLElement {
 			markerRole: "pc-wq-chlor-marker",
 			valueRole: "pc-wq-chlor-value",
 			barClass: "chlor-bar",
+			barStyle: `background: ${this._getOrpGradient(settings.orpMin, settings.orpMax, settings.orpCritical, settings.orpWarning)};`,
 			min: settings.orpMin,
 			max: settings.orpMax,
 			thresholds: [
