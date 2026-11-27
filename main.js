@@ -4,7 +4,7 @@
  * - Supports `content` config: controller | calendar | waterquality | maintenance | cost | pv (default: controller)
  */
 
-const VERSION = "2.14.12";
+const VERSION = "2.14.13";
 try { console.info(`[pool_controller_dashboard_frontend] loaded v${VERSION}`); } catch (_e) {}
 
 const CARD_TYPE = "pc-pool-controller";
@@ -3028,16 +3028,7 @@ class PoolControllerCard extends HTMLElement {
 				}
 				if (action === "blueriiot-read") {
 					ev.stopPropagation();
-					this._runOptimisticAction("blueriiot-read", true, () => {
-					if (eff.blueriiot_read_button) {
-						this._triggerEntity(eff.blueriiot_read_button, true);
-						return Promise.resolve();
-					}
-					if (this._hasService("pool_controller", "read_blueriiot")) {
-						return this._hass.callService("pool_controller", "read_blueriiot", this._buildTargetObject());
-					}
-					return Promise.resolve();
-					}, 15000);
+					this._readBlueRiiot(eff);
 					return;
 				}
 				if (action === "maintenance-toggle") {
@@ -3533,6 +3524,25 @@ class PoolControllerCard extends HTMLElement {
 		return this._hass.callService("homeassistant", turnOn ? "turn_on" : "turn_off", { entity_id: entityId });
 	}
 
+	async _readBlueRiiot(config) {
+		if (this._blueriiotReadPending) return;
+		this._blueriiotReadPending = true;
+		this._render();
+		try {
+			// Both backend paths await the measurement and coordinator refresh.
+			if (config.blueriiot_read_button) {
+				await this._triggerEntity(config.blueriiot_read_button, true);
+			} else if (this._hasService("pool_controller", "read_blueriiot")) {
+				await this._hass.callService("pool_controller", "read_blueriiot", this._buildTargetObject());
+			}
+		} catch (_e) {
+			// A failed request has finished too; release the active state for a retry.
+		} finally {
+			this._blueriiotReadPending = false;
+			this._render();
+		}
+	}
+
 	_runOptimisticAction(key, value, execute, timeout = 12000) {
 		if (!this._optimisticActions) this._optimisticActions = new Map();
 		const expiresAt = Date.now() + timeout;
@@ -3557,6 +3567,7 @@ class PoolControllerCard extends HTMLElement {
 	}
 
 	_applyOptimisticActions(data) {
+		data = { ...data, blueriiotReadPending: !!this._blueriiotReadPending };
 		const pendingActions = this._optimisticActions;
 		if (!pendingActions?.size) return data;
 		const next = { ...data };
@@ -3575,10 +3586,6 @@ class PoolControllerCard extends HTMLElement {
 		for (const [key, pending] of pendingActions) {
 			if (pending.expiresAt <= Date.now()) {
 				pendingActions.delete(key);
-				continue;
-			}
-			if (key === "blueriiot-read") {
-				next.blueriiotReadPending = true;
 				continue;
 			}
 			const current = states[key]?.();
